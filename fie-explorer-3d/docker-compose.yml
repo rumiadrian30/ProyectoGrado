@@ -1,0 +1,92 @@
+version: "3.9"
+
+# ================================================================
+#  FIE Explorer 3D — Docker Compose
+#  Servicios: frontend (React/Vite) | backend (Node/Express) | db (PostgreSQL+PostGIS)
+#  Uso: docker-compose up --build
+# ================================================================
+
+services:
+
+  # ── Base de datos ──────────────────────────────────────────
+  db:
+    image: postgis/postgis:16-3.4-alpine
+    container_name: fie_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB:       ${POSTGRES_DB:-fie_explorer_3d}
+      POSTGRES_USER:     ${POSTGRES_USER:-fie_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-fie_secret}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - fie_pgdata:/var/lib/postgresql/data
+      - ./backend/db/migrations:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-fie_user} -d ${POSTGRES_DB:-fie_explorer_3d}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - fie_network
+
+  # ── Backend Node.js / Express ──────────────────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      target: development
+    container_name: fie_backend
+    restart: unless-stopped
+    environment:
+      NODE_ENV:          ${NODE_ENV:-development}
+      PORT:              ${BACKEND_PORT:-4000}
+      POSTGRES_HOST:     db
+      POSTGRES_PORT:     5432
+      POSTGRES_DB:       ${POSTGRES_DB:-fie_explorer_3d}
+      POSTGRES_USER:     ${POSTGRES_USER:-fie_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-fie_secret}
+      JWT_SECRET:        ${JWT_SECRET:-change_this_in_production_min_32chars}
+      JWT_EXPIRES_IN:    ${JWT_EXPIRES_IN:-8h}
+      FRONTEND_URL:      ${FRONTEND_URL:-http://localhost:5173}
+    ports:
+      - "${BACKEND_PORT:-4000}:4000"
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - fie_network
+
+  # ── Frontend React / Vite ──────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      target: development
+    container_name: fie_frontend
+    restart: unless-stopped
+    environment:
+      VITE_API_URL:      ${VITE_API_URL:-http://localhost:4000/api}
+      VITE_APP_NAME:     "FIE Explorer 3D"
+    ports:
+      - "${FRONTEND_PORT:-5173}:5173"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    depends_on:
+      - backend
+    networks:
+      - fie_network
+
+# ── Volúmenes persistentes ─────────────────────────────────
+volumes:
+  fie_pgdata:
+    driver: local
+
+# ── Red interna ────────────────────────────────────────────
+networks:
+  fie_network:
+    driver: bridge
