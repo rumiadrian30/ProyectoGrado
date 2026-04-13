@@ -1,0 +1,68 @@
+version: '3.9'
+
+services:
+
+  # ─── PostgreSQL + PostGIS ─────────────────────────────────
+  db:
+    image: postgis/postgis:15-3.4
+    container_name: fie_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB:       fie_explorer_3d
+      POSTGRES_USER:     postgres
+      POSTGRES_PASSWORD: fie_password_2026
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./fie_explorer_3d_database.sql:/docker-entrypoint-initdb.d/001_schema.sql:ro
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ─── Backend Node.js ──────────────────────────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: fie_backend
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      NODE_ENV:      production
+      PORT:          4000
+      DB_HOST:       db
+      DB_PORT:       5432
+      DB_NAME:       fie_explorer_3d
+      DB_USER:       postgres
+      DB_PASSWORD:   fie_password_2026
+      JWT_SECRET:    cambia_este_secreto_en_produccion_min32chars!!
+      JWT_EXPIRES_IN: 8h
+      FRONTEND_URL:  http://localhost:5173
+    ports:
+      - "4000:4000"
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+
+  # ─── Frontend Vite (dev) ──────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: fie_frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+
+volumes:
+  pgdata:
