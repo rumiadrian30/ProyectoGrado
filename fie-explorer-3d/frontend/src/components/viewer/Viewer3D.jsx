@@ -238,8 +238,8 @@ export default function Viewer3D({ modelPath, hotspots = [], onHotspotClick }) {
     markersRef.current = [];
 
     const typeColors = {
-      lab:     0x003087,
-      office:  0x0369a1,
+      lab:     0xBC0613,
+      office:  0xd41a2b,
       service: 0x16a34a,
       access:  0xd97706,
     };
@@ -307,7 +307,7 @@ export default function Viewer3D({ modelPath, hotspots = [], onHotspotClick }) {
 
 /* ─── Escena de demostración (sin modelo GLB) ─── */
 function addDemoBuildings(scene) {
-  const palette = [0x003087, 0x1a4faa, 0x0369a1, 0x003087, 0x374151];
+  const palette = [0xBC0613, 0xd41a2b, 0x9a0510, 0xBC0613, 0x374151];
 
   const buildingData = [
     { x: 0, z: 0, w: 14, h: 12, d: 10, label: 'FIE-MAIN' },

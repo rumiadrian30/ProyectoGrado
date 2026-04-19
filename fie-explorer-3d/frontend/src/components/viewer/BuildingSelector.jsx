@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 
 const TYPE_LABELS = { main: 'Principal', secondary: 'Secundario', lab: 'Laboratorio' };
-const TYPE_COLORS = { main: '#003087', secondary: '#374151', lab: '#0369a1' };
+const TYPE_COLORS = { main: '#BC0613', secondary: '#374151', lab: '#d41a2b' };
 
 export default function BuildingSelector({ buildings, onSelect, onClose }) {
   const [search, setSearch] = useState('');

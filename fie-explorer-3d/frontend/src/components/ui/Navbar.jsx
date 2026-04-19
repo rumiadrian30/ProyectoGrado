@@ -1,3 +1,4 @@
+import logoLight from '../../assets/logo-light.svg';
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 
@@ -33,21 +34,8 @@ export default function Navbar() {
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
       }}>
 
-        <Link to="/" style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', textDecoration: 'none' }}>
-          <div style={{
-            width: 36, height: 36, background: 'var(--color-primary)',
-            borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-          }}>
-            <svg viewBox="0 0 36 36" fill="none" width="24" height="24">
-              <path d="M9 28 L18 10 L27 28" stroke="#E8C84A" strokeWidth="2.5" strokeLinejoin="round" fill="none"/>
-              <path d="M12 22 L24 22" stroke="#E8C84A" strokeWidth="2" strokeLinecap="round"/>
-              <circle cx="18" cy="10" r="2.5" fill="white"/>
-            </svg>
-          </div>
-          <div>
-            <span style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.05rem', color: 'var(--color-primary)', letterSpacing: '-0.01em' }}>FIE Explorer</span>
-            <span style={{ display: 'block', fontSize: '0.65rem', fontWeight: 500, color: 'var(--color-text-3)', letterSpacing: '0.06em', textTransform: 'uppercase', lineHeight: 1, marginTop: '1px' }}>ESPOCH · 3D</span>
-          </div>
+        <Link to="/" style={{ display: 'flex', alignItems: 'center', textDecoration: 'none' }}>
+          <img src={logoLight} alt="FIE Explorer 3D" style={{ height: '42px', width: 'auto' }} />
         </Link>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }} className="nav-desktop">
