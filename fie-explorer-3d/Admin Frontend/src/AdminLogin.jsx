@@ -1,5 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
-import logo from './assets/logo-app.png';
+import logoLight from './assets/logo-light.svg';
+import loginHeader from './assets/login-header.svg';
+import logoDark from './assets/logo-dark.svg';
 
 const API = '/api'
 
@@ -42,13 +44,18 @@ export default function AdminLogin({ onSuccess }) {
 
   return (
     <div className="login-screen">
-      <div className="login-card">
-        <div className="login-logo">
-          <img src={logo} alt="Logo" />
-        </div>
-        <div className="login-title">
-          <h2>FIE Explorer 3D</h2>
-          <p>Panel de administración</p>
+      <div className="login-card" style={{ padding: 0, overflow: 'hidden' }}>
+        {/* Encabezado visual con cubo 3D */}
+        <img
+          src={loginHeader}
+          alt="FIE 3D Explorer"
+          style={{ width: '100%', display: 'block', borderRadius: '14px 14px 0 0' }}
+        />
+        {/* Contenido del formulario */}
+        <div style={{ padding: '28px 34px 32px' }}>
+        <div className="login-title" style={{ marginBottom: '20px' }}>
+          <h2 style={{ fontSize: '15px', color: '#111827' }}>Panel de administración</h2>
+          <p style={{ color: '#6b7280', fontSize: '12px', marginTop: '3px' }}>Acceso restringido · Solo personal autorizado</p>
         </div>
 
         {error && <div className="alert alert-error">{error}</div>}
@@ -99,7 +106,7 @@ export default function AdminLogin({ onSuccess }) {
         </form>
 
         <div className="divider" />
-        <p className="hint">Acceso restringido · Solo personal autorizado FIE</p>
+        </div>{/* end padding div */}
       </div>
     </div>
   )

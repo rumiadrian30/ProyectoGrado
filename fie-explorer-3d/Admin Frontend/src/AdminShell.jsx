@@ -61,17 +61,16 @@ export default function AdminShell({ user, onLogout }) {
           <NavItem id="images"     current={page} onClick={setPage}>🖼 &nbsp;Imágenes</NavItem>
 
           <div className="nav-group-label">Trazabilidad</div>
-          <NavItem id="audit"      current={page} onClick={setPage}>📋 &nbsp;Audit Logs</NavItem>
-          <NavItem id="errors"     current={page} onClick={setPage}>
-            ⚠ &nbsp;Error Logs
+          <NavItem id="audit"      current={page} onClick={setPage}>&nbsp;Audit Logs</NavItem>
+          <NavItem id="errors"     current={page} onClick={setPage}>&nbsp;Error Logs
             {errBadge > 0 && <span className="nav-badge">{errBadge}</span>}
           </NavItem>
 
           {isSuperAdmin && (
             <>
               <div className="nav-group-label">Administración</div>
-              <NavItem id="users"    current={page} onClick={setPage}>👤 &nbsp;Usuarios</NavItem>
-              <NavItem id="settings" current={page} onClick={setPage}>⚙️ &nbsp;Configuración</NavItem>
+              <NavItem id="users"    current={page} onClick={setPage}>&nbsp;Usuarios</NavItem>
+              <NavItem id="settings" current={page} onClick={setPage}>&nbsp;Configuración</NavItem>
             </>
           )}
         </nav>

@@ -9,8 +9,18 @@ export default function Home() {
 
   useEffect(() => {
     buildingsService.getAll()
-      .then(setBuildings)
-      .catch(() => {})
+      .then(res => {
+        console.log("RESPUESTA:", res);
+
+        if (Array.isArray(res)) {
+          setBuildings(res);
+        } else if (Array.isArray(res?.data)) {
+          setBuildings(res.data);
+        } else {
+          setBuildings([]); // fallback seguro
+        }
+      })
+      .catch(() => setBuildings([]))
       .finally(() => setLoading(false));
   }, []);
 
@@ -211,7 +221,7 @@ export default function Home() {
               gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
               gap: '1.25rem',
             }}>
-              {buildings.map((b) => (
+              {Array.isArray(buildings) && buildings.map((b) => (
                 <BuildingCard key={b.id} building={b} />
               ))}
             </div>
