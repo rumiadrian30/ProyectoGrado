@@ -49,7 +49,7 @@ export default function AdminLogin({ onSuccess }) {
         <img
           src={loginHeader}
           alt="FIE 3D Explorer"
-          style={{ width: '100%', display: 'block', borderRadius: '14px 14px 0 0' }}
+          style={{ width: '100%', display: 'block', borderRadius: '14px 14px 0S 0' }}
         />
         {/* Contenido del formulario */}
         <div style={{ padding: '28px 34px 32px' }}>
