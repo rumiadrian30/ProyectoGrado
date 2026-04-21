@@ -1,0 +1,116 @@
+import { useState, useEffect } from 'react'
+import { api } from './api'
+import Dashboard  from './pages/Dashboard'
+import Hotspots   from './pages/Hotspots'
+import Buildings  from './pages/Buildings'
+import Models     from './pages/Models'
+import Images     from './pages/Images'
+import AdminUsers from './pages/AdminUsers'
+import AuditLogs  from './pages/AuditLogs'
+import ErrorLogs  from './pages/ErrorLogs'
+import Settings   from './pages/Settings'
+
+const PAGES = {
+  dashboard: Dashboard, hotspots: Hotspots, buildings: Buildings,
+  models: Models, images: Images, users: AdminUsers,
+  audit: AuditLogs, errors: ErrorLogs, settings: Settings,
+}
+const TITLES = {
+  dashboard: 'Dashboard', hotspots: 'Hotspots', buildings: 'Edificios',
+  models: 'Modelos 3D', images: 'Imágenes', users: 'Usuarios',
+  audit: 'Audit Logs', errors: 'Error Logs', settings: 'Configuración',
+}
+
+export default function AdminShell({ user, onLogout }) {
+  const [page,     setPage]     = useState('dashboard')
+  const [errBadge, setErrBadge] = useState(0)
+  const [dbOk,     setDbOk]     = useState(true)
+
+  const initials = (user.full_name || 'A')
+    .split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()
+
+  const isSuperAdmin = user.role === 'superadmin'
+
+  useEffect(() => {
+    fetch('/api/health').then(() => setDbOk(true)).catch(() => setDbOk(false))
+  }, [])
+
+  async function doLogout() {
+    try { await api('POST', '/auth/logout') } catch {}
+    onLogout()
+  }
+
+  const PageComponent = PAGES[page] || Dashboard
+
+  return (
+    <div id="app">
+      <div className="sidebar">
+        <div className="sidebar-logo">
+          <h2>FIE Admin</h2>
+          <p>Panel de gestión · ESPOCH</p>
+        </div>
+
+        <nav className="sidebar-nav">
+          <div className="nav-group-label">General</div>
+          <NavItem id="dashboard"  current={page} onClick={setPage}>◈ &nbsp;Dashboard</NavItem>
+
+          <div className="nav-group-label">Contenidos</div>
+          <NavItem id="hotspots"   current={page} onClick={setPage}>◎ &nbsp;Hotspots</NavItem>
+          <NavItem id="buildings"  current={page} onClick={setPage}>🏛 &nbsp;Edificios</NavItem>
+          <NavItem id="models"     current={page} onClick={setPage}>📦 &nbsp;Modelos 3D</NavItem>
+          <NavItem id="images"     current={page} onClick={setPage}>🖼 &nbsp;Imágenes</NavItem>
+
+          <div className="nav-group-label">Trazabilidad</div>
+          <NavItem id="audit"      current={page} onClick={setPage}>📋 &nbsp;Audit Logs</NavItem>
+          <NavItem id="errors"     current={page} onClick={setPage}>
+            ⚠ &nbsp;Error Logs
+            {errBadge > 0 && <span className="nav-badge">{errBadge}</span>}
+          </NavItem>
+
+          {isSuperAdmin && (
+            <>
+              <div className="nav-group-label">Administración</div>
+              <NavItem id="users"    current={page} onClick={setPage}>👤 &nbsp;Usuarios</NavItem>
+              <NavItem id="settings" current={page} onClick={setPage}>⚙️ &nbsp;Configuración</NavItem>
+            </>
+          )}
+        </nav>
+
+        <div className="sidebar-footer">
+          <div className="user-row">
+            <div className="avatar">{initials}</div>
+            <div className="user-info">
+              <div className="name">{user.full_name}</div>
+              <div className="role">{user.role}</div>
+            </div>
+            <button className="btn-logout" onClick={doLogout}>Salir</button>
+          </div>
+        </div>
+      </div>
+
+      <div className="main">
+        <div className="topbar">
+          <h1>{TITLES[page] || page}</h1>
+          <div className="topbar-info">
+            <span className="mono">fie_explorer_3d</span>
+            <span className="status-dot">
+              <span className={`dot ${dbOk ? 'dot-green' : 'dot-red'}`} />
+              <span>{dbOk ? 'Conectado' : 'Sin conexión'}</span>
+            </span>
+          </div>
+        </div>
+        <div className="content">
+          <PageComponent onErrCount={setErrBadge} currentUser={user} />
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function NavItem({ id, current, onClick, children }) {
+  return (
+    <div className={`nav-item ${current === id ? 'active' : ''}`} onClick={() => onClick(id)}>
+      {children}
+    </div>
+  )
+}

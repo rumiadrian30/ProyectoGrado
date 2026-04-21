@@ -1,40 +1,55 @@
-
 services:
 
-  # ─── Backend Node.js ──────────────────────────────────────
+  # ─── Backend Node.js (compartido) ─────────────────────────
   backend:
     build:
-      context: ./backend
+      context: ./Backend
       dockerfile: Dockerfile
     container_name: fie_backend
     restart: unless-stopped
     environment:
-      NODE_ENV:      production
-      PORT:          4000
-      DB_HOST:       host.docker.internal
-      DB_PORT:       5432
-      DB_NAME:       fie_explorer_3d
-      DB_USER:       postgres
-      DB_PASSWORD:   postgres
+      NODE_ENV:            production
+      PORT:                3001
+      DB_HOST:             host.docker.internal
+      DB_PORT:             5432
+      DB_NAME:             fie_explorer_3d
+      DB_USER:             postgres
+      DB_PASSWORD:         postgres
+      ADMIN_FRONTEND_URL:  http://localhost:5173
+      PUBLIC_FRONTEND_URL: http://localhost:5174
+      DB_ENCRYPTION_KEY:   fie_secret_key_2026_AES256
     ports:
-      - "4000:4000"
+      - "3001:3001"
     volumes:
-      - ./backend:/app
-      - /app/node_modules
+      - ./Backend:/server
+      - /server/node_modules
 
-  # ─── Frontend Vite (dev) ──────────────────────────────────
-  frontend:
+  # ─── Admin Frontend (Vite — puerto 5173) ──────────────────
+  admin-frontend:
     build:
-      context: ./frontend
+      context: ./Admin Frontend
       dockerfile: Dockerfile
-    container_name: fie_frontend
+    container_name: fie_admin_frontend
     restart: unless-stopped
     depends_on:
       - backend
     ports:
       - "5173:5173"
     volumes:
-      - ./frontend:/app
+      - "./Admin Frontend:/app"
       - /app/node_modules
 
-
+  # ─── Public Frontend (Vite — puerto 5174) ─────────────────
+  public-frontend:
+    build:
+      context: ./Public Frontend
+      dockerfile: Dockerfile
+    container_name: fie_public_frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "5174:5174"
+    volumes:
+      - "./Public Frontend:/app"
+      - /app/node_modules
