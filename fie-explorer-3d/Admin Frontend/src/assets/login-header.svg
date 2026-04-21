@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 344 210">
+  <!-- Fondo rojo -->
+  <rect width="344" height="210" rx="0" fill="#BC0613"/>
+
+  <!-- Cubo wireframe blanco, centrado -->
+  <g transform="translate(110, 34)">
+    <polygon points="62,120 0,84 0,14 62,0 124,14 124,84"
+      fill="none" stroke="white" stroke-width="2.2"/>
+    <polygon points="0,14 62,0 124,14 62,28"
+      fill="white" opacity="0.15" stroke="white" stroke-width="2.2"/>
+    <line x1="62" y1="28" x2="62" y2="120" stroke="white" stroke-width="1" opacity="0.35"/>
+    <line x1="0" y1="14" x2="62" y2="28" stroke="white" stroke-width="0.8" opacity="0.25"/>
+    <line x1="124" y1="14" x2="62" y2="28" stroke="white" stroke-width="0.8" opacity="0.25"/>
+    <!-- Vértices principales -->
+    <circle cx="0"   cy="14"  r="5.5" fill="white"/>
+    <circle cx="62"  cy="0"   r="5.5" fill="white"/>
+    <circle cx="124" cy="14"  r="5.5" fill="white"/>
+    <circle cx="0"   cy="84"  r="4.5" fill="white" opacity="0.6"/>
+    <circle cx="124" cy="84"  r="4.5" fill="white" opacity="0.6"/>
+    <circle cx="62"  cy="120" r="4"   fill="white" opacity="0.5"/>
+    <!-- Nube de puntos -->
+    <circle cx="18"  cy="-12" r="3"   fill="white" opacity="0.5"/>
+    <circle cx="46"  cy="-22" r="3"   fill="white" opacity="0.4"/>
+    <circle cx="78"  cy="-18" r="3.5" fill="white" opacity="0.55"/>
+    <circle cx="106" cy="-8"  r="3"   fill="white" opacity="0.4"/>
+    <circle cx="-10" cy="4"   r="2.5" fill="white" opacity="0.3"/>
+    <circle cx="134" cy="4"   r="2.5" fill="white" opacity="0.3"/>
+    <!-- Líneas nube -->
+    <line x1="18" y1="-12" x2="46"  y2="-22" stroke="white" stroke-width="0.7" opacity="0.25"/>
+    <line x1="46" y1="-22" x2="78"  y2="-18" stroke="white" stroke-width="0.7" opacity="0.25"/>
+    <line x1="78" y1="-18" x2="106" y2="-8"  stroke="white" stroke-width="0.7" opacity="0.25"/>
+    <line x1="18" y1="-12" x2="0"   y2="14"  stroke="white" stroke-width="0.7" opacity="0.2"/>
+    <line x1="106" y1="-8" x2="124" y2="14"  stroke="white" stroke-width="0.7" opacity="0.2"/>
+  </g>
+
+  <!-- Texto -->
+  <text x="172" y="172"
+    font-family="'Trebuchet MS', Arial, sans-serif"
+    font-size="22" font-weight="700"
+    fill="white" text-anchor="middle" letter-spacing="-0.5">FIE 3D Explorer</text>
+  <line x1="88" y1="180" x2="256" y2="180" stroke="white" stroke-width="0.5" opacity="0.25"/>
+  <text x="172" y="194"
+    font-family="'Trebuchet MS', Arial, sans-serif"
+    font-size="8" fill="white" text-anchor="middle"
+    letter-spacing="1.8" opacity="0.6">FACULTAD DE INFORMÁTICA Y ELECTRÓNICA · ESPOCH</text>
+</svg>
