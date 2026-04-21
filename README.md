@@ -9,10 +9,9 @@
 
 ```
 fie-explorer-3d/
-├── frontend/          # React 18 + Three.js + Vite
-├── backend/           # Node.js + Express + PostgreSQL
-├── docker-compose.yml # Orquestación completa
-└── fie_explorer_3d_database.sql  # ← copiar aquí para Docker
+├── Backend/            API REST compartida (Node.js + Express + PostgreSQL)
+├── Admin Frontend/     Panel de administración (React + Vite) — puerto 5173
+└── Public Frontend/    Visor 3D público       (React + Three.js + Vite) — puerto 5174
 ```
 
 ---
