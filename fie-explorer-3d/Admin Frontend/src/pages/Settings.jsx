@@ -101,11 +101,11 @@ export default function Settings() {
   if (loading) return <div className="loader">Cargando configuración…</div>
 
   const TABS = [
-    { id:'login',         label:'🔐 Seguridad'      },
-    { id:'session',       label:'⏱️ Sesión'           },
-    { id:'accessibility', label:'♿ Accesibilidad'    },
-    { id:'system',        label:'⚙️ Sistema'          },
-    { id:'roles',         label:'👥 Límites de roles' },
+    { id:'login',         label:'Seguridad'      },
+    { id:'session',       label:'Sesión'           },
+    { id:'accessibility', label:'Accesibilidad'    },
+    { id:'system',        label:'Sistema'          },
+    { id:'roles',         label:'Límites de roles' },
   ]
 
   return (
