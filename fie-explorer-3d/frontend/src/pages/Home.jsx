@@ -1,3 +1,4 @@
+import logoLight from '../assets/logo-light.svg';
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { buildingsService } from '../services/buildingsService';
@@ -86,7 +87,7 @@ export default function Home() {
               FIE
               <span style={{
                 position: 'absolute', bottom: '2px', left: 0, right: 0,
-                height: 4, background: 'var(--color-gold)',
+                height: 4, background: 'rgba(255,255,255,0.6)',
                 borderRadius: 2, opacity: 0.7,
               }}/>
             </span>
@@ -185,8 +186,8 @@ export default function Home() {
             <span style={{
               display: 'inline-block',
               padding: '0.25rem 0.75rem',
-              background: 'var(--color-gold-bg)',
-              color: 'var(--color-gold-dark)',
+              background: 'var(--color-primary-50)',
+              color: 'var(--color-primary-600)',
               borderRadius: 'var(--radius-full)',
               fontSize: '0.75rem', fontWeight: 700,
               letterSpacing: '0.08em', textTransform: 'uppercase',
@@ -292,7 +293,7 @@ export default function Home() {
 
 function BuildingCard({ building }) {
   const typeLabel = { main: 'Principal', secondary: 'Secundario', lab: 'Laboratorio' };
-  const typeColor = { main: '#003087', secondary: '#374151', lab: '#0369a1' };
+  const typeColor = { main: '#BC0613', secondary: '#374151', lab: '#d41a2b' };
 
   return (
     <Link to={`/explorar/${building.id}`} style={{ textDecoration: 'none' }}>

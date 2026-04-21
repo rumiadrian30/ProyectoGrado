@@ -1,6 +1,6 @@
 /* ═══════════════════════════════════════════════
    FIE Explorer 3D — Estilos globales
-   Paleta: Blanco base + Azul ESPOCH + Dorado
+   Paleta: Blanco base + Rojo ESPOCH #BC0613
    Tipografía: Syne (display) + DM Sans (body)
 ═══════════════════════════════════════════════ */
 
@@ -12,18 +12,18 @@
   --color-border:      #e4e7ed;
   --color-border-soft: #f0f2f5;
 
-  /* Azul ESPOCH */
-  --color-primary:     #003087;
-  --color-primary-600: #00256b;
-  --color-primary-400: #1a4faa;
-  --color-primary-100: #dde8ff;
-  --color-primary-50:  #eef3ff;
+  /* Rojo ESPOCH */
+  --color-primary:     #BC0613;
+  --color-primary-600: #9a0510;
+  --color-primary-400: #d41a2b;
+  --color-primary-100: #fdd5d7;
+  --color-primary-50:  #fef0f0;
 
-  /* Dorado acento */
-  --color-gold:        #E8C84A;
-  --color-gold-dark:   #c9a82e;
-  --color-gold-light:  #f5e08a;
-  --color-gold-bg:     #fdf9ec;
+  /* Acento blanco/gris */
+  --color-gold:        #ffffff;
+  --color-gold-dark:   #f0f0f0;
+  --color-gold-light:  #ffffff;
+  --color-gold-bg:     #fff5f5;
 
   /* Texto */
   --color-text:        #0f172a;

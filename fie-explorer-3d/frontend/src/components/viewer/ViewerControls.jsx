@@ -62,11 +62,11 @@ export default function ViewerControls() {
         <svg viewBox="0 0 40 40" width="28" height="28">
           <circle cx="20" cy="20" r="18" fill="none" stroke="#e4e7ed" strokeWidth="1"/>
           <text x="20" y="7" textAnchor="middle" fontSize="5" fontWeight="700"
-            fill="#003087" fontFamily="var(--font-display)">N</text>
+            fill="#BC0613" fontFamily="var(--font-display)">N</text>
           <text x="20" y="37" textAnchor="middle" fontSize="4" fill="#9ca3af">S</text>
           <text x="4" y="22" textAnchor="middle" fontSize="4" fill="#9ca3af">O</text>
           <text x="36" y="22" textAnchor="middle" fontSize="4" fill="#9ca3af">E</text>
-          <polygon points="20,9 18,21 20,19 22,21" fill="#003087"/>
+          <polygon points="20,9 18,21 20,19 22,21" fill="#BC0613"/>
           <polygon points="20,31 18,19 20,21 22,19" fill="#dc2626" opacity="0.7"/>
         </svg>
       </div>

@@ -330,8 +330,8 @@ export default function Explorer() {
             boxShadow: 'var(--shadow-sm)',
           }}>
             {[
-              { color: '#003087', label: 'Lab' },
-              { color: '#0369a1', label: 'Oficina' },
+              { color: '#BC0613', label: 'Lab' },
+              { color: '#d41a2b', label: 'Oficina' },
               { color: '#16a34a', label: 'Servicio' },
               { color: '#d97706', label: 'Acceso' },
             ].map(({ color, label }) => (

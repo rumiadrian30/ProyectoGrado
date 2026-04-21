@@ -2,7 +2,7 @@ import React, { useRef, useEffect } from 'react';
 import { useViewerStore } from '../../store/viewerStore';
 
 const TYPE_COLORS = {
-  lab: '#003087', office: '#0369a1',
+  lab: '#BC0613', office: '#d41a2b',
   service: '#16a34a', access: '#d97706',
 };
 
@@ -70,7 +70,7 @@ export default function MiniMap({ building, hotspots, floor }) {
     hotspots.forEach(h => {
       const { cx, cy } = toCanvas(parseFloat(h.pos_x) || 0, parseFloat(h.pos_z) || 0);
       const isActive = activeHotspot?.id === h.id;
-      const color = TYPE_COLORS[h.type] || '#003087';
+      const color = TYPE_COLORS[h.type] || '#BC0613';
 
       // Halo si activo
       if (isActive) {
@@ -147,7 +147,7 @@ export default function MiniMap({ building, hotspots, floor }) {
             }}>
               <span style={{
                 width: 6, height: 6, borderRadius: '50%',
-                background: TYPE_COLORS[type] || '#003087',
+                background: TYPE_COLORS[type] || '#BC0613',
                 flexShrink: 0,
               }}/>
               {type}
