@@ -52,16 +52,16 @@ docker compose up --build
 
 | Ruta                      | Público | Admin (JWT) |
 |---------------------------|---------|-------------|
-| GET  /api/buildings       | ✅      |             |
-| PUT  /api/buildings/:id   |         | ✅          |
-| GET  /api/hotspots        | ✅      |             |
-| POST/PUT/DELETE /api/hotspots/:id |  | ✅        |
-| GET  /api/models          | ✅      |             |
-| POST/PUT/DELETE /api/models/:id   |  | ✅        |
-| /api/auth                 | ✅      |             |
-| /api/audit-logs           |         | ✅          |
-| /api/error-logs           |         | ✅          |
-| /api/admin-users          |         | ✅          |
-| /api/settings             |         | ✅          |
-| /api/encryption           |         | ✅          |
-| /api/images               |         | ✅          |
+| GET  /api/buildings       | Ok      |             |
+| PUT  /api/buildings/:id   |         | Ok          |
+| GET  /api/hotspots        | Ok      |             |
+| POST/PUT/DELETE /api/hotspots/:id |  | Ok        |
+| GET  /api/models          | Ok      |             |
+| POST/PUT/DELETE /api/models/:id   |  | Ok        |
+| /api/auth                 | Ok      |             |
+| /api/audit-logs           |         | Ok          |
+| /api/error-logs           |         | Ok          |
+| /api/admin-users          |         | Ok          |
+| /api/settings             |         | Ok          |
+| /api/encryption           |         | Ok          |
+| /api/images               |         | Ok          |
