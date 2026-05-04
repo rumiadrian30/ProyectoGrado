@@ -28,7 +28,10 @@ export default function Explorer() {
 
   /* ── Cargar lista de edificios ── */
   useEffect(() => {
-    buildingsService.getAll().then(setBuildings).catch(console.error);
+    buildingsService.getAll().then(res => {
+      console.log("RES:", res);
+      setBuildings(res);
+    });
   }, []);
 
   /* ── Cargar edificio por URL param ── */
