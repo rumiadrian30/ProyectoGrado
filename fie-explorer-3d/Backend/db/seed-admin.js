@@ -9,7 +9,7 @@ const pool   = require('./pool');
 const ADMIN = {
   full_name: 'Administrador FIE',
   email:     'admin@espoch.edu.ec',
-  password:  'Admin2026!',       // ← cambiar en producción
+  password:  'Admin$2026!',       // ← cambiar en producción
   role:      'superadmin',
 };
 
