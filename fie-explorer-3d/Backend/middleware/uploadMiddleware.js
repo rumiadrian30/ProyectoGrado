@@ -6,7 +6,7 @@ const fs     = require('fs');
 // Carpeta destino: Public Frontend/public/models/
 // Configurable con MODELS_DIR en .env
 const MODELS_DIR = process.env.MODELS_DIR ||
-  path.resolve(__dirname, '../../../Public Frontend/public/models');
+  path.resolve(__dirname, '../../Public Frontend/public/models');
 
 // Crear carpeta si no existe
 if (!fs.existsSync(MODELS_DIR)) {

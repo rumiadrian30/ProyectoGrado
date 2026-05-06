@@ -1,6 +1,8 @@
 // Public Frontend/src/services/modelsService.js
 import api from './api';
 
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+
 export const modelsService = {
   /** Todos los modelos (con building_name y building_code) */
   getAll: () => api.get('/models').then(r => r.data),
@@ -21,7 +23,6 @@ export const modelsService = {
   getActive: (buildingId, modelType = 'exterior', lodLevel = 0) => {
     return api.get('/models').then(r => {
       const all = Array.isArray(r.data) ? r.data : (r.data?.data ?? []);
-      // Buscar LOD exacto primero; si no existe, tomar el de menor LOD disponible
       const candidates = all.filter(m =>
         m.building_id === buildingId &&
         m.model_type  === modelType  &&
@@ -29,7 +30,13 @@ export const modelsService = {
       );
       if (!candidates.length) return null;
       const exact = candidates.find(m => m.lod_level === lodLevel);
-      return exact ?? candidates.sort((a, b) => a.lod_level - b.lod_level)[0];
+      const model = exact ?? candidates.sort((a, b) => a.lod_level - b.lod_level)[0];
+
+      // ← Prefija la URL del backend para que GLTFLoader pueda descargarlo
+      if (model?.file_path) {
+        model.file_path = `${API_BASE}${model.file_path}`;
+      }
+      return model;
     });
   },
 };
