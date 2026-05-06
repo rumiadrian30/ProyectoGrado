@@ -3,8 +3,11 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import Navbar from './components/ui/Navbar';
 import LoadingScreen from './components/ui/LoadingScreen';
 
-const Home     = React.lazy(() => import('./pages/Home'));
-const Explorer = React.lazy(() => import('./pages/Explorer'));
+const Home      = React.lazy(() => import('./pages/Home'));
+const Explorer  = React.lazy(() => import('./pages/Explorer'));
+const Directorio = React.lazy(() => import('./pages/Directorio'));
+const AcercaDe  = React.lazy(() => import('./pages/AcercaDe'));
+const Ayuda     = React.lazy(() => import('./pages/Ayuda'));
 
 export default function App() {
   return (
@@ -15,6 +18,9 @@ export default function App() {
           <Route path="/"                     element={<Home />} />
           <Route path="/explorar"             element={<Explorer />} />
           <Route path="/explorar/:buildingId" element={<Explorer />} />
+          <Route path="/directorio"           element={<Directorio />} />
+          <Route path="/acerca-de"            element={<AcercaDe />} />
+          <Route path="/ayuda"                element={<Ayuda />} />
           <Route path="*"                     element={<Navigate to="/" replace />} />
         </Routes>
       </Suspense>
