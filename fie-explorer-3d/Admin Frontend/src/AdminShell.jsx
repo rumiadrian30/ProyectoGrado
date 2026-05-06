@@ -62,9 +62,7 @@ export default function AdminShell({ user, onLogout }) {
 
           <div className="nav-group-label">Trazabilidad</div>
           <NavItem id="audit"      current={page} onClick={setPage}>&nbsp;Audit Logs</NavItem>
-          <NavItem id="errors"     current={page} onClick={setPage}>&nbsp;Error Logs
-            {errBadge > 0 && <span className="nav-badge">{errBadge}</span>}
-          </NavItem>
+          <NavItem id="errors"     current={page} onClick={setPage}>&nbsp;Error Logs</NavItem>
 
           {isSuperAdmin && (
             <>

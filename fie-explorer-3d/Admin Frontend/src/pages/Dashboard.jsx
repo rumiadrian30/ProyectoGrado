@@ -10,18 +10,35 @@ export default function Dashboard({ onErrCount }) {
 
   async function load() {
     try {
-      const [hotspots, buildingsList, audit, errors] = await Promise.all([
+      const [hotspots, buildingsList, models, audit, errors] = await Promise.all([
         api('GET', '/hotspots'),
         api('GET', '/buildings'),
+        api('GET', '/models'),
         api('GET', '/audit-logs?limit=6'),
         api('GET', '/error-logs?limit=6'),
       ])
-      console.log('buildingsList:', buildingsList)
-      const active   = hotspots.filter(h => h.is_active).length
+
+      // Contar imágenes sumando las de cada hotspot activo
+      const imageRequests = hotspots
+        .filter(h => h.is_active)
+        .map(h => api('GET', `/images/hotspot/${h.id}`).catch(() => []))
+      const imageLists  = await Promise.all(imageRequests)
+      const imageCount  = imageLists.reduce((sum, list) => sum + (Array.isArray(list) ? list.length : 0), 0)
+
+      const active    = hotspots.filter(h => h.is_active).length
       const buildings = buildingsList.length
-      const critical = errors.data.filter(e => ['ERROR','FATAL'].includes(e.severity)).length
+      const modelCount = Array.isArray(models) ? models.filter(m => m.is_active).length : 0
+      const critical  = (errors.data ?? errors).filter(e => ['ERROR','FATAL'].includes(e.severity)).length
+
       onErrCount?.(critical)
-      setData({ hotspots, active, buildings, auditTotal: audit.total, critical, recentAudit: audit.data, recentErrors: errors.data })
+      setData({
+        hotspots, active, buildings,
+        modelCount, imageCount,
+        auditTotal: audit.total ?? 0,
+        critical,
+        recentAudit:   audit.data  ?? audit  ?? [],
+        recentErrors:  errors.data ?? errors ?? [],
+      })
     } catch (e) { setError(e.message) }
     finally     { setLoading(false) }
   }
@@ -29,7 +46,7 @@ export default function Dashboard({ onErrCount }) {
   if (loading) return <div className="loader">Cargando…</div>
   if (error)   return <div className="alert alert-error">Error: {error}</div>
 
-  const { hotspots, active, buildings, auditTotal, critical, recentAudit, recentErrors } = data
+  const { hotspots, active, buildings, modelCount, imageCount, recentAudit, recentErrors } = data
 
   return (
     <>
@@ -45,16 +62,14 @@ export default function Dashboard({ onErrCount }) {
           <div className="stat-sub">FIE-ESPOCH</div>
         </div>
         <div className="stat-card">
-          <div className="stat-label">Errores críticos</div>
-          <div className="stat-value" style={{ color: critical > 0 ? 'var(--danger)' : 'inherit' }}>
-            {critical}
-          </div>
-          <div className="stat-sub">ERROR + FATAL</div>
+          <div className="stat-label">Modelos 3D</div>
+          <div className="stat-value">{modelCount}</div>
+          <div className="stat-sub">activos en BD</div>
         </div>
         <div className="stat-card">
-          <div className="stat-label">Acciones de auditoría</div>
-          <div className="stat-value">{auditTotal}</div>
-          <div className="stat-sub">En audit_logs</div>
+          <div className="stat-label">Imágenes</div>
+          <div className="stat-value">{imageCount}</div>
+          <div className="stat-sub">en hotspots activos</div>
         </div>
       </div>
 
