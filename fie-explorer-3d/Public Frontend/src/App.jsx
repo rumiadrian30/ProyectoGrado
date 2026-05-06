@@ -8,6 +8,7 @@ const Explorer  = React.lazy(() => import('./pages/Explorer'));
 const Directorio = React.lazy(() => import('./pages/Directorio'));
 const AcercaDe  = React.lazy(() => import('./pages/AcercaDe'));
 const Ayuda     = React.lazy(() => import('./pages/Ayuda'));
+const DemoPrivacidad = React.lazy(() => import('./pages/DemoPrivacidad'));
 
 export default function App() {
   return (
@@ -21,6 +22,7 @@ export default function App() {
           <Route path="/directorio"           element={<Directorio />} />
           <Route path="/acerca-de"            element={<AcercaDe />} />
           <Route path="/ayuda"                element={<Ayuda />} />
+          <Route path="/demo-privacidad"      element={<DemoPrivacidad />} />
           <Route path="*"                     element={<Navigate to="/" replace />} />
         </Routes>
       </Suspense>

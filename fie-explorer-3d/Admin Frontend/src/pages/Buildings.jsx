@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { api, fmt } from '../api'
 
 const TYPE_LABELS = { main: 'Principal', secondary: 'Secundario', lab: 'Laboratorio' }
@@ -76,12 +76,16 @@ function BuildingForm({ data, onChange, isEdit = false }) {
   )
 }
 
+// ─── BuildingModels con file picker ──────────────────────────
 function BuildingModels({ building, onToast }) {
-  const [models, setModels] = useState(null)
-  const [open,   setOpen]   = useState(false)
-  const [modal,  setModal]  = useState(null)
-  const [form,   setForm]   = useState({})
-  const [saving, setSaving] = useState(false)
+  const [models,    setModels]    = useState(null)
+  const [open,      setOpen]      = useState(false)
+  const [modal,     setModal]     = useState(null)
+  const [form,      setForm]      = useState({})
+  const [saving,    setSaving]    = useState(false)
+  const [uploading, setUploading] = useState(false)
+  const [uploadPct, setUploadPct] = useState(0)
+  const fileInputRef = useRef(null)
 
   async function load() {
     try {
@@ -95,8 +99,58 @@ function BuildingModels({ building, onToast }) {
     setOpen(o => !o)
   }
 
+  // ── Subir archivo al backend ────────────────────────────────
+  async function handleFileChange(e) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const ext = file.name.split('.').pop().toLowerCase()
+    if (!['glb', 'gltf'].includes(ext)) {
+      onToast('Solo se aceptan archivos .glb o .gltf', 'error')
+      return
+    }
+    setUploading(true)
+    setUploadPct(0)
+    try {
+      const formData = new FormData()
+      formData.append('model', file)
+
+      const result = await new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest()
+        xhr.open('POST', '/api/models/upload')
+        xhr.withCredentials = true
+        xhr.upload.onprogress = ev => {
+          if (ev.lengthComputable) setUploadPct(Math.round(ev.loaded / ev.total * 100))
+        }
+        xhr.onload = () => {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            resolve(JSON.parse(xhr.responseText))
+          } else {
+            try { reject(new Error(JSON.parse(xhr.responseText).error || 'Error al subir')) }
+            catch { reject(new Error(`Error ${xhr.status}`)) }
+          }
+        }
+        xhr.onerror = () => reject(new Error('Error de red al subir el archivo'))
+        xhr.send(formData)
+      })
+
+      setForm(f => ({
+        ...f,
+        file_path:    result.file_path,
+        file_size_mb: result.file_size_mb,
+        format:       result.format,
+      }))
+      onToast(`✅ "${file.name}" subido correctamente.`)
+    } catch (err) {
+      onToast(err.message, 'error')
+    } finally {
+      setUploading(false)
+      setUploadPct(0)
+      if (fileInputRef.current) fileInputRef.current.value = ''
+    }
+  }
+
   async function confirmNew() {
-    if (!form.file_path?.trim()) return onToast('La ruta del archivo es obligatoria.', 'error')
+    if (!form.file_path?.trim()) return onToast('Selecciona un archivo .glb primero.', 'error')
     setSaving(true)
     try {
       await api('POST', '/models', form)
@@ -142,7 +196,9 @@ function BuildingModels({ building, onToast }) {
 
       {open && (
         <div style={{ paddingBottom: '8px' }}>
-          {models === null && <div style={{ fontSize: '12px', color: 'var(--faint)', padding: '4px 0' }}>Cargando…</div>}
+          {models === null && (
+            <div style={{ fontSize: '12px', color: 'var(--faint)', padding: '4px 0' }}>Cargando…</div>
+          )}
           {models !== null && models.length === 0 && (
             <div style={{ fontSize: '12px', color: 'var(--faint)', padding: '4px 0' }}>Sin modelos registrados.</div>
           )}
@@ -176,15 +232,23 @@ function BuildingModels({ building, onToast }) {
             </div>
           ))}
           <button className="btn btn-sm" style={{ marginTop: '6px', width: '100%', fontSize: '12px' }}
-            onClick={() => { setForm({ building_id: building.id, model_type: 'exterior', lod_level: 0, format: 'GLB' }); setModal({ type: 'new' }) }}>
+            onClick={() => {
+              setForm({ building_id: building.id, model_type: 'exterior', lod_level: 0, format: 'GLB' })
+              setModal({ type: 'new' })
+            }}>
             + Añadir modelo
           </button>
         </div>
       )}
 
+      {/* Modal nuevo modelo */}
       {modal?.type === 'new' && (
-        <Modal title={`Nuevo modelo — ${building.name}`} onConfirm={confirmNew}
-          confirmLabel={saving ? 'Guardando…' : 'Registrar modelo'} onClose={() => setModal(null)}>
+        <Modal
+          title={`Nuevo modelo — ${building.name}`}
+          onConfirm={confirmNew}
+          confirmLabel={saving ? 'Registrando…' : 'Registrar modelo'}
+          onClose={() => setModal(null)}
+        >
           <div className="form-grid-2">
             <div className="form-group">
               <label className="form-label">Tipo *</label>
@@ -202,29 +266,100 @@ function BuildingModels({ building, onToast }) {
               </select>
             </div>
           </div>
+
+          {/* ── Selector de archivo (reemplaza al input de ruta) ── */}
           <div className="form-group">
-            <label className="form-label">Ruta del archivo *</label>
-            <input className="form-input" placeholder="/models/fie-main_exterior_lod0.glb"
-              value={form.file_path || ''} onChange={e => set('file_path', e.target.value)} />
-            <small style={{ color: 'var(--faint)', fontSize: '11px' }}>Ruta relativa desde public/ del frontend.</small>
+            <label className="form-label">Archivo del modelo *</label>
+
+            {/* Input oculto */}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".glb,.gltf"
+              style={{ display: 'none' }}
+              onChange={handleFileChange}
+            />
+
+            {/* Estado: sin archivo aún */}
+            {!form.file_path && !uploading && (
+              <button
+                type="button"
+                className="btn btn-primary"
+                style={{ width: '100%', padding: '0.65rem', fontSize: '13px' }}
+                onClick={() => fileInputRef.current?.click()}
+              >
+                📂 Seleccionar archivo .glb / .gltf
+              </button>
+            )}
+
+            {/* Estado: subiendo */}
+            {uploading && (
+              <div style={{
+                border: '1px solid var(--border)', borderRadius: '8px',
+                padding: '12px', textAlign: 'center',
+              }}>
+                <div style={{ fontSize: '12px', color: 'var(--muted)', marginBottom: '8px' }}>
+                  Subiendo… {uploadPct}%
+                </div>
+                <div style={{ background: 'var(--bg)', borderRadius: '4px', height: '6px', overflow: 'hidden' }}>
+                  <div style={{
+                    height: '100%', width: `${uploadPct}%`,
+                    background: 'var(--primary, #BC0613)', borderRadius: '4px',
+                    transition: 'width 200ms',
+                  }} />
+                </div>
+              </div>
+            )}
+
+            {/* Estado: archivo subido */}
+            {form.file_path && !uploading && (
+              <div style={{
+                border: '1px solid #bbf7d0', borderRadius: '8px',
+                background: '#f0fdf4', padding: '10px 12px',
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px',
+              }}>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontSize: '12px', fontWeight: 600, color: '#15803d' }}>✅ Archivo subido</div>
+                  <div style={{
+                    fontSize: '11px', color: '#166534', marginTop: '2px',
+                    fontFamily: 'monospace', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                  }}>{form.file_path}</div>
+                  {form.file_size_mb && (
+                    <div style={{ fontSize: '11px', color: '#4ade80', marginTop: '1px' }}>
+                      {form.file_size_mb} MB · {form.format}
+                    </div>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  className="btn btn-sm"
+                  style={{ flexShrink: 0, fontSize: '11px' }}
+                  onClick={() => {
+                    set('file_path', '')
+                    set('file_size_mb', null)
+                    fileInputRef.current?.click()
+                  }}
+                >
+                  Cambiar
+                </button>
+              </div>
+            )}
+
+            <small style={{ color: 'var(--faint)', fontSize: '11px', display: 'block', marginTop: '4px' }}>
+              Se guarda en <code>public/models/</code> del visor público. Máx. 200 MB.
+            </small>
           </div>
-          <div className="form-grid-2">
-            <div className="form-group">
-              <label className="form-label">Tamaño (MB)</label>
-              <input className="form-input" type="number" step="0.1"
-                value={form.file_size_mb || ''} onChange={e => set('file_size_mb', parseFloat(e.target.value))} />
-            </div>
-            <div className="form-group">
-              <label className="form-label">Formato</label>
-              <select className="form-select" value={form.format} onChange={e => set('format', e.target.value)}>
-                <option value="GLB">GLB</option>
-                <option value="GLTF">GLTF</option>
-              </select>
-            </div>
+
+          {/* Versión opcional */}
+          <div className="form-group">
+            <label className="form-label">Versión (opcional)</label>
+            <input className="form-input" placeholder="v1.0"
+              value={form.version || ''} onChange={e => set('version', e.target.value)} />
           </div>
         </Modal>
       )}
 
+      {/* Modal eliminar modelo */}
       {modal?.type === 'del-model' && (
         <Modal title="Eliminar modelo" onConfirm={confirmDeleteModel}
           confirmLabel="Eliminar" danger onClose={() => setModal(null)}>
@@ -237,6 +372,7 @@ function BuildingModels({ building, onToast }) {
   )
 }
 
+// ─── Página principal ─────────────────────────────────────────
 export default function Buildings() {
   const [buildings, setBuildings] = useState([])
   const [loading,   setLoading]   = useState(true)
@@ -305,7 +441,9 @@ export default function Buildings() {
       <div className="page-hdr">
         <div>
           <div className="page-title">Edificios</div>
-          <div className="page-sub">{active} activo{active !== 1 ? 's' : ''} · {buildings.length - active} inactivo{buildings.length - active !== 1 ? 's' : ''}</div>
+          <div className="page-sub">
+            {active} activo{active !== 1 ? 's' : ''} · {buildings.length - active} inactivo{buildings.length - active !== 1 ? 's' : ''}
+          </div>
         </div>
         <button className="btn btn-primary" onClick={() => { setForm(EMPTY_FORM); setModal({ type: 'create' }) }}>
           + Nuevo edificio
@@ -338,7 +476,10 @@ export default function Buildings() {
               }}>
                 {b.description || <span style={{ fontStyle: 'italic' }}>Sin descripción</span>}
               </p>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '10px', borderTop: '1px solid var(--border)' }}>
+              <div style={{
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                paddingTop: '10px', borderTop: '1px solid var(--border)',
+              }}>
                 <div style={{ display: 'flex', gap: '12px', fontSize: '11px', color: 'var(--faint)' }}>
                   <span>{b.floor_count} planta{b.floor_count !== 1 ? 's' : ''}</span>
                   <span>{b.hotspot_count ?? 0} hotspot{(b.hotspot_count ?? 0) !== 1 ? 's' : ''}</span>
