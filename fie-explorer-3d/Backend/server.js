@@ -1,4 +1,5 @@
 require('dotenv').config();
+const path = require('path');
 const express      = require('express');
 const cors         = require('cors');
 const cookieParser = require('cookie-parser');
@@ -19,6 +20,7 @@ const imageRoutes      = require('./routes/imageRoutes');
 const adminUserRoutes  = require('./routes/adminUserRoutes');
 const settingsRoutes   = require('./routes/settingsRoutes');
 const { errorMiddleware } = require('./middleware/errorMiddleware');
+const { MODELS_DIR } = require('./middleware/uploadMiddleware');
 
 const app  = express();
 const PORT = process.env.PORT || 3001;
@@ -85,6 +87,7 @@ app.use(cors({
   origin: [
     process.env.ADMIN_FRONTEND_URL  || 'http://localhost:5173',
     process.env.PUBLIC_FRONTEND_URL || 'http://localhost:5174',
+    'http://localhost:5175',
     'http://127.0.0.1:5173',
     'http://127.0.0.1:5174',
     'null',
@@ -123,6 +126,7 @@ if (!isProd || process.env.SWAGGER_ENABLED === 'true') {
 }
 
 // ── Rutas ────────────────────────────────────────────────────
+app.use('/models', express.static(path.isAbsolute(MODELS_DIR) ? MODELS_DIR : path.resolve(__dirname, MODELS_DIR)));
 app.use('/api/auth',        authRoutes);
 app.use('/api/hotspots',    hotspotRoutes);
 app.use('/api/audit-logs',  auditRoutes);
