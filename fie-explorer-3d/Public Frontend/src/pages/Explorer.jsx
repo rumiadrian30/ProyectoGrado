@@ -5,10 +5,30 @@ import HotspotPanel from '../components/hotspots/HotspotPanel';
 import BuildingSelector from '../components/viewer/BuildingSelector';
 import ViewerControls from '../components/viewer/ViewerControls';
 import MiniMap from '../components/minimap/MiniMap';
+import MapboxCampus from '../components/minimap/MapboxCampus';
 import { useViewerStore } from '../store/viewerStore';
 import { buildingsService } from '../services/buildingsService';
 import { hotspotsService } from '../services/hotspotsService';
 import { modelsService } from '../services/modelsService';
+
+// ─── Icono mapa inline ───────────────────────────────────────────────────────
+const IconMap = () => (
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none"
+    stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21"/>
+    <line x1="9" y1="3" x2="9" y2="18"/>
+    <line x1="15" y1="6" x2="15" y2="21"/>
+  </svg>
+);
+
+const Icon3D = () => (
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none"
+    stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M12 3L3 9l9 6 9-6-9-6z"/>
+    <path d="M3 15l9 6 9-6"/>
+    <path d="M3 9l9 6 9-6"/>
+  </svg>
+);
 
 export default function Explorer() {
   const { buildingId } = useParams();
@@ -23,13 +43,15 @@ export default function Explorer() {
     currentFloor,
   } = useViewerStore();
 
-  const [buildings,     setBuildings]     = useState([]);
-  const [showSelector,  setShowSelector]  = useState(!buildingId);
-  const [sidebarOpen,   setSidebarOpen]   = useState(true);
+  const [buildings,    setBuildings]    = useState([]);
+  const [showSelector, setShowSelector] = useState(!buildingId);
+  const [sidebarOpen,  setSidebarOpen]  = useState(true);
 
-  // ── Modelo activo cargado desde la BD ──────────────────────
+  // Vista activa: 'viewer3d' | 'mapbox'
+  const [activeView, setActiveView] = useState('viewer3d');
+
   const [modelPath, setModelPath] = useState(null);
-  const [modelInfo, setModelInfo] = useState(null); // metadata del modelo
+  const [modelInfo, setModelInfo] = useState(null);
 
   /* ── Cargar lista de edificios ── */
   useEffect(() => {
@@ -49,19 +71,16 @@ export default function Explorer() {
   /* ── Cargar modelo desde la BD cuando cambia edificio o viewMode ── */
   useEffect(() => {
     if (!selectedBuilding) { setModelPath(null); setModelInfo(null); return; }
-
     modelsService.getActive(selectedBuilding.id, viewMode, 0)
       .then(model => {
         if (model?.file_path) {
           setModelPath(model.file_path);
           setModelInfo(model);
         } else {
-          // No hay modelo registrado → visor muestra escena demo
           setModelPath(null);
           setModelInfo(null);
           console.info(
-            `[Visor] Sin modelo ${viewMode} registrado para "${selectedBuilding.name}". ` +
-            'Mostrando escena de demostración.'
+            `[Visor] Sin modelo ${viewMode} para "${selectedBuilding.name}". Mostrando demo.`
           );
         }
       })
@@ -85,9 +104,19 @@ export default function Explorer() {
     navigate(`/explorar/${b.id}`, { replace: true });
   }, [setSelectedBuilding, setActiveHotspot, navigate]);
 
+  /* ── Selección desde el mapa Mapbox → vuelve al visor 3D ── */
+  const handleMapSelectBuilding = useCallback((b) => {
+    handleSelectBuilding(b);
+    // Cambiar automáticamente al visor 3D después de seleccionar
+    setTimeout(() => setActiveView('viewer3d'), 400);
+  }, [handleSelectBuilding]);
+
   const handleHotspotClick = useCallback((hs) => {
     setActiveHotspot(hs);
   }, [setActiveHotspot]);
+
+  // ─── Botón toggle Mapa / Visor 3D ───────────────────────────────────────
+  const isMapView = activeView === 'mapbox';
 
   return (
     <div style={{
@@ -118,11 +147,46 @@ export default function Explorer() {
             </p>
           </div>
 
+          {/* ── Toggle Vista: Mapa / Visor 3D ── */}
+          <div style={{
+            padding: '0.75rem 1.25rem',
+            borderBottom: '1px solid var(--color-border-soft)',
+            background: 'var(--color-primary-50)',
+          }}>
+            <p style={{
+              fontSize: '0.68rem', fontWeight: 700, color: 'var(--color-primary)',
+              textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: '0.5rem',
+            }}>Modo de exploración</p>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.4rem' }}>
+              {[
+                { id: 'viewer3d', icon: <Icon3D />, label: 'Visor 3D' },
+                { id: 'mapbox',   icon: <IconMap />, label: 'Mapa Campus' },
+              ].map(({ id, icon, label }) => (
+                <button
+                  key={id}
+                  onClick={() => setActiveView(id)}
+                  style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    gap: '0.35rem', padding: '0.5rem',
+                    background: activeView === id ? 'var(--color-primary)' : 'var(--color-bg-soft)',
+                    color: activeView === id ? '#fff' : 'var(--color-text-2)',
+                    border: '1px solid',
+                    borderColor: activeView === id ? 'var(--color-primary)' : 'var(--color-border)',
+                    borderRadius: 'var(--radius-md)',
+                    fontFamily: 'var(--font-body)', fontSize: '0.78rem', fontWeight: 600,
+                    cursor: 'pointer', transition: 'all var(--transition)',
+                  }}
+                >
+                  {icon} {label}
+                </button>
+              ))}
+            </div>
+          </div>
+
           {/* Edificio activo */}
           {selectedBuilding && (
             <div style={{
               padding: '1rem 1.25rem', borderBottom: '1px solid var(--color-border-soft)',
-              background: 'var(--color-primary-50)',
             }}>
               <p style={{
                 fontSize: '0.68rem', fontWeight: 700, color: 'var(--color-primary)',
@@ -136,8 +200,6 @@ export default function Explorer() {
                 {selectedBuilding.code} · {selectedBuilding.floor_count}{' '}
                 {selectedBuilding.floor_count === 1 ? 'planta' : 'plantas'}
               </p>
-
-              {/* Info del modelo cargado */}
               {modelInfo ? (
                 <div style={{
                   marginTop: '0.5rem', fontSize: '0.68rem', color: 'var(--color-text-3)',
@@ -159,8 +221,8 @@ export default function Explorer() {
             </div>
           )}
 
-          {/* Toggle vista exterior/interior */}
-          {selectedBuilding && (
+          {/* Toggle vista exterior/interior (solo en Visor 3D) */}
+          {selectedBuilding && !isMapView && (
             <div style={{ padding: '1rem 1.25rem', borderBottom: '1px solid var(--color-border-soft)' }}>
               <p style={{
                 fontSize: '0.68rem', fontWeight: 700, color: 'var(--color-text-3)',
@@ -185,30 +247,44 @@ export default function Explorer() {
             </div>
           )}
 
-          {/* Lista hotspots */}
-          <div style={{ flex: 1, overflow: 'auto', padding: '0.75rem' }}>
-            {!selectedBuilding && (
+          {/* Lista hotspots (solo en Visor 3D) */}
+          {!isMapView && (
+            <div style={{ flex: 1, overflow: 'auto', padding: '0.75rem' }}>
+              {!selectedBuilding && (
+                <div style={{ textAlign: 'center', padding: '2rem 1rem', color: 'var(--color-text-3)' }}>
+                  <div style={{ fontSize: '2.5rem', marginBottom: '0.75rem' }}>🏛️</div>
+                  <p style={{ fontSize: '0.85rem', lineHeight: 1.5 }}>
+                    Selecciona un edificio en el <strong>Mapa Campus</strong> o usando el botón inferior.
+                  </p>
+                </div>
+              )}
+              {hotspots.length === 0 && selectedBuilding && (
+                <div style={{ textAlign: 'center', padding: '2rem 1rem', color: 'var(--color-text-3)' }}>
+                  <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>📍</div>
+                  <p style={{ fontSize: '0.82rem' }}>Sin hotspots registrados para este edificio.</p>
+                </div>
+              )}
+              {hotspots.map(h => (
+                <HotspotListItem
+                  key={h.id} hotspot={h}
+                  active={activeHotspot?.id === h.id}
+                  onClick={() => setActiveHotspot(h)}
+                />
+              ))}
+            </div>
+          )}
+
+          {/* Info en modo mapa */}
+          {isMapView && (
+            <div style={{ flex: 1, overflow: 'auto', padding: '0.75rem' }}>
               <div style={{ textAlign: 'center', padding: '2rem 1rem', color: 'var(--color-text-3)' }}>
-                <div style={{ fontSize: '2.5rem', marginBottom: '0.75rem' }}>🏛️</div>
-                <p style={{ fontSize: '0.85rem', lineHeight: 1.5 }}>
-                  Selecciona un edificio para comenzar la exploración.
+                <div style={{ fontSize: '2.5rem', marginBottom: '0.75rem' }}>🗺️</div>
+                <p style={{ fontSize: '0.82rem', lineHeight: 1.5 }}>
+                  Haz click en un <strong style={{ color: '#BC0613' }}>edificio rojo FIE</strong> en el mapa para seleccionarlo y explorar en 3D.
                 </p>
               </div>
-            )}
-            {hotspots.length === 0 && selectedBuilding && (
-              <div style={{ textAlign: 'center', padding: '2rem 1rem', color: 'var(--color-text-3)' }}>
-                <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>📍</div>
-                <p style={{ fontSize: '0.82rem' }}>Sin hotspots registrados para este edificio.</p>
-              </div>
-            )}
-            {hotspots.map(h => (
-              <HotspotListItem
-                key={h.id} hotspot={h}
-                active={activeHotspot?.id === h.id}
-                onClick={() => setActiveHotspot(h)}
-              />
-            ))}
-          </div>
+            </div>
+          )}
 
           {/* Cambiar edificio */}
           <div style={{ padding: '0.75rem', borderTop: '1px solid var(--color-border)' }}>
@@ -230,7 +306,7 @@ export default function Explorer() {
         </div>
       </aside>
 
-      {/* ── ÁREA DEL VISOR ── */}
+      {/* ── ÁREA PRINCIPAL ── */}
       <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
 
         {/* Toggle sidebar */}
@@ -251,73 +327,90 @@ export default function Explorer() {
           </svg>
         </button>
 
-        {/* Loading overlay */}
-        {modelLoading && (
-          <div style={{
-            position: 'absolute', inset: 0, zIndex: 30,
-            background: 'rgba(255,255,255,0.9)',
-            display: 'flex', flexDirection: 'column',
-            alignItems: 'center', justifyContent: 'center', gap: '1.25rem',
-          }}>
+        {/* ── MAPA MAPBOX ── */}
+        {isMapView && (
+          <div style={{ position: 'absolute', inset: 0, zIndex: 5 }}>
+            <MapboxCampus
+              buildings={buildings}
+              onSelectBuilding={handleMapSelectBuilding}
+              onClose={() => setActiveView('viewer3d')}
+            />
+          </div>
+        )}
+
+        {/* ── VISOR 3D ── (siempre montado, solo ocultado cuando hay mapa) */}
+        <div style={{
+          position: 'absolute', inset: 0,
+          visibility: isMapView ? 'hidden' : 'visible',
+          pointerEvents: isMapView ? 'none' : 'auto',
+        }}>
+          {/* Loading overlay */}
+          {modelLoading && (
             <div style={{
-              width: 56, height: 56, border: '3px solid var(--color-border)',
-              borderTop: '3px solid var(--color-primary)', borderRadius: '50%',
-              animation: 'spin 0.9s linear infinite',
-            }}/>
-            <div style={{ textAlign: 'center' }}>
-              <p style={{
-                fontFamily: 'var(--font-display)', fontWeight: 700,
-                fontSize: '1rem', color: 'var(--color-primary)',
-              }}>Cargando modelo 3D</p>
-              <p style={{ fontSize: '0.85rem', color: 'var(--color-text-3)', marginTop: '0.25rem' }}>
-                {modelProgress}%
-              </p>
-            </div>
-            <div style={{
-              width: 200, height: 4, background: 'var(--color-border)',
-              borderRadius: 9999, overflow: 'hidden',
+              position: 'absolute', inset: 0, zIndex: 30,
+              background: 'rgba(255,255,255,0.9)',
+              display: 'flex', flexDirection: 'column',
+              alignItems: 'center', justifyContent: 'center', gap: '1.25rem',
             }}>
               <div style={{
-                height: '100%', width: `${modelProgress}%`,
-                background: 'var(--color-primary)', borderRadius: 9999,
-                transition: 'width 300ms ease',
+                width: 56, height: 56, border: '3px solid var(--color-border)',
+                borderTop: '3px solid var(--color-primary)', borderRadius: '50%',
+                animation: 'spin 0.9s linear infinite',
               }}/>
+              <div style={{ textAlign: 'center' }}>
+                <p style={{
+                  fontFamily: 'var(--font-display)', fontWeight: 700,
+                  fontSize: '1rem', color: 'var(--color-primary)',
+                }}>Cargando modelo 3D</p>
+                <p style={{ fontSize: '0.85rem', color: 'var(--color-text-3)', marginTop: '0.25rem' }}>
+                  {modelProgress}%
+                </p>
+              </div>
+              <div style={{
+                width: 200, height: 4, background: 'var(--color-border)',
+                borderRadius: 9999, overflow: 'hidden',
+              }}>
+                <div style={{
+                  height: '100%', width: `${modelProgress}%`,
+                  background: 'var(--color-primary)', borderRadius: 9999,
+                  transition: 'width 300ms ease',
+                }}/>
+              </div>
             </div>
-          </div>
-        )}
+          )}
 
-        {/* Visor 3D — recibe modelPath desde la BD */}
-        <Viewer3D
-          modelPath={modelPath}
-          hotspots={hotspots}
-          onHotspotClick={handleHotspotClick}
-        />
+          <Viewer3D
+            modelPath={modelPath}
+            hotspots={hotspots}
+            onHotspotClick={handleHotspotClick}
+          />
 
-        <ViewerControls />
-        <MiniMap building={selectedBuilding} hotspots={hotspots} floor={currentFloor} />
+          <ViewerControls />
+          <MiniMap building={selectedBuilding} hotspots={hotspots} floor={currentFloor} />
 
-        {/* Leyenda */}
-        {hotspots.length > 0 && (
-          <div style={{
-            position: 'absolute', bottom: 16, left: '50%', transform: 'translateX(-50%)',
-            background: 'rgba(255,255,255,0.9)', backdropFilter: 'blur(8px)',
-            border: '1px solid var(--color-border)', borderRadius: 'var(--radius-full)',
-            padding: '0.4rem 1rem', display: 'flex', gap: '1rem', alignItems: 'center',
-            fontSize: '0.72rem', color: 'var(--color-text-2)', boxShadow: 'var(--shadow-sm)',
-          }}>
-            {[
-              { color: '#BC0613', label: 'Lab' }, { color: '#d41a2b', label: 'Oficina' },
-              { color: '#16a34a', label: 'Servicio' }, { color: '#d97706', label: 'Acceso' },
-            ].map(({ color, label }) => (
-              <span key={label} style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
-                <span style={{ width: 8, height: 8, borderRadius: '50%', background: color, flexShrink: 0 }}/>
-                {label}
-              </span>
-            ))}
-          </div>
-        )}
+          {/* Leyenda */}
+          {hotspots.length > 0 && (
+            <div style={{
+              position: 'absolute', bottom: 16, left: '50%', transform: 'translateX(-50%)',
+              background: 'rgba(255,255,255,0.9)', backdropFilter: 'blur(8px)',
+              border: '1px solid var(--color-border)', borderRadius: 'var(--radius-full)',
+              padding: '0.4rem 1rem', display: 'flex', gap: '1rem', alignItems: 'center',
+              fontSize: '0.72rem', color: 'var(--color-text-2)', boxShadow: 'var(--shadow-sm)',
+            }}>
+              {[
+                { color: '#BC0613', label: 'Lab' }, { color: '#d41a2b', label: 'Oficina' },
+                { color: '#16a34a', label: 'Servicio' }, { color: '#d97706', label: 'Acceso' },
+              ].map(({ color, label }) => (
+                <span key={label} style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                  <span style={{ width: 8, height: 8, borderRadius: '50%', background: color, flexShrink: 0 }}/>
+                  {label}
+                </span>
+              ))}
+            </div>
+          )}
 
-        <HotspotPanel />
+          <HotspotPanel />
+        </div>
       </div>
 
       {/* Modal selector edificios */}
