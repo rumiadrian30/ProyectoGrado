@@ -6,7 +6,13 @@ export default defineConfig({
   server: {
     port: 5174,
     proxy: {
+      // API REST del backend
       '/api': {
+        target: 'http://localhost:3001',
+        changeOrigin: true,
+      },
+      // Archivos GLB/GLTF servidos por el backend — evita CORS
+      '/models': {
         target: 'http://localhost:3001',
         changeOrigin: true,
       },
