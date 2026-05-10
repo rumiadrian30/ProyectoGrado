@@ -16,8 +16,7 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { useViewerStore } from '../../store/viewerStore';
 import { getCoords, CAMPUS_VIEW, BUILDING_SIZES } from '../../utils/buildingCoords';
 
-mapboxgl.accessToken =
-  'pk.eyJ1IjoicnVtaWFkcmlhbiIsImEiOiJjbW95cnd4OGwwYjViMnJwdWNtbmRvdXA0In0.is21gbSMEJTlU_wQRjgoTQ';
+mapboxgl.accessToken = import.meta.env.VITE_MAPBOX_TOKEN;
 
 const LAYER_ID = 'fie-model-layer';
 
@@ -146,7 +145,7 @@ function addDemoModel(scene) {
 }
 
 // ─── Componente ───────────────────────────────────────────────────────────────
-export default function MapboxViewer({ modelPath, hotspots = [], building, onHotspotClick }) {
+export default function MapboxViewer({ modelPath, hotspots = [], building, onHotspotClick, isMobile }) {
   const containerRef = useRef(null);
   const mapRef       = useRef(null);
   const markersRef   = useRef([]);
@@ -162,6 +161,7 @@ export default function MapboxViewer({ modelPath, hotspots = [], building, onHot
 
     const map = new mapboxgl.Map({
       container: containerRef.current,
+        attributionControl: false,  
       zoom:      CAMPUS_VIEW.zoom,
       pitch:     CAMPUS_VIEW.pitch,
       bearing:   CAMPUS_VIEW.bearing ?? -15,
@@ -179,6 +179,7 @@ export default function MapboxViewer({ modelPath, hotspots = [], building, onHot
 
     map.addControl(new mapboxgl.NavigationControl({ visualizePitch: true }), 'bottom-right');
     map.addControl(new mapboxgl.ScaleControl({ unit: 'metric' }), 'bottom-left');
+    map.addControl(new mapboxgl.AttributionControl({ compact: true }), 'bottom-right');
     map.on('load', () => { mapReadyRef.current = true; });
 
     mapRef.current = map;
@@ -188,6 +189,13 @@ export default function MapboxViewer({ modelPath, hotspots = [], building, onHot
       mapRef.current    = null;
       mapReadyRef.current = false;
     };
+  }, []);
+
+  // ─── ResizeObserver: resize al cambiar tamaño de ventana ────────────────────
+  useEffect(() => {
+    const ro = new ResizeObserver(() => { mapRef.current?.resize(); });
+    ro.observe(document.body);
+    return () => ro.disconnect();
   }, []);
 
   // ─── Teclado: registrar teclas ─────────────────────────────────────────────
@@ -370,7 +378,7 @@ export default function MapboxViewer({ modelPath, hotspots = [], building, onHot
           onClick={flyToCampus}
           title="Ver campus completo"
           style={{
-            position: 'absolute', top: 54, left: 12, zIndex: 20,
+            position: 'absolute', top: 54, right: 12, zIndex: 20,
             width: 36, height: 36,
             background: 'var(--color-bg)', border: '1px solid var(--color-border)',
             borderRadius: 'var(--radius-sm)', cursor: 'pointer',
@@ -390,33 +398,35 @@ export default function MapboxViewer({ modelPath, hotspots = [], building, onHot
       )}
 
       {/* Hint de teclado */}
-      <div className="keyboard-hint" style={{
-        position: 'absolute', top: building ? 98 : 54, left: 12, zIndex: 20,
-        background: 'var(--color-bg)', border: '1px solid var(--color-border)',
-        borderRadius: 'var(--radius-sm)', padding: '0.45rem 0.6rem',
-        boxShadow: 'var(--shadow-xs)', fontSize: '0.62rem',
-        color: 'var(--color-text-3)', lineHeight: 1.7,
-        display: 'flex', flexDirection: 'column', gap: 1,
-      }}>
-        {[
-          ['W / ↑', 'Avanzar'],
-          ['S / ↓', 'Retroceder'],
-          ['A / ←', 'Izquierda'],
-          ['D / →', 'Derecha'],
-          ['Q / E', 'Rotar'],
-          ['R / F', 'Pitch'],
-        ].map(([key, label]) => (
-          <div key={key} style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-            <kbd style={{
-              background: 'var(--color-bg-soft)', border: '1px solid var(--color-border)',
-              borderRadius: 4, padding: '0 4px', fontSize: '0.6rem',
-              fontFamily: 'monospace', color: 'var(--color-text-2)',
-              minWidth: 38, textAlign: 'center', flexShrink: 0,
-            }}>{key}</kbd>
-            <span>{label}</span>
-          </div>
-        ))}
-      </div>
+      {!isMobile && (
+        <div style={{
+          position: 'absolute', top: building ? 98 : 54, right: 12, zIndex: 20,
+          background: 'var(--color-bg)', border: '1px solid var(--color-border)',
+          borderRadius: 'var(--radius-sm)', padding: '0.45rem 0.6rem',
+          boxShadow: 'var(--shadow-xs)', fontSize: '0.62rem',
+          color: 'var(--color-text-3)', lineHeight: 1.7,
+          display: 'flex', flexDirection: 'column', gap: 1,
+        }}>
+          {[
+            ['W / ↑', 'Avanzar'],
+            ['S / ↓', 'Retroceder'],
+            ['A / ←', 'Izquierda'],
+            ['D / →', 'Derecha'],
+            ['Q / E', 'Rotar'],
+            ['R / F', 'Pitch'],
+          ].map(([key, label]) => (
+            <div key={key} style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+              <kbd style={{
+                background: 'var(--color-bg-soft)', border: '1px solid var(--color-border)',
+                borderRadius: 4, padding: '0 4px', fontSize: '0.6rem',
+                fontFamily: 'monospace', color: 'var(--color-text-2)',
+                minWidth: 38, textAlign: 'center', flexShrink: 0,
+              }}>{key}</kbd>
+              <span>{label}</span>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Badge estado edificio */}
       {building && (
