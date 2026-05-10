@@ -143,3 +143,11 @@ input, textarea, select {
   0%   { background-position: -200% 0; }
   100% { background-position:  200% 0; }
 }
+.keyboard-hint {
+  display: flex;
+}
+@media (max-width: 768px) {
+  .keyboard-hint {
+    display: none !important;
+  }
+}
