@@ -38,8 +38,8 @@ export default function Explorer() {
   const [buildings,    setBuildings]    = useState([]);
   const [showSelector, setShowSelector] = useState(!buildingId);
   const [sidebarOpen,  setSidebarOpen]  = useState(true);
-  const [modelPath,    setModelPath]    = useState(null);
-  const [modelInfo,    setModelInfo]    = useState(null);
+  const [allExteriorModels, setAllExteriorModels] = useState([]);
+  const [interiorModel,     setInteriorModel]     = useState(null);
 
   useEffect(() => { if (isMobile) setSidebarOpen(false); }, [isMobile]);
 
@@ -56,12 +56,30 @@ export default function Explorer() {
     }
   }, [buildingId, buildings, setSelectedBuilding]);
 
+  // Cargar TODOS los modelos exteriores una sola vez al montar
   useEffect(() => {
-    if (!selectedBuilding) { setModelPath(null); setModelInfo(null); return; }
-    modelsService.getActive(selectedBuilding.id, viewMode, 0)
-      .then(model => { setModelPath(model?.file_path ?? null); setModelInfo(model ?? null); })
-      .catch(() => { setModelPath(null); setModelInfo(null); });
+    modelsService.getAllActive('exterior')
+      .then(setAllExteriorModels)
+      .catch(console.error);
+  }, []);
+
+  // Modelo interior: solo para el edificio seleccionado cuando se activa esa vista
+  useEffect(() => {
+    if (viewMode !== 'interior' || !selectedBuilding) { setInteriorModel(null); return; }
+    modelsService.getActive(selectedBuilding.id, 'interior', 0)
+      .then(setInteriorModel)
+      .catch(() => setInteriorModel(null));
   }, [selectedBuilding, viewMode]);
+
+  // Modelos que el visor debe renderizar en cada momento
+  const modelsToShow = viewMode === 'exterior'
+    ? allExteriorModels
+    : (interiorModel ? [interiorModel] : []);
+
+  // Info del modelo del edificio seleccionado (para la barra lateral)
+  const modelInfo = selectedBuilding
+    ? modelsToShow.find(m => m.building_id === selectedBuilding.id) ?? null
+    : null;
 
   useEffect(() => {
     if (!selectedBuilding) return;
@@ -98,17 +116,9 @@ export default function Explorer() {
 
       {/* ── MAPA: siempre 100% del espacio disponible ────────────────────── */}
       <MapboxViewer
-        modelPath={modelPath}
-        modelTransform={modelInfo ? {
-          scale_x:  parseFloat(modelInfo.scale_x)  || 1,
-          scale_y:  parseFloat(modelInfo.scale_y)  || 1,
-          scale_z:  parseFloat(modelInfo.scale_z)  || 1,
-          offset_x: parseFloat(modelInfo.offset_x) || 0,
-          offset_y: parseFloat(modelInfo.offset_y) || 0,
-          offset_z: parseFloat(modelInfo.offset_z) || 0,
-        } : null}
-        hotspots={hotspots}
+        allModels={modelsToShow}
         building={selectedBuilding}
+        hotspots={hotspots}
         onHotspotClick={handleHotspotClick}
         isMobile={isMobile}
       />
