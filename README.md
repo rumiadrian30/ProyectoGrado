@@ -55,4 +55,4 @@ fie-explorer-3d/
 Código: 7333  
 Facultad de Informática y Electrónica — ESPOCH  
 Proyecto de Titulación: *Exploración Tridimensional FIE*  
-Versión: 3.0 · 2026
+Versión: 4.0 · 2026
