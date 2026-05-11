@@ -99,6 +99,14 @@ export default function Explorer() {
       {/* ── MAPA: siempre 100% del espacio disponible ────────────────────── */}
       <MapboxViewer
         modelPath={modelPath}
+        modelTransform={modelInfo ? {
+          scale_x:  parseFloat(modelInfo.scale_x)  || 1,
+          scale_y:  parseFloat(modelInfo.scale_y)  || 1,
+          scale_z:  parseFloat(modelInfo.scale_z)  || 1,
+          offset_x: parseFloat(modelInfo.offset_x) || 0,
+          offset_y: parseFloat(modelInfo.offset_y) || 0,
+          offset_z: parseFloat(modelInfo.offset_z) || 0,
+        } : null}
         hotspots={hotspots}
         building={selectedBuilding}
         onHotspotClick={handleHotspotClick}

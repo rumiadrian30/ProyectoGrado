@@ -13,6 +13,7 @@ import React, { useEffect, useRef, useCallback } from 'react';
 import mapboxgl from 'mapbox-gl';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
 import { useViewerStore } from '../../store/viewerStore';
 import { getCoords, CAMPUS_VIEW, BUILDING_SIZES } from '../../utils/buildingCoords';
 
@@ -28,8 +29,14 @@ const PITCH_MIN    = 0;
 const PITCH_MAX    = 85;
 
 // ─── Custom Three.js layer ────────────────────────────────────────────────────
-function createModelLayer({ id, modelUrl, lngLat, onProgress, onLoaded }) {
-  const state = { scene: null, camera: null, renderer: null, map: null, loaded: false, lngLat };
+function createModelLayer({ id, modelUrl, lngLat, modelTransform, onProgress, onLoaded }) {
+  const state = { scene: null, camera: null, renderer: null, map: null, loaded: false, lngLat, dracoLoader: null };
+  const sx = modelTransform?.scale_x  ?? 1;
+  const sy = modelTransform?.scale_y  ?? 1;
+  const sz = modelTransform?.scale_z  ?? 1;
+  const ox = modelTransform?.offset_x ?? 0;
+  const oy = modelTransform?.offset_y ?? 0;
+  const oz = modelTransform?.offset_z ?? 0;
 
   return {
     id,
@@ -68,16 +75,32 @@ function createModelLayer({ id, modelUrl, lngLat, onProgress, onLoaded }) {
       state.renderer.outputColorSpace    = THREE.SRGBColorSpace;
 
       if (modelUrl) {
+        const dracoLoader = new DRACOLoader();
+        dracoLoader.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.6/');
+        state.dracoLoader = dracoLoader;
         const loader = new GLTFLoader();
+        loader.setDRACOLoader(dracoLoader);
         loader.load(
           modelUrl,
           (gltf) => {
             const model = gltf.scene;
+            // Aplicar escala configurada en el admin
+            model.scale.set(sx, sy, sz);
+            // Centrar horizontalmente y apoyar sobre el suelo (y=0 = superficie del mapa)
             const box    = new THREE.Box3().setFromObject(model);
             const center = box.getCenter(new THREE.Vector3());
             model.position.x -= center.x;
             model.position.z -= center.z;
-            model.position.y -= box.min.y;
+            model.position.y -= box.min.y;   // fondo del modelo en y=0
+            // Aplicar offset configurado en el admin
+            model.position.x += ox;
+            model.position.y += oy;
+            model.position.z += oz;
+            // Clamp: el fondo del modelo nunca puede estar por debajo del mapa (y < 0)
+            const floorBox = new THREE.Box3().setFromObject(model);
+            if (floorBox.min.y < 0) {
+              model.position.y -= floorBox.min.y;  // empuja hacia arriba lo necesario
+            }
             model.traverse(c => { if (c.isMesh) { c.castShadow = true; c.receiveShadow = true; } });
             state.scene.add(model);
             state.loaded = true;
@@ -114,6 +137,7 @@ function createModelLayer({ id, modelUrl, lngLat, onProgress, onLoaded }) {
     },
 
     onRemove() {
+      state.dracoLoader?.dispose();
       state.scene?.traverse(obj => {
         if (obj.isMesh) {
           obj.geometry?.dispose();
@@ -145,7 +169,7 @@ function addDemoModel(scene) {
 }
 
 // ─── Componente ───────────────────────────────────────────────────────────────
-export default function MapboxViewer({ modelPath, hotspots = [], building, onHotspotClick, isMobile }) {
+export default function MapboxViewer({ modelPath, modelTransform = null, hotspots = [], building, onHotspotClick, isMobile }) {
   const containerRef = useRef(null);
   const mapRef       = useRef(null);
   const markersRef   = useRef([]);
@@ -305,11 +329,12 @@ export default function MapboxViewer({ modelPath, hotspots = [], building, onHot
       setModelProgress(0);
 
       map.addLayer(createModelLayer({
-        id:         LAYER_ID,
-        modelUrl:   modelPath || null,
+        id:            LAYER_ID,
+        modelUrl:      modelPath || null,
         lngLat,
-        onProgress: (p) => setModelProgress(p),
-        onLoaded:   ()  => setModelLoading(false),
+        modelTransform,
+        onProgress:    (p) => setModelProgress(p),
+        onLoaded:      ()  => setModelLoading(false),
       }));
 
       map.flyTo({ center: lngLat, zoom: 17.2, pitch: 58, bearing: -20, speed: 0.8, essential: true });
@@ -323,7 +348,7 @@ export default function MapboxViewer({ modelPath, hotspots = [], building, onHot
       setModelLoading(false);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [building?.id, modelPath]);
+  }, [building?.id, modelPath, JSON.stringify(modelTransform)]);
 
   // ─── Marcadores de hotspots ────────────────────────────────────────────────
   useEffect(() => {
