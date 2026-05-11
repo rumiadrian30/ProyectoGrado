@@ -2,6 +2,9 @@
 node_modules/
 */node_modules/
 
+uploads/
+*/uploads/
+
 # Variables de entorno — NUNCA subir al repo
 .env
 */.env
