@@ -7,6 +7,11 @@
  * Navegación: W/A/S/D o flechas → mover cámara
  *             Q/E               → rotar bearing
  *             R/F               → subir/bajar pitch
+ *
+ * Centrado dinámico al seleccionar edificio (computeBuildingFlyTo):
+ *   1. Si existe modelo 3D → coords del modelo + offsets del admin
+ *   2. Si hay hotspots con posición → centroide convertido a GPS
+ *   3. Fallback → coordenadas estáticas del campus
  */
 
 import React, { useEffect, useRef, useCallback } from 'react';
@@ -15,7 +20,12 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
 import { useViewerStore } from '../../store/viewerStore';
-import { getCoords, CAMPUS_VIEW, BUILDING_SIZES } from '../../utils/buildingCoords';
+import {
+  getCoords,
+  CAMPUS_VIEW,
+  BUILDING_SIZES,
+  computeBuildingFlyTo,
+} from '../../utils/buildingCoords';
 
 mapboxgl.accessToken = import.meta.env.VITE_MAPBOX_TOKEN;
 
@@ -174,7 +184,15 @@ export default function MapboxViewer({ allModels = [], building, hotspots = [], 
   const installedLayers  = useRef(new Map()); // layerId → true
   const pendingLoadsRef  = useRef(0);      // modelos aún cargando
 
+  // Refs para acceder siempre a los valores más recientes sin re-disparar flyTo
+  const allModelsRef     = useRef(allModels);
+  const hotspotsRef      = useRef(hotspots);
+
   const { setModelLoading, setModelProgress } = useViewerStore();
+
+  // Sincronizar refs con los props más recientes
+  useEffect(() => { allModelsRef.current = allModels; }, [allModels]);
+  useEffect(() => { hotspotsRef.current  = hotspots;  }, [hotspots]);
 
   // ─── Inicializar mapa ──────────────────────────────────────────────────────
   useEffect(() => {
@@ -382,13 +400,77 @@ export default function MapboxViewer({ allModels = [], building, hotspots = [], 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [allModels.map(m => m.building_id).join(',')]);
 
-  // ─── Volar al edificio seleccionado ───────────────────────────────────────
+  // ─── Volar al edificio seleccionado (flyTo dinámico) ──────────────────────
+  //
+  // Prioridad (definida en computeBuildingFlyTo de buildingCoords.js):
+  //   1. Modelo 3D registrado en el admin → ancla + offsets configurados → zoom adaptativo
+  //   2. Hotspots ya cargados con posición → centroide en GPS → zoom moderado
+  //   3. Fallback → coordenadas estáticas del campus → zoom base
+  //
+  // Se usan refs (allModelsRef, hotspotsRef) para acceder a los valores más
+  // recientes SIN incluirlos en las dependencias del effect y así evitar
+  // que un re-render del mapa dispare un flyTo no deseado.
   useEffect(() => {
     if (!building || !mapReadyRef.current) return;
-    const lngLat = getCoords(building.code);
-    mapRef.current?.flyTo({ center: lngLat, zoom: 17.2, pitch: 58, bearing: -20, speed: 0.8, essential: true });
+
+    const params = computeBuildingFlyTo(
+      building,
+      allModelsRef.current,
+      hotspotsRef.current,
+    );
+    if (!params) return;
+
+    mapRef.current?.flyTo({
+      ...params,
+      speed:     0.85,   // velocidad de vuelo (1 = estándar Mapbox)
+      curve:     1.4,    // curvatura de la trayectoria (suaviza zooms extremos)
+      essential: true,   // no se interrumpe por gestos del usuario
+    });
+
+    console.debug('[MapboxViewer] flyTo', {
+      building:  building.code,
+      source:    allModelsRef.current.some(m => m.building_id === building.id)
+                   ? 'model' : hotspotsRef.current.length ? 'hotspots' : 'fallback',
+      ...params,
+    });
+
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [building?.id]);
+
+  // ─── Refinamiento de cámara cuando cargan hotspots (sin modelo) ───────────
+  //
+  // Si el edificio no tiene modelo 3D y los hotspots acaban de cargarse con
+  // posiciones no triviales, ajustamos la cámara suavemente sin interrumpir
+  // al usuario (velocidad reducida, solo si el edificio no cambió).
+  const hotspotIdsKey = hotspots.map(h => h.id).sort().join(',');
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!building || !hotspots.length || !map || !mapReadyRef.current) return;
+
+    // No refinar si el edificio ya tiene un modelo (más preciso)
+    const hasModel = allModelsRef.current.some(m => m.building_id === building.id);
+    if (hasModel) return;
+
+    // Solo refinar si hay posiciones reales (pos_x o pos_z != 0)
+    const hasMeaningfulPos = hotspots.some(
+      h => Math.abs(parseFloat(h.pos_x) || 0) > 1 || Math.abs(parseFloat(h.pos_z) || 0) > 1,
+    );
+    if (!hasMeaningfulPos) return;
+
+    const params = computeBuildingFlyTo(building, [], hotspots);
+    if (!params) return;
+
+    map.flyTo({
+      ...params,
+      speed:     0.55,   // más suave para la corrección secundaria
+      curve:     1.2,
+      essential: true,
+    });
+
+    console.debug('[MapboxViewer] flyTo refinado con hotspots', { building: building.code, ...params });
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hotspotIdsKey, building?.id]);
 
   // ─── Marcadores de hotspots ────────────────────────────────────────────────
   useEffect(() => {
