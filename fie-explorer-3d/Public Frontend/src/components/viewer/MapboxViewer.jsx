@@ -29,14 +29,14 @@ const PITCH_MIN    = 0;
 const PITCH_MAX    = 85;
 
 // ─── Custom Three.js layer ────────────────────────────────────────────────────
-function createModelLayer({ id, modelUrl, lngLat, modelTransform, onProgress, onLoaded }) {
-  const state = { scene: null, camera: null, renderer: null, map: null, loaded: false, lngLat, dracoLoader: null };
-  const sx = modelTransform?.scale_x  ?? 1;
-  const sy = modelTransform?.scale_y  ?? 1;
-  const sz = modelTransform?.scale_z  ?? 1;
-  const ox = modelTransform?.offset_x ?? 0;
-  const oy = modelTransform?.offset_y ?? 0;
-  const oz = modelTransform?.offset_z ?? 0;
+function createModelLayer({ id, modelUrl, lngLat, modelTransform, dracoLoader, onProgress, onLoaded, onError }) {
+  const state = { scene: null, camera: null, renderer: null, map: null, loaded: false, lngLat };
+  const sx = parseFloat(modelTransform?.scale_x)  || 1;
+  const sy = parseFloat(modelTransform?.scale_y)  || 1;
+  const sz = parseFloat(modelTransform?.scale_z)  || 1;
+  const ox = parseFloat(modelTransform?.offset_x) || 0;
+  const oy = parseFloat(modelTransform?.offset_y) || 0;
+  const oz = parseFloat(modelTransform?.offset_z) || 0;
 
   return {
     id,
@@ -75,11 +75,8 @@ function createModelLayer({ id, modelUrl, lngLat, modelTransform, onProgress, on
       state.renderer.outputColorSpace    = THREE.SRGBColorSpace;
 
       if (modelUrl) {
-        const dracoLoader = new DRACOLoader();
-        dracoLoader.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.6/');
-        state.dracoLoader = dracoLoader;
         const loader = new GLTFLoader();
-        loader.setDRACOLoader(dracoLoader);
+        if (dracoLoader) loader.setDRACOLoader(dracoLoader);
         loader.load(
           modelUrl,
           (gltf) => {
@@ -109,10 +106,8 @@ function createModelLayer({ id, modelUrl, lngLat, modelTransform, onProgress, on
           },
           (xhr) => { if (xhr.total) onProgress?.(Math.round((xhr.loaded / xhr.total) * 100)); },
           (err) => {
-            console.error('[MapboxViewer] Error cargando modelo:', err);
-            addDemoModel(state.scene);
-            state.loaded = true;
-            map.triggerRepaint();
+            console.error(`[MapboxViewer] Error cargando ${modelUrl}:`, err);
+            onError?.();
           },
         );
       } else {
@@ -137,7 +132,6 @@ function createModelLayer({ id, modelUrl, lngLat, modelTransform, onProgress, on
     },
 
     onRemove() {
-      state.dracoLoader?.dispose();
       state.scene?.traverse(obj => {
         if (obj.isMesh) {
           obj.geometry?.dispose();
@@ -169,13 +163,16 @@ function addDemoModel(scene) {
 }
 
 // ─── Componente ───────────────────────────────────────────────────────────────
-export default function MapboxViewer({ modelPath, modelTransform = null, hotspots = [], building, onHotspotClick, isMobile }) {
-  const containerRef = useRef(null);
-  const mapRef       = useRef(null);
-  const markersRef   = useRef([]);
-  const mapReadyRef  = useRef(false);
-  const keysRef      = useRef(new Set());  // teclas presionadas actualmente
-  const rafRef       = useRef(null);       // animación de teclado
+export default function MapboxViewer({ allModels = [], building, hotspots = [], onHotspotClick, isMobile }) {
+  const containerRef     = useRef(null);
+  const mapRef           = useRef(null);
+  const markersRef       = useRef([]);
+  const mapReadyRef      = useRef(false);
+  const keysRef          = useRef(new Set());
+  const rafRef           = useRef(null);
+  const dracoLoaderRef   = useRef(null);   // DRACOLoader compartido
+  const installedLayers  = useRef(new Map()); // layerId → true
+  const pendingLoadsRef  = useRef(0);      // modelos aún cargando
 
   const { setModelLoading, setModelProgress } = useViewerStore();
 
@@ -315,40 +312,83 @@ export default function MapboxViewer({ modelPath, modelTransform = null, hotspot
     return () => cancelAnimationFrame(rafRef.current);
   }, []);
 
-  // ─── Cargar modelo cuando cambia edificio ─────────────────────────────────
+  // ─── Inicializar DRACOLoader compartido ──────────────────────────────────
+  useEffect(() => {
+    const dl = new DRACOLoader();
+    dl.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.6/');
+    dl.preload();
+    dracoLoaderRef.current = dl;
+    return () => { dl.dispose(); dracoLoaderRef.current = null; };
+  }, []);
+
+  // ─── Instalar layers de todos los modelos ─────────────────────────────────
   useEffect(() => {
     const map = mapRef.current;
-    if (!map) return;
+    if (!map || !dracoLoaderRef.current) return;
 
     const install = () => {
-      if (map.getLayer(LAYER_ID)) map.removeLayer(LAYER_ID);
-      if (!building) return;
+      const targetIds = new Set(allModels.map(m => `fie-model-${m.building_id}`));
 
-      const lngLat = getCoords(building.code);
+      // Eliminar layers que ya no están en la lista
+      installedLayers.current.forEach((_, layerId) => {
+        if (!targetIds.has(layerId) && map.getLayer(layerId)) {
+          map.removeLayer(layerId);
+          installedLayers.current.delete(layerId);
+        }
+      });
+
+      // Agregar layers nuevos
+      const newModels = allModels.filter(m => !installedLayers.current.has(`fie-model-${m.building_id}`));
+      if (!newModels.length) return;
+
+      pendingLoadsRef.current += newModels.length;
       setModelLoading(true);
       setModelProgress(0);
 
-      map.addLayer(createModelLayer({
-        id:            LAYER_ID,
-        modelUrl:      modelPath || null,
-        lngLat,
-        modelTransform,
-        onProgress:    (p) => setModelProgress(p),
-        onLoaded:      ()  => setModelLoading(false),
-      }));
+      newModels.forEach(m => {
+        const layerId = `fie-model-${m.building_id}`;
+        const lngLat  = getCoords(m.building_code);
 
-      map.flyTo({ center: lngLat, zoom: 17.2, pitch: 58, bearing: -20, speed: 0.8, essential: true });
+        const onDone = () => {
+          pendingLoadsRef.current = Math.max(0, pendingLoadsRef.current - 1);
+          if (pendingLoadsRef.current === 0) setModelLoading(false);
+        };
+
+        map.addLayer(createModelLayer({
+          id:            layerId,
+          modelUrl:      m.file_path,
+          lngLat,
+          modelTransform: m,
+          dracoLoader:   dracoLoaderRef.current,
+          onProgress:    (p) => setModelProgress(p),
+          onLoaded:      onDone,
+          onError:       onDone,
+        }));
+        installedLayers.current.set(layerId, true);
+      });
     };
 
     if (mapReadyRef.current) install();
     else map.once('load', install);
 
     return () => {
-      if (mapRef.current?.getLayer(LAYER_ID)) mapRef.current.removeLayer(LAYER_ID);
-      setModelLoading(false);
+      // Al desmontar, limpiar todos los layers instalados
+      installedLayers.current.forEach((_, layerId) => {
+        if (mapRef.current?.getLayer(layerId)) mapRef.current.removeLayer(layerId);
+      });
+      installedLayers.current.clear();
+      pendingLoadsRef.current = 0;
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [building?.id, modelPath, JSON.stringify(modelTransform)]);
+  }, [allModels.map(m => m.building_id).join(',')]);
+
+  // ─── Volar al edificio seleccionado ───────────────────────────────────────
+  useEffect(() => {
+    if (!building || !mapReadyRef.current) return;
+    const lngLat = getCoords(building.code);
+    mapRef.current?.flyTo({ center: lngLat, zoom: 17.2, pitch: 58, bearing: -20, speed: 0.8, essential: true });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [building?.id]);
 
   // ─── Marcadores de hotspots ────────────────────────────────────────────────
   useEffect(() => {
@@ -465,7 +505,7 @@ export default function MapboxViewer({ modelPath, modelTransform = null, hotspot
         }}>
           <span style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--color-primary)', flexShrink: 0 }}/>
           {building.name}
-          {modelPath
+          {allModels.some(m => m.building_id === building.id)
             ? <span style={{ color: 'var(--color-success)', fontWeight: 400, fontSize: '0.68rem' }}>· modelo 3D</span>
             : <span style={{ color: 'var(--color-warning)', fontWeight: 400, fontSize: '0.68rem' }}>· demo</span>
           }

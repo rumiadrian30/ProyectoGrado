@@ -126,7 +126,12 @@ if (!isProd || process.env.SWAGGER_ENABLED === 'true') {
 }
 
 // ── Rutas ────────────────────────────────────────────────────
-app.use('/models', express.static(path.isAbsolute(MODELS_DIR) ? MODELS_DIR : path.resolve(__dirname, MODELS_DIR)));
+app.use('/models', express.static(path.isAbsolute(MODELS_DIR) ? MODELS_DIR : path.resolve(__dirname, MODELS_DIR), {
+  setHeaders: (res) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET');
+  }
+}));
 app.use('/api/auth',        authRoutes);
 app.use('/api/hotspots',    hotspotRoutes);
 app.use('/api/audit-logs',  auditRoutes);
