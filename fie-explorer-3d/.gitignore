@@ -2,8 +2,8 @@
 node_modules/
 */node_modules/
 
-uploads/
-*/uploads/
+uploads/models/*
+!uploads/models/.gitkeep
 
 # Variables de entorno — NUNCA subir al repo
 .env
