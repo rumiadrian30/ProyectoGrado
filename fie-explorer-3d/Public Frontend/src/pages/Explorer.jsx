@@ -36,34 +36,73 @@ export default function Explorer() {
   } = useViewerStore();
 
   const [buildings,    setBuildings]    = useState([]);
-  const [showSelector, setShowSelector] = useState(!buildingId);
+  const [showSelector, setShowSelector] = useState(false);
   const [sidebarOpen,  setSidebarOpen]  = useState(true);
   const [allExteriorModels, setAllExteriorModels] = useState([]);
   const [interiorModel,     setInteriorModel]     = useState(null);
 
   useEffect(() => { if (isMobile) setSidebarOpen(false); }, [isMobile]);
 
+  // ── Cargar edificios ──────────────────────────────────────
   useEffect(() => {
     buildingsService.getAll()
       .then(res => setBuildings(Array.isArray(res) ? res : (res?.data ?? [])))
       .catch(console.error);
   }, []);
 
+  // ── HU-09: validar edificio restaurado desde localStorage ─
+  // Cuando los edificios cargan desde la API, verificamos que el
+  // edificio guardado en localStorage siga existiendo y esté activo.
+  // Si fue eliminado o desactivado en el admin, limpiamos la selección
+  // silenciosamente sin mostrar ningún error al usuario.
   useEffect(() => {
-    if (buildingId && buildings.length) {
-      const found = buildings.find(b => b.id === buildingId);
-      if (found) { setSelectedBuilding(found); setShowSelector(false); }
-    }
-  }, [buildingId, buildings, setSelectedBuilding]);
+    if (!buildings.length) return;
 
-  // Cargar TODOS los modelos exteriores una sola vez al montar
+    // Si la URL trae un buildingId, tiene prioridad sobre el localStorage
+    if (buildingId) {
+      const found = buildings.find(b => String(b.id) === String(buildingId) && b.is_active !== false);
+      if (found) {
+        setSelectedBuilding(found);
+        setShowSelector(false);
+      } else {
+        // El ID de la URL ya no existe — limpiar y mostrar selector
+        setSelectedBuilding(null);
+        navigate('/explorar', { replace: true });
+        setShowSelector(true);
+      }
+      return;
+    }
+
+    // Sin buildingId en URL: intentar restaurar desde localStorage
+    if (selectedBuilding) {
+      const stillExists = buildings.find(
+        b => String(b.id) === String(selectedBuilding.id) && b.is_active !== false
+      );
+      if (stillExists) {
+        // El edificio sigue activo — restaurar selección y navegar a su URL
+        setSelectedBuilding(stillExists); // actualizar con datos frescos del servidor
+        setShowSelector(false);
+        navigate(`/explorar/${stillExists.id}`, { replace: true });
+      } else {
+        // El edificio fue eliminado o desactivado — limpiar silenciosamente
+        setSelectedBuilding(null);
+        setShowSelector(true);
+      }
+    } else {
+      // No hay edificio guardado → mostrar selector
+      setShowSelector(true);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [buildings]);
+
+  // ── Cargar todos los modelos exteriores una sola vez ──────
   useEffect(() => {
     modelsService.getAllActive('exterior')
       .then(setAllExteriorModels)
       .catch(console.error);
   }, []);
 
-  // Modelo interior: solo para el edificio seleccionado cuando se activa esa vista
+  // ── Modelo interior para el edificio seleccionado ─────────
   useEffect(() => {
     if (viewMode !== 'interior' || !selectedBuilding) { setInteriorModel(null); return; }
     modelsService.getActive(selectedBuilding.id, 'interior', 0)
@@ -71,16 +110,16 @@ export default function Explorer() {
       .catch(() => setInteriorModel(null));
   }, [selectedBuilding, viewMode]);
 
-  // Modelos que el visor debe renderizar en cada momento
+  // ── Modelos a renderizar según vista ─────────────────────
   const modelsToShow = viewMode === 'exterior'
     ? allExteriorModels
     : (interiorModel ? [interiorModel] : []);
 
-  // Info del modelo del edificio seleccionado (para la barra lateral)
   const modelInfo = selectedBuilding
     ? modelsToShow.find(m => m.building_id === selectedBuilding.id) ?? null
     : null;
 
+  // ── Hotspots del edificio seleccionado ────────────────────
   useEffect(() => {
     if (!selectedBuilding) return;
     const params = { building_id: selectedBuilding.id };
@@ -90,8 +129,9 @@ export default function Explorer() {
       .catch(() => setHotspots([]));
   }, [selectedBuilding, currentFloor, viewMode, setHotspots]);
 
+  // ── Selección de edificio ─────────────────────────────────
   const handleSelectBuilding = useCallback((b) => {
-    setSelectedBuilding(b);
+    setSelectedBuilding(b);      // Zustand persist lo guarda en localStorage
     setShowSelector(false);
     setActiveHotspot(null);
     navigate(`/explorar/${b.id}`, { replace: true });
@@ -103,18 +143,12 @@ export default function Explorer() {
   const TYPE_ICONS = { lab: '🔬', office: '🏢', service: '⚙️', access: '🚪' };
 
   return (
-    /**
-     * El mapa ocupa SIEMPRE el 100% del área (position: relative, flex: 1).
-     * El sidebar es SIEMPRE position: absolute sobre el mapa, en ambos breakpoints.
-     * Así el canvas Mapbox nunca cambia de tamaño al abrir/cerrar el panel
-     * y no hay ningún flash blanco.
-     */
     <div style={{
       position: 'fixed', inset: 0, top: 'var(--nav-h)',
       overflow: 'hidden',
     }}>
 
-      {/* ── MAPA: siempre 100% del espacio disponible ────────────────────── */}
+      {/* ── MAPA ───────────────────────────────────────────────────────────── */}
       <MapboxViewer
         allModels={modelsToShow}
         building={selectedBuilding}
@@ -123,38 +157,34 @@ export default function Explorer() {
         isMobile={isMobile}
       />
 
-      {/* ── BACKDROP (móvil y desktop con sidebar abierto) ───────────────── */}
+      {/* ── BACKDROP ───────────────────────────────────────────────────────── */}
       {sidebarOpen && (
         <div
           onClick={() => setSidebarOpen(false)}
           style={{
-            position:   'absolute', inset: 0,
-            // En móvil backdrop oscuro; en desktop transparente para no molestar
-            background:  isMobile ? 'rgba(0,0,0,0.35)' : 'transparent',
-            zIndex:      29,
-            // Solo bloquear clicks en móvil
+            position:      'absolute', inset: 0,
+            background:    isMobile ? 'rgba(0,0,0,0.35)' : 'transparent',
+            zIndex:        29,
             pointerEvents: isMobile ? 'auto' : 'none',
           }}
         />
       )}
 
-      {/* ── SIDEBAR: absoluto sobre el mapa, deslizante ─────────────────── */}
-      <aside
-        style={{
-          position:   'absolute',
-          top:         0,
-          left:        sidebarOpen ? 0 : -(SIDEBAR_W + 2),
-          height:     '100%',
-          width:       SIDEBAR_W,
-          zIndex:      30,
-          transition: 'left 300ms cubic-bezier(.4,0,.2,1)',
-          background: 'var(--color-bg)',
-          borderRight:'1px solid var(--color-border)',
-          display:    'flex',
-          flexDirection: 'column',
-          boxShadow:  sidebarOpen ? 'var(--shadow-xl)' : 'none',
-        }}
-      >
+      {/* ── SIDEBAR ────────────────────────────────────────────────────────── */}
+      <aside style={{
+        position:   'absolute',
+        top:         0,
+        left:        sidebarOpen ? 0 : -(SIDEBAR_W + 2),
+        height:     '100%',
+        width:       SIDEBAR_W,
+        zIndex:      30,
+        transition: 'left 300ms cubic-bezier(.4,0,.2,1)',
+        background: 'var(--color-bg)',
+        borderRight:'1px solid var(--color-border)',
+        display:    'flex',
+        flexDirection: 'column',
+        boxShadow:  sidebarOpen ? 'var(--shadow-xl)' : 'none',
+      }}>
         {/* Header */}
         <div style={{
           padding:      '1rem 1.25rem',
@@ -172,15 +202,12 @@ export default function Explorer() {
               Campus ESPOCH · Riobamba
             </p>
           </div>
-          <button
-            onClick={() => setSidebarOpen(false)}
-            style={{
-              width: 30, height: 30, borderRadius: 'var(--radius-sm)',
-              background: 'rgba(255,255,255,0.15)', border: 'none',
-              color: '#fff', cursor: 'pointer', display: 'flex',
-              alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-            }}
-          >
+          <button onClick={() => setSidebarOpen(false)} style={{
+            width: 30, height: 30, borderRadius: 'var(--radius-sm)',
+            background: 'rgba(255,255,255,0.15)', border: 'none',
+            color: '#fff', cursor: 'pointer', display: 'flex',
+            alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+          }}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
               stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
               <path d="M18 6 6 18M6 6l12 12"/>
@@ -196,6 +223,7 @@ export default function Explorer() {
             background:   'var(--color-primary-50)',
             flexShrink:   0,
           }}>
+            {/* Badge de restaurado desde localStorage */}
             <p style={{
               fontSize: '0.65rem', fontWeight: 700, color: 'var(--color-primary)',
               textTransform: 'uppercase', letterSpacing: '0.08em', margin: '0 0 0.3rem',
@@ -356,13 +384,12 @@ export default function Explorer() {
         </div>
       </aside>
 
-      {/* ── BOTÓN TOGGLE (siempre visible sobre el mapa) ─────────────────── */}
+      {/* ── BOTÓN TOGGLE ───────────────────────────────────────────────────── */}
       <button
         onClick={() => setSidebarOpen(p => !p)}
         title={sidebarOpen ? 'Ocultar panel' : 'Mostrar panel'}
         style={{
           position:   'absolute',
-          // Se desplaza con el sidebar cuando está abierto en desktop
           left:        sidebarOpen && !isMobile ? SIDEBAR_W + 8 : 12,
           top:         12,
           zIndex:      31,

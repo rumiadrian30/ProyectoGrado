@@ -14,7 +14,7 @@
  *   3. Fallback → coordenadas estáticas del campus
  */
 
-import React, { useEffect, useRef, useCallback } from 'react';
+import React, { useEffect, useRef, useCallback, useState } from 'react';
 import mapboxgl from 'mapbox-gl';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
@@ -183,6 +183,8 @@ export default function MapboxViewer({ allModels = [], building, hotspots = [], 
   const dracoLoaderRef   = useRef(null);   // DRACOLoader compartido
   const installedLayers  = useRef(new Map()); // layerId → true
   const pendingLoadsRef  = useRef(0);      // modelos aún cargando
+  const buildingRef = useRef(building);
+
 
   // Refs para acceder siempre a los valores más recientes sin re-disparar flyTo
   const allModelsRef     = useRef(allModels);
@@ -190,42 +192,74 @@ export default function MapboxViewer({ allModels = [], building, hotspots = [], 
 
   const { setModelLoading, setModelProgress } = useViewerStore();
 
+  // ─── Estado de error WebGL ────────────────────────────────────────────────
+  const [webglError, setWebglError] = useState(false);
+
   // Sincronizar refs con los props más recientes
   useEffect(() => { allModelsRef.current = allModels; }, [allModels]);
   useEffect(() => { hotspotsRef.current  = hotspots;  }, [hotspots]);
+  useEffect(() => { buildingRef.current = building; }, [building]);
+
 
   // ─── Inicializar mapa ──────────────────────────────────────────────────────
   useEffect(() => {
     if (mapRef.current) return;
 
-    const map = new mapboxgl.Map({
-      container: containerRef.current,
-        attributionControl: false,  
-      zoom:      CAMPUS_VIEW.zoom,
-      pitch:     CAMPUS_VIEW.pitch,
-      bearing:   CAMPUS_VIEW.bearing ?? -15,
-      center:    CAMPUS_VIEW.center,
-      // ── Estilo Standard con objetos 3D nativos desactivados ──────────────
-      // (solo se verán los modelos GLB propios del proyecto)
-      style: 'mapbox://styles/mapbox/standard',
-      config: {
-        basemap: {
-          show3dObjects: false,  // desactiva edificios, árboles y landmarks 3D nativos
+    // ── Detección de WebGL antes de crear el mapa ────────────────────────
+    // mapboxgl.supported() es la API oficial de Mapbox para verificar WebGL.
+    // Si falla aquí se muestra el error amigable sin reventar React.
+    if (!mapboxgl.supported()) {
+      setWebglError(true);
+      return;
+    }
+
+    let map;
+    try {
+      map = new mapboxgl.Map({
+        container: containerRef.current,
+        attributionControl: false,
+        zoom:      CAMPUS_VIEW.zoom,
+        pitch:     CAMPUS_VIEW.pitch,
+        bearing:   CAMPUS_VIEW.bearing ?? -15,
+        center:    CAMPUS_VIEW.center,
+        style: 'mapbox://styles/mapbox/standard',
+        config: {
+          basemap: {
+            show3dObjects: false,
+          },
         },
-      },
-      antialias: true,
-    });
+        antialias: true,
+      });
+    } catch {
+      // Captura cualquier error de inicialización de WebGL de Mapbox
+      setWebglError(true);
+      return;
+    }
 
     map.addControl(new mapboxgl.NavigationControl({ visualizePitch: true }), 'bottom-right');
     map.addControl(new mapboxgl.ScaleControl({ unit: 'metric' }), 'bottom-left');
     map.addControl(new mapboxgl.AttributionControl({ compact: true }), 'bottom-right');
-    map.on('load', () => { mapReadyRef.current = true; });
+    map.on('load', () => {
+      mapReadyRef.current = true;
+
+      // Si hay edificio restaurado desde localStorage, volar a él ahora que el mapa está listo
+      if (buildingRef.current) {
+        const params = computeBuildingFlyTo(
+          buildingRef.current,
+          allModelsRef.current,
+          hotspotsRef.current,
+        );
+        if (params) {
+          mapRef.current?.flyTo({ ...params, speed: 0.85, curve: 1.4, essential: true });
+        }
+      }
+    });
 
     mapRef.current = map;
     return () => {
       cancelAnimationFrame(rafRef.current);
       map.remove();
-      mapRef.current    = null;
+      mapRef.current      = null;
       mapReadyRef.current = false;
     };
   }, []);
@@ -472,6 +506,39 @@ export default function MapboxViewer({ allModels = [], building, hotspots = [], 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hotspotIdsKey, building?.id]);
 
+  // ─── Demo model para edificio sin modelo 3D registrado ────────────────────
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!building) return;
+
+    const hasRealModel = allModels.some(m => m.building_id === building.id);
+    if (hasRealModel) return;
+
+    const demoLayerId = `fie-demo-${building.id}`;
+
+    const install = () => {
+      if (map.getLayer(demoLayerId)) return;
+      const lngLat = getCoords(building.code);
+      map.addLayer(createModelLayer({
+        id:             demoLayerId,
+        modelUrl:       null,
+        lngLat,
+        modelTransform: {},
+        dracoLoader:    null,
+      }));
+    };
+
+    if (mapReadyRef.current) install();
+    else map.once('load', install);
+
+    return () => {
+      if (mapRef.current?.getLayer(demoLayerId)) {
+        mapRef.current.removeLayer(demoLayerId);
+      }
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [building?.id, allModels.map(m => m.building_id).join(',')]);
+
   // ─── Marcadores de hotspots ────────────────────────────────────────────────
   useEffect(() => {
     const map = mapRef.current;
@@ -514,6 +581,48 @@ export default function MapboxViewer({ allModels = [], building, hotspots = [], 
   const flyToCampus = useCallback(() => {
     mapRef.current?.flyTo({ ...CAMPUS_VIEW, duration: 1200, essential: true });
   }, []);
+
+  // ─── Pantalla de error WebGL ──────────────────────────────────────────────
+  if (webglError) {
+    return (
+      <div style={{
+        width: '100%', height: '100%',
+        display: 'flex', flexDirection: 'column',
+        alignItems: 'center', justifyContent: 'center',
+        background: 'var(--color-bg-soft, #f8fafc)',
+        gap: '1rem', padding: '2rem', textAlign: 'center',
+      }}>
+        <span style={{ fontSize: '3rem' }}>⚠️</span>
+        <h3 style={{ margin: 0, color: 'var(--color-text, #111827)', fontSize: '1.15rem', fontWeight: 700 }}>
+          WebGL no disponible
+        </h3>
+        <p style={{
+          maxWidth: 380, margin: 0,
+          color: 'var(--color-text-3, #6b7280)',
+          fontSize: '0.88rem', lineHeight: 1.6,
+        }}>
+          Tu navegador o dispositivo no puede inicializar WebGL, tecnología necesaria
+          para el visor 3D. Actualiza tu navegador o descarga uno compatible:
+        </p>
+        <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', justifyContent: 'center' }}>
+          <a href="https://www.google.com/chrome" target="_blank" rel="noreferrer"
+            style={{
+              padding: '0.5rem 1.1rem', borderRadius: 8, fontWeight: 600,
+              background: '#1967D2', color: '#fff', textDecoration: 'none', fontSize: '0.85rem',
+            }}>
+            🌐 Descargar Chrome
+          </a>
+          <a href="https://www.mozilla.org/firefox" target="_blank" rel="noreferrer"
+            style={{
+              padding: '0.5rem 1.1rem', borderRadius: 8, fontWeight: 600,
+              background: '#FF7139', color: '#fff', textDecoration: 'none', fontSize: '0.85rem',
+            }}>
+            🦊 Descargar Firefox
+          </a>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%' }}>

@@ -1,34 +1,38 @@
 import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
 
-export const useViewerStore = create((set) => ({
-  // Edificio seleccionado
-  selectedBuilding: null,
-  setSelectedBuilding: (b) => set({ selectedBuilding: b }),
+const LS_KEY = 'fie-viewer-building';
 
-  // Hotspot activo (panel lateral)
-  activeHotspot: null,
-  setActiveHotspot: (h) => set({ activeHotspot: h }),
+export const useViewerStore = create(
+  persist(
+    (set) => ({
+      selectedBuilding: null,
+      setSelectedBuilding: (b) => set({ selectedBuilding: b }),
 
-  // Vista actual: 'exterior' | 'interior'
-  viewMode: 'exterior',
-  setViewMode: (m) => set({ viewMode: m }),
+      activeHotspot: null,
+      setActiveHotspot: (h) => set({ activeHotspot: h }),
 
-  // Planta actual para interior
-  currentFloor: 1,
-  setCurrentFloor: (f) => set({ currentFloor: f }),
+      viewMode: 'exterior',
+      setViewMode: (m) => set({ viewMode: m }),
 
-  // Hotspots cargados
-  hotspots: [],
-  setHotspots: (hs) => set({ hotspots: hs }),
+      currentFloor: 1,
+      setCurrentFloor: (f) => set({ currentFloor: f }),
 
-  // Estado de carga del modelo 3D
-  modelLoading: false,
-  setModelLoading: (v) => set({ modelLoading: v }),
+      hotspots: [],
+      setHotspots: (hs) => set({ hotspots: hs }),
 
-  modelProgress: 0,
-  setModelProgress: (p) => set({ modelProgress: p }),
+      modelLoading: false,
+      setModelLoading: (v) => set({ modelLoading: v }),
 
-  // LOD activo: 0 | 1 | 2
-  activeLOD: 0,
-  setActiveLOD: (l) => set({ activeLOD: l }),
-}));
+      modelProgress: 0,
+      setModelProgress: (p) => set({ modelProgress: p }),
+
+      activeLOD: 0,
+      setActiveLOD: (l) => set({ activeLOD: l }),
+    }),
+    {
+      name: LS_KEY,
+      partialize: (state) => ({ selectedBuilding: state.selectedBuilding }),
+    }
+  )
+);

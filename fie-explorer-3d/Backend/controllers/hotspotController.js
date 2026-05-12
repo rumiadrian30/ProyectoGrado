@@ -1,10 +1,66 @@
+// controllers/hotspotController.js
+// GET /api/hotspots usa caché Redis (TTL 60 s).
+// POST / PUT / PATCH / DELETE invalidan el caché automáticamente.
+
 const pool = require('../db/pool');
 const { writeAudit } = require('./authController');
+const { getClient }  = require('../utils/redisClient');
 
 const log = (msg) => console.log(`  \x1b[35m[HOTSPOT]\x1b[0m ${msg}`);
 
+const CACHE_KEY = 'hotspots:list';
+const CACHE_TTL = 60; // segundos
+
+// ── Helpers de caché ─────────────────────────────────────────
+async function cacheGet(key) {
+  const redis = getClient();
+  if (!redis) return null;
+  try {
+    const raw = await redis.get(key);
+    if (raw) {
+      console.log(`  \x1b[36m[Redis]\x1b[0m cache hit  → ${key}`);
+      return JSON.parse(raw);
+    }
+    console.log(`  \x1b[36m[Redis]\x1b[0m cache miss → ${key}`);
+    return null;
+  } catch (err) {
+    console.warn(`  \x1b[33m[Redis]\x1b[0m get error: ${err.message}`);
+    return null;
+  }
+}
+
+async function cacheSet(key, data, ttl = CACHE_TTL) {
+  const redis = getClient();
+  if (!redis) return;
+  try {
+    await redis.set(key, JSON.stringify(data), 'EX', ttl);
+    console.log(`  \x1b[36m[Redis]\x1b[0m cache set  → ${key} (TTL ${ttl}s)`);
+  } catch (err) {
+    console.warn(`  \x1b[33m[Redis]\x1b[0m set error: ${err.message}`);
+  }
+}
+
+async function cacheInvalidate(key) {
+  const redis = getClient();
+  if (!redis) return;
+  try {
+    await redis.del(key);
+    console.log(`  \x1b[36m[Redis]\x1b[0m cache invalidated → ${key}`);
+  } catch (err) {
+    console.warn(`  \x1b[33m[Redis]\x1b[0m del error: ${err.message}`);
+  }
+}
+
+// ── GET / — lista todos los hotspots (con caché) ─────────────
 async function list(req, res, next) {
   try {
+    // 1. Intentar caché
+    const cached = await cacheGet(CACHE_KEY);
+    if (cached) {
+      return res.json(cached);
+    }
+
+    // 2. Consultar BD
     const { rows } = await pool.query(`
       SELECT h.*, b.name AS building_name, b.code AS building_code
       FROM hotspots h
@@ -12,10 +68,15 @@ async function list(req, res, next) {
       ORDER BY h.created_at DESC
     `);
     log(`Listado: ${rows.length} hotspots`);
+
+    // 3. Guardar en caché
+    await cacheSet(CACHE_KEY, rows);
+
     res.json(rows);
   } catch (err) { next(err); }
 }
 
+// ── GET /:id ─────────────────────────────────────────────────
 async function getOne(req, res, next) {
   try {
     const { rows } = await pool.query(
@@ -32,15 +93,17 @@ async function getOne(req, res, next) {
   } catch (err) { next(err); }
 }
 
+// ── POST / ───────────────────────────────────────────────────
 async function create(req, res, next) {
   const ip = req.ip;
   const { building_id, name, description, type, floor, pos_x, pos_y, pos_z, schedule, equipment } = req.body;
 
-  if (!name?.trim())     { const e=new Error('El campo "name" es obligatorio.'); e.status=400; return next(e); }
-  if (!building_id)      { const e=new Error('El campo "building_id" es obligatorio.'); e.status=400; return next(e); }
-  if (!['lab','office','service','access'].includes(type)) {
-    const e=new Error('Tipo inválido. Usar: lab, office, service, access'); e.status=400; return next(e);
-  }
+  if (!name?.trim())
+    { const e=new Error('El campo "name" es obligatorio.'); e.status=400; return next(e); }
+  if (!building_id)
+    { const e=new Error('El campo "building_id" es obligatorio.'); e.status=400; return next(e); }
+  if (!['lab','office','service','access'].includes(type))
+    { const e=new Error('Tipo inválido. Usar: lab, office, service, access'); e.status=400; return next(e); }
 
   try {
     const { rows } = await pool.query(`
@@ -58,11 +121,13 @@ async function create(req, res, next) {
       new_values: { name: h.name, type: h.type, floor: h.floor, building_id },
       ip_address: ip, user_agent: req.headers['user-agent'],
     });
+    await cacheInvalidate(CACHE_KEY); // invalidar caché tras escritura
     log(`✅ CREADO — "${h.name}" (${h.type}) por ${req.admin.email}`);
     res.status(201).json(h);
   } catch (err) { next(err); }
 }
 
+// ── PUT /:id ─────────────────────────────────────────────────
 async function update(req, res, next) {
   const ip = req.ip;
   const { id } = req.params;
@@ -96,11 +161,13 @@ async function update(req, res, next) {
       new_values: { name: h.name, type: h.type, floor: h.floor },
       ip_address: ip, user_agent: req.headers['user-agent'],
     });
+    await cacheInvalidate(CACHE_KEY);
     log(`✏️  ACTUALIZADO — "${h.name}" por ${req.admin.email}`);
     res.json(h);
   } catch (err) { next(err); }
 }
 
+// ── PATCH /:id/toggle ─────────────────────────────────────────
 async function toggle(req, res, next) {
   const ip = req.ip;
   const { id } = req.params;
@@ -120,11 +187,13 @@ async function toggle(req, res, next) {
       new_values: { is_active: h.is_active },
       ip_address: ip, user_agent: req.headers['user-agent'],
     });
+    await cacheInvalidate(CACHE_KEY);
     log(`${h.is_active ? '🟢' : '🔴'} ${action} — "${h.name}" por ${req.admin.email}`);
     res.json(h);
   } catch (err) { next(err); }
 }
 
+// ── DELETE /:id ───────────────────────────────────────────────
 async function remove(req, res, next) {
   const ip = req.ip;
   const { id } = req.params;
@@ -140,6 +209,7 @@ async function remove(req, res, next) {
       old_values: { name: deleted.name, type: deleted.type, building_id: deleted.building_id },
       ip_address: ip, user_agent: req.headers['user-agent'],
     });
+    await cacheInvalidate(CACHE_KEY);
     log(`🗑️  ELIMINADO — "${deleted.name}" por ${req.admin.email}`);
     res.json({ message: `Hotspot "${deleted.name}" eliminado correctamente.` });
   } catch (err) { next(err); }
