@@ -222,6 +222,7 @@ export default function MapboxViewer({ allModels = [], building, hotspots = [], 
         pitch:     CAMPUS_VIEW.pitch,
         bearing:   CAMPUS_VIEW.bearing ?? -15,
         center:    CAMPUS_VIEW.center,
+        projection: 'mercator', 
         style: 'mapbox://styles/mapbox/standard',
         config: {
           basemap: {
@@ -241,7 +242,7 @@ export default function MapboxViewer({ allModels = [], building, hotspots = [], 
     map.addControl(new mapboxgl.AttributionControl({ compact: true }), 'bottom-right');
     map.on('load', () => {
       mapReadyRef.current = true;
-
+      map.setProjection('mercator');
       // Si hay edificio restaurado desde localStorage, volar a él ahora que el mapa está listo
       if (buildingRef.current) {
         const params = computeBuildingFlyTo(
@@ -634,7 +635,7 @@ export default function MapboxViewer({ allModels = [], building, hotspots = [], 
           onClick={flyToCampus}
           title="Ver campus completo"
           style={{
-            position: 'absolute', top: 54, right: 12, zIndex: 20,
+            position: 'absolute', top: 12, right: 12, zIndex: 20,
             width: 36, height: 36,
             background: 'var(--color-bg)', border: '1px solid var(--color-border)',
             borderRadius: 'var(--radius-sm)', cursor: 'pointer',
@@ -656,7 +657,7 @@ export default function MapboxViewer({ allModels = [], building, hotspots = [], 
       {/* Hint de teclado */}
       {!isMobile && (
         <div style={{
-          position: 'absolute', top: building ? 98 : 54, right: 12, zIndex: 20,
+          position: 'absolute', top: 54, right: 12, zIndex: 20,
           background: 'var(--color-bg)', border: '1px solid var(--color-border)',
           borderRadius: 'var(--radius-sm)', padding: '0.45rem 0.6rem',
           boxShadow: 'var(--shadow-xs)', fontSize: '0.62rem',

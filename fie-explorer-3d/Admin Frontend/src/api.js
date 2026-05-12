@@ -1,11 +1,23 @@
 // ── URL base: usa el proxy de Vite → evita CORS ──────────────
 const API = '/api';
 
-// Token guardado en memoria (igual que el HTML original)
-let _token = null;
+// sessionStorage: persiste en refresh, se limpia al cerrar el navegador
+let _token = sessionStorage.getItem('admin_token');
+let _onUnauthorized = null;
 
-export function setToken(t) { _token = t;    }
-export function clearToken() { _token = null; }
+export function setToken(t) {
+  _token = t;
+  sessionStorage.setItem('admin_token', t);
+}
+export function clearToken() {
+  _token = null;
+  sessionStorage.removeItem('admin_token');
+  sessionStorage.removeItem('admin_user');
+}
+
+export function onUnauthorized(cb) {
+  _onUnauthorized = cb;
+}
 
 // ── fetch helper idéntico al del HTML ────────────────────────
 export async function api(method, path, body) {
@@ -19,6 +31,13 @@ export async function api(method, path, body) {
 
   const res  = await fetch(API + path, opts);
   const data = await res.json().catch(() => ({}));
+
+  // Sesión expirada o token inválido → logout automático
+  if (res.status === 401) {
+    clearToken();
+    _onUnauthorized?.();
+    throw Object.assign(new Error('Sesión expirada. Vuelve a iniciar sesión.'), { status: 401 });
+  }
 
   if (!res.ok) {
     throw Object.assign(
