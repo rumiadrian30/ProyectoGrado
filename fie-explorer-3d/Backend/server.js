@@ -21,12 +21,13 @@ const adminUserRoutes  = require('./routes/adminUserRoutes');
 const settingsRoutes   = require('./routes/settingsRoutes');
 const { errorMiddleware } = require('./middleware/errorMiddleware');
 const { MODELS_DIR } = require('./middleware/uploadMiddleware');
+const { getClient }  = require('./utils/redisClient');  // ← Redis
 
 const app  = express();
 const PORT = process.env.PORT || 3001;
 const isProd = process.env.NODE_ENV === 'production';
 
-// ── Seguridad: Helmet (HT-10) ────────────────────────────────
+// ── Seguridad: Helmet ────────────────────────────────────────
 app.use(helmet({
   contentSecurityPolicy: {
     directives: {
@@ -116,7 +117,7 @@ app.use((req, res, next) => {
   next();
 });
 
-// ── Swagger UI (/api/docs) — HT-08 ──────────────────────────
+// ── Swagger UI (/api/docs) ───────────────────────────────────
 if (!isProd || process.env.SWAGGER_ENABLED === 'true') {
   app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, swaggerUiOptions));
   app.get('/api/docs.json', (_req, res) => {
@@ -147,7 +148,6 @@ app.get('/api/health', (_, res) => {
   res.json({ status: 'ok', project: 'FIE Explorer 3D', timestamp: new Date().toISOString() });
 });
 
-// Ruta raíz — redirige a la documentación
 app.get('/', (_, res) => {
   res.json({
     project: 'FIE Explorer 3D — API REST',
@@ -163,7 +163,8 @@ app.use((req, _, next) => {
 });
 app.use(errorMiddleware);
 
-app.listen(PORT, () => {
+// ── Arranque ─────────────────────────────────────────────────
+app.listen(PORT, async () => {
   console.log('');
   console.log(`${B}\x1b[34m╔════════════════════════════════════════╗${R}`);
   console.log(`${B}\x1b[34m║   FIE Explorer 3D — API REST · ESPOCH  ║${R}`);
@@ -171,5 +172,20 @@ app.listen(PORT, () => {
   console.log(`${B}\x1b[34m║   Docs → http://localhost:${PORT}/api/docs ║${R}`);
   console.log(`${B}\x1b[34m╚════════════════════════════════════════╝${R}`);
   console.log('');
+
+  // ── Verificar conexión Redis al arrancar ─────────────────
+  const redis = getClient();
+  if (redis) {
+    try {
+      await redis.ping();
+      console.log(`  \x1b[36m[Redis]\x1b[0m \x1b[32m Conectado\x1b[0m → ${process.env.REDIS_URL}`);
+    } catch (err) {
+      console.warn(`  \x1b[33m[Redis]\x1b[0m \x1b[31m✗ No disponible\x1b[0m — ${err.message}`);
+      console.warn(`  \x1b[33m[Redis]\x1b[0m   La API funcionará sin caché. Instala Redis y reinicia.`);
+    }
+  }
+
+  console.log('');
 });
+
 module.exports = app;
