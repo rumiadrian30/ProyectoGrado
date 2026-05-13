@@ -8,6 +8,7 @@ export default function BuildingSelector({ buildings, onSelect, onClose }) {
   const [filter, setFilter] = useState('all');
 
   const filtered = buildings.filter(b => {
+    if (b.is_active === false) return false;  
     const matchSearch = b.name.toLowerCase().includes(search.toLowerCase()) ||
       b.code.toLowerCase().includes(search.toLowerCase());
     const matchType = filter === 'all' || b.type === filter;
