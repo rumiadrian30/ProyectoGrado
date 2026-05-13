@@ -49,7 +49,7 @@ function BuildingForm({ data, onChange, isEdit = false }) {
           </select>
         </div>
         <div className="form-group">
-          <label className="form-label">Número de plantas</label>
+          <label className="form-label">Número de plantas *</label>
           <input className="form-input" type="number" min="1" max="20"
             value={data.floor_count || 1}
             onChange={e => set('floor_count', parseInt(e.target.value) || 1)} />
