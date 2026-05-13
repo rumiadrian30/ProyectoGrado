@@ -2,44 +2,46 @@ import React, { useState } from 'react';
 import { useViewerStore } from '../../store/viewerStore';
 
 const TYPE_ICONS = {
-  lab:     '🔬',
-  office:  '🏢',
-  service: '⚙️',
-  access:  '🚪',
+  classroom: '🏫',
+  lab:       '🔬',
+  office:    '🏢',
+  service:   '⚙️',
+  access:    '🚪',
 };
 
 const TYPE_LABELS = {
-  lab:     'Laboratorio',
-  office:  'Oficina',
-  service: 'Servicio',
-  access:  'Acceso',
+  classroom: 'Aula',
+  lab:       'Laboratorio',
+  office:    'Oficina',
+  service:   'Servicio',
+  access:    'Acceso',
 };
 
 const TYPE_COLORS = {
-  lab:     { bg: 'var(--color-primary-50)', text: 'var(--color-primary)' },
-  office:  { bg: '#e0f2fe', text: '#0369a1' },
-  service: { bg: '#dcfce7', text: '#16a34a' },
-  access:  { bg: '#fef3c7', text: '#d97706' },
+  classroom: { bg: '#ede9fe', text: '#6d28d9' },
+  lab:       { bg: 'var(--color-primary-50)', text: 'var(--color-primary)' },
+  office:    { bg: '#e0f2fe', text: '#0369a1' },
+  service:   { bg: '#dcfce7', text: '#16a34a' },
+  access:    { bg: '#fef3c7', text: '#d97706' },
 };
 
 export default function HotspotPanel() {
   const { activeHotspot, setActiveHotspot } = useViewerStore();
-  const [imgIndex, setImgIndex] = useState(0);
+  const [imgError, setImgError] = useState(false);
 
   if (!activeHotspot) return null;
 
-  const hs = activeHotspot;
-  const images = hs.images?.filter(Boolean) || [];
+  const hs     = activeHotspot;
   const colors = TYPE_COLORS[hs.type] || TYPE_COLORS.lab;
 
-  const close = () => {
-    setActiveHotspot(null);
-    setImgIndex(0);
-  };
+  // Compatibilidad: image_url (string nuevo) o images (array legacy)
+  const imageUrl = hs.image_url || hs.images?.[0]?.url || null;
+
+  const close = () => setActiveHotspot(null);
 
   return (
     <>
-      {/* Overlay oscuro en móvil */}
+      {/* Overlay móvil */}
       <div
         onClick={close}
         style={{
@@ -50,7 +52,7 @@ export default function HotspotPanel() {
         className="hs-overlay"
       />
 
-      {/* Panel lateral */}
+      {/* Panel lateral derecho */}
       <aside style={{
         position: 'absolute', top: 0, right: 0, bottom: 0,
         width: 360,
@@ -59,37 +61,19 @@ export default function HotspotPanel() {
         zIndex: 50,
         overflowY: 'auto',
         display: 'flex', flexDirection: 'column',
-        animation: 'slideUpPanel .25s ease',
+        animation: 'slideInPanel .25s ease',
         boxShadow: 'var(--shadow-xl)',
       }}>
 
-        {/* ── Galería de imágenes ── */}
-        {images.length > 0 ? (
+        {/* ── Imagen o banner de color ── */}
+        {imageUrl && !imgError ? (
           <div style={{ position: 'relative', height: 200, background: '#f0f2f5', flexShrink: 0 }}>
             <img
-              src={images[imgIndex]?.url}
-              alt={images[imgIndex]?.alt_text || hs.name}
+              src={imageUrl}
+              alt={hs.name}
               style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-              onError={e => { e.target.style.display = 'none'; }}
+              onError={() => setImgError(true)}
             />
-            {images.length > 1 && (
-              <div style={{
-                position: 'absolute', bottom: 10, left: '50%',
-                transform: 'translateX(-50%)',
-                display: 'flex', gap: '6px',
-              }}>
-                {images.map((_, i) => (
-                  <button key={i} onClick={() => setImgIndex(i)} style={{
-                    width: i === imgIndex ? 18 : 6, height: 6,
-                    borderRadius: 9999,
-                    background: i === imgIndex ? '#fff' : 'rgba(255,255,255,0.5)',
-                    border: 'none', cursor: 'pointer',
-                    transition: 'all 200ms ease',
-                    padding: 0,
-                  }}/>
-                ))}
-              </div>
-            )}
           </div>
         ) : (
           <div style={{
@@ -102,34 +86,50 @@ export default function HotspotPanel() {
           </div>
         )}
 
+        {/* Botón cerrar flotante */}
+        <button
+          onClick={close}
+          style={{
+            position: 'absolute', top: 10, right: 10,
+            width: 32, height: 32, borderRadius: '50%',
+            background: 'rgba(0,0,0,0.45)', border: 'none',
+            color: '#fff', cursor: 'pointer', zIndex: 2,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+            <path d="M18 6 6 18M6 6l12 12"/>
+          </svg>
+        </button>
+
         {/* ── Contenido ── */}
-        <div style={{ padding: '1.25rem 1.25rem 0', flex: 1 }}>
+        <div style={{ padding: '1.25rem', flex: 1, display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+
           {/* Badge tipo */}
           <span style={{
-            display: 'inline-block',
+            display: 'inline-flex', alignItems: 'center', gap: '0.3rem',
             padding: '0.2rem 0.65rem',
-            background: colors.bg,
-            color: colors.text,
+            background: colors.bg, color: colors.text,
             borderRadius: 'var(--radius-full)',
             fontSize: '0.7rem', fontWeight: 700,
             letterSpacing: '0.06em', textTransform: 'uppercase',
-            marginBottom: '0.6rem',
+            alignSelf: 'flex-start',
           }}>
             {TYPE_ICONS[hs.type]} {TYPE_LABELS[hs.type] || hs.type}
           </span>
 
+          {/* Nombre */}
           <h2 style={{
             fontFamily: 'var(--font-display)',
             fontSize: '1.2rem', fontWeight: 700,
-            color: 'var(--color-text)',
-            lineHeight: 1.2, marginBottom: '0.5rem',
+            color: 'var(--color-text)', lineHeight: 1.2,
           }}>{hs.name}</h2>
 
-          {/* Planta */}
+          {/* Edificio + piso */}
           <p style={{
             fontSize: '0.8rem', color: 'var(--color-text-3)',
             display: 'flex', alignItems: 'center', gap: '0.3rem',
-            marginBottom: '1rem',
           }}>
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
               stroke="currentColor" strokeWidth="2">
@@ -138,38 +138,51 @@ export default function HotspotPanel() {
             Piso {hs.floor} · {hs.building_name}
           </p>
 
+          {/* Descripción */}
           {hs.description && (
             <p style={{
               fontSize: '0.875rem', color: 'var(--color-text-2)',
-              lineHeight: 1.65, marginBottom: '1.25rem',
+              lineHeight: 1.65,
             }}>{hs.description}</p>
           )}
 
-          {/* Info cards */}
+          {/* ── Info cards ── */}
+          {hs.teacher && (
+            <InfoCard icon="👤" label="Docente / Responsable" value={hs.teacher} />
+          )}
           {hs.schedule && (
             <InfoCard icon="🕐" label="Horario" value={hs.schedule} />
+          )}
+          {hs.capacity && (
+            <InfoCard icon="👥" label="Capacidad" value={`${hs.capacity} personas`} />
+          )}
+          {hs.phone && (
+            <InfoCard
+              icon="📞"
+              label="Teléfono / Extensión"
+              value={hs.phone}
+              href={`tel:${hs.phone.replace(/\s/g, '')}`}
+            />
           )}
           {hs.equipment && (
             <InfoCard icon="🔧" label="Equipamiento" value={hs.equipment} />
           )}
         </div>
 
-        {/* ── Cierre ── */}
-        <div style={{ padding: '1.25rem' }}>
+        {/* ── Pie ── */}
+        <div style={{ padding: '1rem 1.25rem', borderTop: '1px solid var(--color-border)' }}>
           <button onClick={close} style={{
-            width: '100%',
-            padding: '0.75rem',
+            width: '100%', padding: '0.75rem',
             background: 'var(--color-bg-soft)',
             color: 'var(--color-text-2)',
             border: '1px solid var(--color-border)',
             borderRadius: 'var(--radius-md)',
             fontFamily: 'var(--font-body)',
             fontWeight: 500, fontSize: '0.875rem',
-            cursor: 'pointer',
-            transition: 'all var(--transition)',
+            cursor: 'pointer', transition: 'all var(--transition)',
           }}
-            onMouseEnter={e => e.target.style.background = 'var(--color-border)'}
-            onMouseLeave={e => e.target.style.background = 'var(--color-bg-soft)'}
+            onMouseEnter={e => e.currentTarget.style.background = 'var(--color-border)'}
+            onMouseLeave={e => e.currentTarget.style.background = 'var(--color-bg-soft)'}
           >
             Cerrar
           </button>
@@ -177,7 +190,7 @@ export default function HotspotPanel() {
       </aside>
 
       <style>{`
-        @keyframes slideUpPanel {
+        @keyframes slideInPanel {
           from { transform: translateX(30px); opacity: 0; }
           to   { transform: translateX(0);    opacity: 1; }
         }
@@ -185,12 +198,10 @@ export default function HotspotPanel() {
           .hs-overlay { display: block !important; }
           aside {
             position: fixed !important;
-            top: auto !important;
-            left: 0 !important;
-            right: 0 !important;
-            bottom: 0 !important;
+            top: auto !important; left: 0 !important;
+            right: 0 !important; bottom: 0 !important;
             width: 100% !important;
-            max-height: 70vh;
+            max-height: 75vh;
             border-radius: 16px 16px 0 0 !important;
           }
         }
@@ -199,13 +210,12 @@ export default function HotspotPanel() {
   );
 }
 
-function InfoCard({ icon, label, value }) {
+function InfoCard({ icon, label, value, href }) {
   return (
     <div style={{
       padding: '0.85rem',
       background: 'var(--color-bg-soft)',
       borderRadius: 'var(--radius-md)',
-      marginBottom: '0.75rem',
     }}>
       <p style={{
         fontSize: '0.72rem', fontWeight: 700,
@@ -216,9 +226,16 @@ function InfoCard({ icon, label, value }) {
       }}>
         {icon} {label}
       </p>
-      <p style={{ fontSize: '0.85rem', color: 'var(--color-text-2)', lineHeight: 1.5 }}>
-        {value}
-      </p>
+      {href ? (
+        <a href={href} style={{
+          fontSize: '0.85rem', color: 'var(--color-primary)',
+          lineHeight: 1.5, fontWeight: 500,
+        }}>{value}</a>
+      ) : (
+        <p style={{ fontSize: '0.85rem', color: 'var(--color-text-2)', lineHeight: 1.5 }}>
+          {value}
+        </p>
+      )}
     </div>
   );
 }

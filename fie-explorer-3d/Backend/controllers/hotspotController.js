@@ -11,6 +11,8 @@ const log = (msg) => console.log(`  \x1b[35m[HOTSPOT]\x1b[0m ${msg}`);
 const CACHE_KEY = 'hotspots:list';
 const CACHE_TTL = 60; // segundos
 
+const VALID_TYPES = ['lab', 'office', 'service', 'access', 'classroom'];
+
 // ── Helpers de caché ─────────────────────────────────────────
 async function cacheGet(key) {
   const redis = getClient();
@@ -54,13 +56,9 @@ async function cacheInvalidate(key) {
 // ── GET / — lista todos los hotspots (con caché) ─────────────
 async function list(req, res, next) {
   try {
-    // 1. Intentar caché
     const cached = await cacheGet(CACHE_KEY);
-    if (cached) {
-      return res.json(cached);
-    }
+    if (cached) return res.json(cached);
 
-    // 2. Consultar BD
     const { rows } = await pool.query(`
       SELECT h.*, b.name AS building_name, b.code AS building_code
       FROM hotspots h
@@ -69,9 +67,7 @@ async function list(req, res, next) {
     `);
     log(`Listado: ${rows.length} hotspots`);
 
-    // 3. Guardar en caché
     await cacheSet(CACHE_KEY, rows);
-
     res.json(rows);
   } catch (err) { next(err); }
 }
@@ -96,23 +92,49 @@ async function getOne(req, res, next) {
 // ── POST / ───────────────────────────────────────────────────
 async function create(req, res, next) {
   const ip = req.ip;
-  const { building_id, name, description, type, floor, pos_x, pos_y, pos_z, schedule, equipment } = req.body;
+  const {
+    building_id, name, description, type, floor,
+    pos_x, pos_y, pos_z,
+    schedule, equipment,
+    // Campos nuevos
+    teacher, capacity, phone, image_url,
+  } = req.body;
 
   if (!name?.trim())
     { const e=new Error('El campo "name" es obligatorio.'); e.status=400; return next(e); }
   if (!building_id)
     { const e=new Error('El campo "building_id" es obligatorio.'); e.status=400; return next(e); }
-  if (!['lab','office','service','access'].includes(type))
-    { const e=new Error('Tipo inválido. Usar: lab, office, service, access'); e.status=400; return next(e); }
+  if (!VALID_TYPES.includes(type))
+    { const e=new Error(`Tipo inválido. Usar: ${VALID_TYPES.join(', ')}`); e.status=400; return next(e); }
+
+  const parsedFloor = parseInt(floor) || 1;
+  if (parsedFloor < 1)
+    { const e=new Error('El piso mínimo es 1.'); e.status=400; return next(e); }
 
   try {
+    // Validar que el piso no supere el floor_count del edificio
+    const buildingRes = await pool.query(`SELECT floor_count FROM buildings WHERE id = $1`, [building_id]);
+    if (!buildingRes.rows[0])
+      { const e=new Error('Edificio no encontrado.'); e.status=404; return next(e); }
+
+    const maxFloor = buildingRes.rows[0].floor_count ?? 99;
+    if (parsedFloor > maxFloor) {
+      const e = new Error(`El edificio solo tiene ${maxFloor} ${maxFloor === 1 ? 'planta' : 'plantas'}. Piso máximo: ${maxFloor}.`);
+      e.status = 400; return next(e);
+    }
+
     const { rows } = await pool.query(`
       INSERT INTO hotspots
-        (building_id, created_by, name, description, type, floor, pos_x, pos_y, pos_z, schedule, equipment)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+        (building_id, created_by, name, description, type, floor,
+         pos_x, pos_y, pos_z, schedule, equipment,
+         teacher, capacity, phone, image_url)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
       RETURNING *`,
-      [building_id, req.admin.id, name.trim(), description||null, type,
-       floor||1, pos_x||0, pos_y||0, pos_z||0, schedule||null, equipment||null]
+      [
+        building_id, req.admin.id, name.trim(), description||null, type,
+        parsedFloor, pos_x||0, pos_y||0, pos_z||0, schedule||null, equipment||null,
+        teacher||null, capacity||null, phone||null, image_url||null,
+      ]
     );
     const h = rows[0];
     await writeAudit({
@@ -121,7 +143,7 @@ async function create(req, res, next) {
       new_values: { name: h.name, type: h.type, floor: h.floor, building_id },
       ip_address: ip, user_agent: req.headers['user-agent'],
     });
-    await cacheInvalidate(CACHE_KEY); // invalidar caché tras escritura
+    await cacheInvalidate(CACHE_KEY);
     log(`✅ CREADO — "${h.name}" (${h.type}) por ${req.admin.email}`);
     res.status(201).json(h);
   } catch (err) { next(err); }
@@ -131,27 +153,61 @@ async function create(req, res, next) {
 async function update(req, res, next) {
   const ip = req.ip;
   const { id } = req.params;
-  const { name, description, type, floor, pos_x, pos_y, pos_z, schedule, equipment } = req.body;
+  const {
+    building_id,
+    name, description, type, floor,
+    pos_x, pos_y, pos_z,
+    schedule, equipment,
+    teacher, capacity, phone, image_url,
+  } = req.body;
 
   try {
     const before = await pool.query(`SELECT * FROM hotspots WHERE id = $1`, [id]);
     if (!before.rows[0]) { const e=new Error('Hotspot no encontrado.'); e.status=404; return next(e); }
     const old = before.rows[0];
 
+    // Validar piso contra el edificio destino (nuevo o el actual si no cambió)
+    const targetBuildingId = building_id || old.building_id;
+    const parsedFloor = floor !== undefined ? parseInt(floor) || 1 : undefined;
+    if (parsedFloor !== undefined) {
+      if (parsedFloor < 1)
+        { const e=new Error('El piso mínimo es 1.'); e.status=400; return next(e); }
+
+      const buildingRes = await pool.query(`SELECT floor_count FROM buildings WHERE id = $1`, [targetBuildingId]);
+      if (!buildingRes.rows[0])
+        { const e=new Error('Edificio no encontrado.'); e.status=404; return next(e); }
+      const maxFloor = buildingRes.rows[0].floor_count ?? 99;
+      if (parsedFloor > maxFloor) {
+        const e = new Error(`El edificio solo tiene ${maxFloor} ${maxFloor === 1 ? 'planta' : 'plantas'}. Piso máximo: ${maxFloor}.`);
+        e.status = 400; return next(e);
+      }
+    }
+
     const { rows } = await pool.query(`
       UPDATE hotspots SET
-        name        = COALESCE($1, name),
-        description = COALESCE($2, description),
-        type        = COALESCE($3, type),
-        floor       = COALESCE($4, floor),
-        pos_x       = COALESCE($5, pos_x),
-        pos_y       = COALESCE($6, pos_y),
-        pos_z       = COALESCE($7, pos_z),
-        schedule    = COALESCE($8, schedule),
-        equipment   = COALESCE($9, equipment),
+        building_id = COALESCE($1,  building_id),
+        name        = COALESCE($2,  name),
+        description = COALESCE($3,  description),
+        type        = COALESCE($4,  type),
+        floor       = COALESCE($5,  floor),
+        pos_x       = COALESCE($6,  pos_x),
+        pos_y       = COALESCE($7,  pos_y),
+        pos_z       = COALESCE($8,  pos_z),
+        schedule    = COALESCE($9,  schedule),
+        equipment   = COALESCE($10, equipment),
+        teacher     = COALESCE($11, teacher),
+        capacity    = COALESCE($12, capacity),
+        phone       = COALESCE($13, phone),
+        image_url   = COALESCE($14, image_url),
         updated_at  = NOW()
-      WHERE id = $10 RETURNING *`,
-      [name, description, type, floor, pos_x, pos_y, pos_z, schedule, equipment, id]
+      WHERE id = $15 RETURNING *`,
+      [
+        building_id || null,
+        name, description, type, parsedFloor,
+        pos_x, pos_y, pos_z, schedule, equipment,
+        teacher, capacity, phone, image_url,
+        id,
+      ]
     );
     const h = rows[0];
     await writeAudit({
