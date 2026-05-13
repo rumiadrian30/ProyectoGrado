@@ -2,11 +2,12 @@
 const router = require('express').Router();
 const path   = require('path');
 const auth   = require('../middleware/authMiddleware');
+const authOptional = auth.optional;
 const ctrl   = require('../controllers/modelController');
 const { upload, MODELS_DIR } = require('../middleware/uploadMiddleware');
 
 // ── Pública: el visor 3D lee modelos sin login ────────────────
-router.get('/', ctrl.list);
+router.get('/', authOptional, ctrl.list); 
 
 // ── Upload de archivo .glb / .gltf ───────────────────────────
 router.post('/upload', auth, upload.single('model'), (req, res, next) => {

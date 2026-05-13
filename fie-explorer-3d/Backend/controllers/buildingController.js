@@ -6,11 +6,16 @@ const log = (msg) => console.log(`  \x1b[34m[BUILDING]\x1b[0m ${msg}`);
 // ── GET / ────────────────────────────────────────────────────
 async function list(req, res, next) {
   try {
+    // Si hay token de admin válido → devolver todos (activos e inactivos)
+    // Si es acceso público → solo activos
+    const isAdmin = !!req.admin; // el middleware auth lo setea si el token es válido
+    const whereClause = isAdmin ? '' : 'WHERE b.is_active = TRUE';
+
     const { rows } = await pool.query(`
       SELECT b.*,
         (SELECT COUNT(*)::int FROM hotspots   h WHERE h.building_id = b.id AND h.is_active) AS hotspot_count,
         (SELECT COUNT(*)::int FROM models_3d  m WHERE m.building_id = b.id AND m.is_active) AS model_count
-      FROM buildings b ORDER BY b.name ASC
+      FROM buildings b ${whereClause} ORDER BY b.name ASC
     `);
     log(`Listado: ${rows.length} edificios`);
     res.json(rows);

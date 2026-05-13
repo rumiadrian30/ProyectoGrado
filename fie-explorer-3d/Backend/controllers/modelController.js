@@ -4,10 +4,16 @@ const log = (msg) => console.log(`  \x1b[36m[MODEL]\x1b[0m ${msg}`);
 
 async function list(req, res, next) {
   try {
+    const isAdmin = !!req.admin;
+    const filters = isAdmin
+      ? ''
+      : 'WHERE m.is_active = TRUE AND b.is_active = TRUE';
+
     const { rows } = await pool.query(`
       SELECT m.*, b.name AS building_name, b.code AS building_code
       FROM models_3d m
       JOIN buildings b ON b.id = m.building_id
+      ${filters}
       ORDER BY b.name, m.model_type, m.lod_level
     `);
     log(`Listado: ${rows.length} modelos`);
