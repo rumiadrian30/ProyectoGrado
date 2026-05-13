@@ -133,7 +133,7 @@ function HotspotForm({ data, onChange, buildings = [] }) {
       </div>
 
       {/* ── Posición 3D (técnico) ── */}
-      {/*
+      {/* COMENTADO HASTA UNA POSIBLE NUEVA FUNCIONALIDAD DE UBICACIÓN MANUAL EN EL EXPLORADOR 3D
       <details style={{ marginTop: '8px' }}>
         <summary style={{ fontSize: '12px', color: 'var(--muted)', cursor: 'pointer', userSelect: 'none' }}>
           Posición 3D (avanzado)
