@@ -67,7 +67,7 @@ export default function Explorer() {
       .catch(console.error);
   }, []);
 
-  // ── HU-09: validar edificio restaurado desde localStorage ─
+  // validar edificio restaurado desde localStorage ─
   useEffect(() => {
     if (!buildings.length) return;
 
