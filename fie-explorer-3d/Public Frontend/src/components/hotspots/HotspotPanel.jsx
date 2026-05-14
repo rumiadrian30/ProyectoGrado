@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useViewerStore } from '../../store/viewerStore';
+import { isOpenNow, scheduleToString, parseSchedule } from '../../utils/scheduleUtils';
 
 const TYPE_ICONS = {
   classroom: '🏫',
@@ -150,9 +151,41 @@ export default function HotspotPanel() {
           {hs.teacher && (
             <InfoCard icon="👤" label="Docente / Responsable" value={hs.teacher} />
           )}
-          {hs.schedule && (
-            <InfoCard icon="🕐" label="Horario" value={hs.schedule} />
-          )}
+          {hs.schedule && (() => {
+            const openStatus = isOpenNow(hs.schedule)
+            const parsed     = parseSchedule(hs.schedule)
+            const displayStr = parsed ? scheduleToString(parsed) : hs.schedule
+            return (
+              <div style={{
+                padding: '0.85rem',
+                background: 'var(--color-bg-soft)',
+                borderRadius: 'var(--radius-md)',
+              }}>
+                <p style={{
+                  fontSize: '0.72rem', fontWeight: 700,
+                  color: 'var(--color-text-3)',
+                  textTransform: 'uppercase', letterSpacing: '0.07em',
+                  marginBottom: '0.35rem',
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                }}>
+                  <span>🕐 Horario</span>
+                  {openStatus !== null && (
+                    <span style={{
+                      fontSize: '0.68rem', fontWeight: 700,
+                      padding: '0.15rem 0.55rem', borderRadius: 'var(--radius-full)',
+                      background: openStatus ? '#dcfce7' : '#fee2e2',
+                      color:      openStatus ? '#15803d' : '#b91c1c',
+                    }}>
+                      {openStatus ? '● Abierto ahora' : '● Cerrado'}
+                    </span>
+                  )}
+                </p>
+                <p style={{ fontSize: '0.85rem', color: 'var(--color-text-2)', lineHeight: 1.5 }}>
+                  {displayStr}
+                </p>
+              </div>
+            )
+          })()}
           {hs.capacity && (
             <InfoCard icon="👥" label="Capacidad" value={`${hs.capacity} personas`} />
           )}

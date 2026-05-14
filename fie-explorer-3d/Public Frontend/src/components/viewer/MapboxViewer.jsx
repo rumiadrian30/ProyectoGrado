@@ -32,9 +32,9 @@ mapboxgl.accessToken = import.meta.env.VITE_MAPBOX_TOKEN;
 const LAYER_ID = 'fie-model-layer';
 
 // ─── Velocidad de movimiento de teclado ───────────────────────────────────────
-const PAN_SPEED    = 0.0002;  // grados por frame (se escala con zoom)
-const ROTATE_SPEED = 1.5;     // grados por frame
-const PITCH_SPEED  = 1.0;     // grados por frame
+const PAN_SPEED    = 0.0002;
+const ROTATE_SPEED = 1.5;
+const PITCH_SPEED  = 1.0;
 const PITCH_MIN    = 0;
 const PITCH_MAX    = 85;
 
@@ -91,22 +91,18 @@ function createModelLayer({ id, modelUrl, lngLat, modelTransform, dracoLoader, o
           modelUrl,
           (gltf) => {
             const model = gltf.scene;
-            // Aplicar escala configurada en el admin
             model.scale.set(sx, sy, sz);
-            // Centrar horizontalmente y apoyar sobre el suelo (y=0 = superficie del mapa)
             const box    = new THREE.Box3().setFromObject(model);
             const center = box.getCenter(new THREE.Vector3());
             model.position.x -= center.x;
             model.position.z -= center.z;
-            model.position.y -= box.min.y;   // fondo del modelo en y=0
-            // Aplicar offset configurado en el admin
+            model.position.y -= box.min.y;
             model.position.x += ox;
             model.position.y += oy;
             model.position.z += oz;
-            // Clamp: el fondo del modelo nunca puede estar por debajo del mapa (y < 0)
             const floorBox = new THREE.Box3().setFromObject(model);
             if (floorBox.min.y < 0) {
-              model.position.y -= floorBox.min.y;  // empuja hacia arriba lo necesario
+              model.position.y -= floorBox.min.y;
             }
             model.traverse(c => { if (c.isMesh) { c.castShadow = true; c.receiveShadow = true; } });
             state.scene.add(model);
@@ -138,7 +134,6 @@ function createModelLayer({ id, modelUrl, lngLat, modelTransform, dracoLoader, o
       state.camera.projectionMatrix = new THREE.Matrix4().fromArray(matrix).multiply(modelMatrix);
       state.renderer.resetState();
       state.renderer.render(state.scene, state.camera);
-      state.map.triggerRepaint();
     },
 
     onRemove() {
@@ -180,34 +175,26 @@ export default function MapboxViewer({ allModels = [], building, hotspots = [], 
   const mapReadyRef      = useRef(false);
   const keysRef          = useRef(new Set());
   const rafRef           = useRef(null);
-  const dracoLoaderRef   = useRef(null);   // DRACOLoader compartido
-  const installedLayers  = useRef(new Map()); // layerId → true
-  const pendingLoadsRef  = useRef(0);      // modelos aún cargando
-  const buildingRef = useRef(building);
+  const dracoLoaderRef   = useRef(null);
+  const installedLayers  = useRef(new Map());
+  const pendingLoadsRef  = useRef(0);
+  const buildingRef      = useRef(building);
 
-
-  // Refs para acceder siempre a los valores más recientes sin re-disparar flyTo
-  const allModelsRef     = useRef(allModels);
-  const hotspotsRef      = useRef(hotspots);
+  const allModelsRef = useRef(allModels);
+  const hotspotsRef  = useRef(hotspots);
 
   const { setModelLoading, setModelProgress } = useViewerStore();
 
-  // ─── Estado de error WebGL ────────────────────────────────────────────────
   const [webglError, setWebglError] = useState(false);
 
-  // Sincronizar refs con los props más recientes
   useEffect(() => { allModelsRef.current = allModels; }, [allModels]);
   useEffect(() => { hotspotsRef.current  = hotspots;  }, [hotspots]);
-  useEffect(() => { buildingRef.current = building; }, [building]);
-
+  useEffect(() => { buildingRef.current  = building;  }, [building]);
 
   // ─── Inicializar mapa ──────────────────────────────────────────────────────
   useEffect(() => {
     if (mapRef.current) return;
 
-    // ── Detección de WebGL antes de crear el mapa ────────────────────────
-    // mapboxgl.supported() es la API oficial de Mapbox para verificar WebGL.
-    // Si falla aquí se muestra el error amigable sin reventar React.
     if (!mapboxgl.supported()) {
       setWebglError(true);
       return;
@@ -222,7 +209,7 @@ export default function MapboxViewer({ allModels = [], building, hotspots = [], 
         pitch:     CAMPUS_VIEW.pitch,
         bearing:   CAMPUS_VIEW.bearing ?? -15,
         center:    CAMPUS_VIEW.center,
-        projection: 'mercator', 
+        projection: 'mercator',
         style: 'mapbox://styles/mapbox/standard',
         config: {
           basemap: {
@@ -232,7 +219,6 @@ export default function MapboxViewer({ allModels = [], building, hotspots = [], 
         antialias: true,
       });
     } catch {
-      // Captura cualquier error de inicialización de WebGL de Mapbox
       setWebglError(true);
       return;
     }
@@ -243,7 +229,6 @@ export default function MapboxViewer({ allModels = [], building, hotspots = [], 
     map.on('load', () => {
       mapReadyRef.current = true;
       map.setProjection('mercator');
-      // Si hay edificio restaurado desde localStorage, volar a él ahora que el mapa está listo
       if (buildingRef.current) {
         const params = computeBuildingFlyTo(
           buildingRef.current,
@@ -265,7 +250,7 @@ export default function MapboxViewer({ allModels = [], building, hotspots = [], 
     };
   }, []);
 
-  // ─── ResizeObserver: resize al cambiar tamaño de ventana ────────────────────
+  // ─── ResizeObserver ────────────────────────────────────────────────────────
   useEffect(() => {
     const ro = new ResizeObserver(() => { mapRef.current?.resize(); });
     ro.observe(document.body);
@@ -275,10 +260,8 @@ export default function MapboxViewer({ allModels = [], building, hotspots = [], 
   // ─── Teclado: registrar teclas ─────────────────────────────────────────────
   useEffect(() => {
     const onKeyDown = (e) => {
-      // Solo si el foco no está en un input/textarea
       if (['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName)) return;
       keysRef.current.add(e.key.toLowerCase());
-      // Shift izquierdo identificado por location
       if (e.key === 'Shift' && e.location === KeyboardEvent.DOM_KEY_LOCATION_LEFT) {
         keysRef.current.add('shiftleft');
       }
@@ -287,7 +270,6 @@ export default function MapboxViewer({ allModels = [], building, hotspots = [], 
       keysRef.current.delete(e.key.toLowerCase());
       if (e.key === 'Shift') keysRef.current.delete('shiftleft');
     };
-
     window.addEventListener('keydown', onKeyDown);
     window.addEventListener('keyup',   onKeyUp);
     return () => {
@@ -309,63 +291,33 @@ export default function MapboxViewer({ allModels = [], building, hotspots = [], 
       const pitch   = map.getPitch();
       const center  = map.getCenter();
 
-      // Shift izquierdo → x4 velocidad
       const speedMult = keys.has('shiftleft') ? 4 : 1;
-
-      // Escalar velocidad de pan con el zoom (más zoom → movimiento más fino)
-      const panSpeed = PAN_SPEED * Math.pow(0.5, zoom - 14) * speedMult;
-
-      // Dirección de avance basada en el bearing actual del mapa
+      const panSpeed  = PAN_SPEED * Math.pow(0.5, zoom - 14) * speedMult;
       const bearingRad = (bearing * Math.PI) / 180;
       const sinB = Math.sin(bearingRad);
       const cosB = Math.cos(bearingRad);
 
-      let dLng = 0;
-      let dLat = 0;
-      let dBearing = 0;
-      let dPitch   = 0;
+      let dLng = 0, dLat = 0, dBearing = 0, dPitch = 0;
 
-      // Avanzar / retroceder (W/S o ↑/↓)
-      if (keys.has('w') || keys.has('arrowup')) {
-        dLng -= sinB * panSpeed;
-        dLat += cosB * panSpeed;
-      }
-      if (keys.has('s') || keys.has('arrowdown')) {
-        dLng += sinB * panSpeed;
-        dLat -= cosB * panSpeed;
-      }
-      // Strafe izquierda / derecha (A/D o ←/→)
-      if (keys.has('a') || keys.has('arrowleft')) {
-        dLng -= cosB * panSpeed;
-        dLat -= sinB * panSpeed;
-      }
-      if (keys.has('d') || keys.has('arrowright')) {
-        dLng += cosB * panSpeed;
-        dLat += sinB * panSpeed;
-      }
-      // Rotar (Q/E)
+      if (keys.has('w') || keys.has('arrowup'))    { dLng -= sinB * panSpeed; dLat += cosB * panSpeed; }
+      if (keys.has('s') || keys.has('arrowdown'))  { dLng += sinB * panSpeed; dLat -= cosB * panSpeed; }
+      if (keys.has('a') || keys.has('arrowleft'))  { dLng -= cosB * panSpeed; dLat -= sinB * panSpeed; }
+      if (keys.has('d') || keys.has('arrowright')) { dLng += cosB * panSpeed; dLat += sinB * panSpeed; }
       if (keys.has('q')) dBearing -= ROTATE_SPEED * speedMult;
       if (keys.has('e')) dBearing += ROTATE_SPEED * speedMult;
-      // Pitch (R/F)
       if (keys.has('r')) dPitch = -PITCH_SPEED * speedMult;
       if (keys.has('f')) dPitch =  PITCH_SPEED * speedMult;
 
-      if (dLng !== 0 || dLat !== 0) {
-        map.setCenter([center.lng + dLng, center.lat + dLat]);
-      }
-      if (dBearing !== 0) {
-        map.setBearing(bearing + dBearing);
-      }
-      if (dPitch !== 0) {
-        map.setPitch(Math.min(PITCH_MAX, Math.max(PITCH_MIN, pitch + dPitch)));
-      }
+      if (dLng !== 0 || dLat !== 0) map.setCenter([center.lng + dLng, center.lat + dLat]);
+      if (dBearing !== 0) map.setBearing(bearing + dBearing);
+      if (dPitch !== 0) map.setPitch(Math.min(PITCH_MAX, Math.max(PITCH_MIN, pitch + dPitch)));
     };
 
     rafRef.current = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(rafRef.current);
   }, []);
 
-  // ─── Inicializar DRACOLoader compartido ──────────────────────────────────
+  // ─── DRACOLoader compartido ───────────────────────────────────────────────
   useEffect(() => {
     const dl = new DRACOLoader();
     dl.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.6/');
@@ -374,7 +326,7 @@ export default function MapboxViewer({ allModels = [], building, hotspots = [], 
     return () => { dl.dispose(); dracoLoaderRef.current = null; };
   }, []);
 
-  // ─── Instalar layers de todos los modelos ─────────────────────────────────
+  // ─── Instalar layers de modelos reales ────────────────────────────────────
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !dracoLoaderRef.current) return;
@@ -382,7 +334,6 @@ export default function MapboxViewer({ allModels = [], building, hotspots = [], 
     const install = () => {
       const targetIds = new Set(allModels.map(m => `fie-model-${m.building_id}`));
 
-      // Eliminar layers que ya no están en la lista
       installedLayers.current.forEach((_, layerId) => {
         if (!targetIds.has(layerId) && map.getLayer(layerId)) {
           map.removeLayer(layerId);
@@ -390,7 +341,6 @@ export default function MapboxViewer({ allModels = [], building, hotspots = [], 
         }
       });
 
-      // Agregar layers nuevos
       const newModels = allModels.filter(m => !installedLayers.current.has(`fie-model-${m.building_id}`));
       if (!newModels.length) return;
 
@@ -408,14 +358,14 @@ export default function MapboxViewer({ allModels = [], building, hotspots = [], 
         };
 
         map.addLayer(createModelLayer({
-          id:            layerId,
-          modelUrl:      m.file_path,
+          id:             layerId,
+          modelUrl:       m.file_path,
           lngLat,
           modelTransform: m,
-          dracoLoader:   dracoLoaderRef.current,
-          onProgress:    (p) => setModelProgress(p),
-          onLoaded:      onDone,
-          onError:       onDone,
+          dracoLoader:    dracoLoaderRef.current,
+          onProgress:     (p) => setModelProgress(p),
+          onLoaded:       onDone,
+          onError:        onDone,
         }));
         installedLayers.current.set(layerId, true);
       });
@@ -425,7 +375,6 @@ export default function MapboxViewer({ allModels = [], building, hotspots = [], 
     else map.once('load', install);
 
     return () => {
-      // Al desmontar, limpiar todos los layers instalados
       installedLayers.current.forEach((_, layerId) => {
         if (mapRef.current?.getLayer(layerId)) mapRef.current.removeLayer(layerId);
       });
@@ -435,16 +384,7 @@ export default function MapboxViewer({ allModels = [], building, hotspots = [], 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [allModels.map(m => m.building_id).join(',')]);
 
-  // ─── Volar al edificio seleccionado (flyTo dinámico) ──────────────────────
-  //
-  // Prioridad (definida en computeBuildingFlyTo de buildingCoords.js):
-  //   1. Modelo 3D registrado en el admin → ancla + offsets configurados → zoom adaptativo
-  //   2. Hotspots ya cargados con posición → centroide en GPS → zoom moderado
-  //   3. Fallback → coordenadas estáticas del campus → zoom base
-  //
-  // Se usan refs (allModelsRef, hotspotsRef) para acceder a los valores más
-  // recientes SIN incluirlos en las dependencias del effect y así evitar
-  // que un re-render del mapa dispare un flyTo no deseado.
+  // ─── Volar al edificio seleccionado ───────────────────────────────────────
   useEffect(() => {
     if (!building || !mapReadyRef.current) return;
 
@@ -455,38 +395,26 @@ export default function MapboxViewer({ allModels = [], building, hotspots = [], 
     );
     if (!params) return;
 
-    mapRef.current?.flyTo({
-      ...params,
-      speed:     0.85,   // velocidad de vuelo (1 = estándar Mapbox)
-      curve:     1.4,    // curvatura de la trayectoria (suaviza zooms extremos)
-      essential: true,   // no se interrumpe por gestos del usuario
-    });
+    mapRef.current?.flyTo({ ...params, speed: 0.85, curve: 1.4, essential: true });
 
     console.debug('[MapboxViewer] flyTo', {
-      building:  building.code,
-      source:    allModelsRef.current.some(m => m.building_id === building.id)
-                   ? 'model' : hotspotsRef.current.length ? 'hotspots' : 'fallback',
+      building: building.code,
+      source:   allModelsRef.current.some(m => m.building_id === building.id)
+                  ? 'model' : hotspotsRef.current.length ? 'hotspots' : 'fallback',
       ...params,
     });
-
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [building?.id]);
 
   // ─── Refinamiento de cámara cuando cargan hotspots (sin modelo) ───────────
-  //
-  // Si el edificio no tiene modelo 3D y los hotspots acaban de cargarse con
-  // posiciones no triviales, ajustamos la cámara suavemente sin interrumpir
-  // al usuario (velocidad reducida, solo si el edificio no cambió).
   const hotspotIdsKey = hotspots.map(h => h.id).sort().join(',');
   useEffect(() => {
     const map = mapRef.current;
     if (!building || !hotspots.length || !map || !mapReadyRef.current) return;
 
-    // No refinar si el edificio ya tiene un modelo (más preciso)
     const hasModel = allModelsRef.current.some(m => m.building_id === building.id);
     if (hasModel) return;
 
-    // Solo refinar si hay posiciones reales (pos_x o pos_z != 0)
     const hasMeaningfulPos = hotspots.some(
       h => Math.abs(parseFloat(h.pos_x) || 0) > 1 || Math.abs(parseFloat(h.pos_z) || 0) > 1,
     );
@@ -495,31 +423,38 @@ export default function MapboxViewer({ allModels = [], building, hotspots = [], 
     const params = computeBuildingFlyTo(building, [], hotspots);
     if (!params) return;
 
-    map.flyTo({
-      ...params,
-      speed:     0.55,   // más suave para la corrección secundaria
-      curve:     1.2,
-      essential: true,
-    });
-
-    console.debug('[MapboxViewer] flyTo refinado con hotspots', { building: building.code, ...params });
-
+    map.flyTo({ ...params, speed: 0.55, curve: 1.2, essential: true });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hotspotIdsKey, building?.id]);
 
   // ─── Demo model para edificio sin modelo 3D registrado ────────────────────
+  // Se instala cuando el edificio seleccionado no tiene modelo real.
+  // Se destruye automáticamente cuando allModels cambia e incluye ese edificio
+  // (es decir, cuando se sube un modelo real en el admin).
   useEffect(() => {
     const map = mapRef.current;
     if (!building) return;
 
-    const hasRealModel = allModels.some(m => m.building_id === building.id);
-    if (hasRealModel) return;
+    const hasRealModel = allModels.some(
+      m => String(m.building_id) === String(building.id)
+    );
 
     const demoLayerId = `fie-demo-${building.id}`;
 
+    if (hasRealModel) {
+      if (mapRef.current?.getLayer(demoLayerId)) {
+        mapRef.current.removeLayer(demoLayerId);
+      }
+      return;
+    }
+
+    // Obtener coordenadas — si el edificio no está en buildingCoords,
+    // usar las coordenadas del campus como fallback en lugar de undefined
+    const lngLat = getCoords(building.code) ?? CAMPUS_VIEW.center;
+    if (!lngLat) return; // seguridad extra
+
     const install = () => {
       if (map.getLayer(demoLayerId)) return;
-      const lngLat = getCoords(building.code);
       map.addLayer(createModelLayer({
         id:             demoLayerId,
         modelUrl:       null,
@@ -551,8 +486,8 @@ export default function MapboxViewer({ allModels = [], building, hotspots = [], 
     if (!building || !hotspots.length) return;
 
     const base = getCoords(building.code);
-    const TYPE_COLORS = { lab: '#BC0613', office: '#2563eb', service: '#16a34a', access: '#d97706' };
-    const TYPE_ICONS  = { lab: '🔬', office: '🏢', service: '⚙️', access: '🚪' };
+    const TYPE_COLORS = { classroom: '#6d28d9', lab: '#BC0613', office: '#2563eb', service: '#16a34a', access: '#d97706' };
+    const TYPE_ICONS  = { classroom: '🏫', lab: '🔬', office: '🏢', service: '⚙️', access: '🚪' };
 
     hotspots.forEach((hs, i) => {
       const angle  = (i / hotspots.length) * Math.PI * 2;
@@ -607,17 +542,11 @@ export default function MapboxViewer({ allModels = [], building, hotspots = [], 
         </p>
         <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', justifyContent: 'center' }}>
           <a href="https://www.google.com/chrome" target="_blank" rel="noreferrer"
-            style={{
-              padding: '0.5rem 1.1rem', borderRadius: 8, fontWeight: 600,
-              background: '#1967D2', color: '#fff', textDecoration: 'none', fontSize: '0.85rem',
-            }}>
+            style={{ padding: '0.5rem 1.1rem', borderRadius: 8, fontWeight: 600, background: '#1967D2', color: '#fff', textDecoration: 'none', fontSize: '0.85rem' }}>
             🌐 Descargar Chrome
           </a>
           <a href="https://www.mozilla.org/firefox" target="_blank" rel="noreferrer"
-            style={{
-              padding: '0.5rem 1.1rem', borderRadius: 8, fontWeight: 600,
-              background: '#FF7139', color: '#fff', textDecoration: 'none', fontSize: '0.85rem',
-            }}>
+            style={{ padding: '0.5rem 1.1rem', borderRadius: 8, fontWeight: 600, background: '#FF7139', color: '#fff', textDecoration: 'none', fontSize: '0.85rem' }}>
             🦊 Descargar Firefox
           </a>
         </div>
