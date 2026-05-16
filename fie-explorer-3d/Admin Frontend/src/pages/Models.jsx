@@ -4,7 +4,6 @@ import { api, fmt } from '../api'
 const LOD_LABELS = { 0: 'Alta (LOD 0)', 1: 'Media (LOD 1)', 2: 'Baja (LOD 2)' }
 const LOD_BADGE  = { 0: 'b-green', 1: 'b-amber', 2: 'b-gray' }
 
-// ─── Modal genérico ───────────────────────────────────────────
 function Modal({ title, children, onConfirm, confirmLabel = 'Guardar', danger = false, onClose, disabled = false }) {
   return (
     <div className="overlay" onClick={e => e.target.className === 'overlay' && onClose()}>
@@ -21,8 +20,8 @@ function Modal({ title, children, onConfirm, confirmLabel = 'Guardar', danger = 
   )
 }
 
-// ─── Editor de transform (escala + offset) ───────────────────
-function TransformEditor({ form, set }) {
+// ─── Editor de escala (solo escala — la posición la controla el edificio) ──────
+function ScaleEditor({ form, set }) {
   const [uniform, setUniform] = useState(true)
 
   function setScale(axis, val) {
@@ -34,110 +33,83 @@ function TransformEditor({ form, set }) {
     }
   }
 
-  function reset() {
-    set('scale_x', 1); set('scale_y', 1); set('scale_z', 1)
-    set('offset_x', 0); set('offset_y', 0); set('offset_z', 0)
-  }
-
   const sx = form.scale_x ?? 1
   const sy = form.scale_y ?? 1
   const sz = form.scale_z ?? 1
 
   return (
     <div style={{ border: '1px solid var(--border)', borderRadius: '10px', overflow: 'hidden', marginTop: '4px' }}>
-      {/* Cabecera */}
       <div style={{
         background: 'var(--bg)', padding: '8px 12px',
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
       }}>
         <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--muted)' }}>
-          Transform en Three.js
+          Escala del modelo
         </span>
         <button type="button" className="btn btn-sm"
-          style={{ fontSize: '11px', padding: '2px 8px' }} onClick={reset}>
-          Resetear
+          style={{ fontSize: '11px', padding: '2px 8px' }}
+          onClick={() => { set('scale_x', 1); set('scale_y', 1); set('scale_z', 1) }}>
+          Resetear 1×
         </button>
       </div>
 
       <div style={{ padding: '10px 12px' }}>
-        {/* Escala */}
-        <div style={{ marginBottom: '10px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
-            <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text)' }}>Escala</label>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '11px', color: 'var(--muted)', cursor: 'pointer' }}>
-              <input type="checkbox" checked={uniform} onChange={e => setUniform(e.target.checked)}
-                style={{ accentColor: 'var(--primary)' }} />
-              Uniforme
-            </label>
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '6px' }}>
-            {['x', 'y', 'z'].map(ax => (
-              <div key={ax}>
-                <label style={{ fontSize: '10px', color: 'var(--faint)', display: 'block', marginBottom: '2px', textAlign: 'center' }}>
-                  {ax.toUpperCase()}
-                </label>
-                <input
-                  className="form-input"
-                  type="number" step="0.01" min="0.001"
-                  style={{ textAlign: 'center', padding: '4px', fontSize: '12px' }}
-                  value={form[`scale_${ax}`] ?? 1}
-                  onChange={e => setScale(ax, e.target.value)}
-                />
-              </div>
-            ))}
-          </div>
-          {/* Presets rápidos */}
-          <div style={{ marginTop: '4px', display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
-            {[0.1, 0.25, 0.5, 1, 2, 5].map(v => (
-              <button key={v} type="button"
-                style={{
-                  fontSize: '10px', padding: '2px 7px', borderRadius: '4px',
-                  border: '1px solid var(--border)', cursor: 'pointer',
-                  background: (sx === v && sy === v && sz === v) ? 'var(--primary)' : 'transparent',
-                  color: (sx === v && sy === v && sz === v) ? '#fff' : 'var(--muted)',
-                }}
-                onClick={() => { set('scale_x', v); set('scale_y', v); set('scale_z', v) }}>
-                {v}×
-              </button>
-            ))}
-          </div>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+          <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text)' }}>Escala (X / Y / Z)</label>
+          <label style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '11px', color: 'var(--muted)', cursor: 'pointer' }}>
+            <input type="checkbox" checked={uniform} onChange={e => setUniform(e.target.checked)}
+              style={{ accentColor: 'var(--primary)' }} />
+            Uniforme
+          </label>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '6px' }}>
+          {['x', 'y', 'z'].map(ax => (
+            <div key={ax}>
+              <label style={{ fontSize: '10px', color: 'var(--faint)', display: 'block', marginBottom: '2px', textAlign: 'center' }}>
+                {ax.toUpperCase()}
+              </label>
+              <input
+                className="form-input"
+                type="number" step="0.01" min="0.001"
+                style={{ textAlign: 'center', padding: '4px', fontSize: '12px' }}
+                value={form[`scale_${ax}`] ?? 1}
+                onChange={e => setScale(ax, e.target.value)}
+              />
+            </div>
+          ))}
+        </div>
+        {/* Presets rápidos */}
+        <div style={{ marginTop: '4px', display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
+          {[0.1, 0.25, 0.5, 1, 2, 5].map(v => (
+            <button key={v} type="button"
+              style={{
+                fontSize: '10px', padding: '2px 7px', borderRadius: '4px',
+                border: '1px solid var(--border)', cursor: 'pointer',
+                background: (sx === v && sy === v && sz === v) ? 'var(--primary)' : 'transparent',
+                color: (sx === v && sy === v && sz === v) ? '#fff' : 'var(--muted)',
+              }}
+              onClick={() => { set('scale_x', v); set('scale_y', v); set('scale_z', v) }}>
+              {v}×
+            </button>
+          ))}
         </div>
 
-        {/* Offset */}
-        <div>
-          <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text)', display: 'block', marginBottom: '6px' }}>
-            Desplazamiento (offset)
-          </label>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '6px' }}>
-            {[
-              { ax: 'x', label: 'X (este)' },
-              { ax: 'y', label: 'Y (altura)' },
-              { ax: 'z', label: 'Z (norte)' },
-            ].map(({ ax, label }) => (
-              <div key={ax}>
-                <label style={{ fontSize: '10px', color: 'var(--faint)', display: 'block', marginBottom: '2px', textAlign: 'center' }}>
-                  {label}
-                </label>
-                <input
-                  className="form-input"
-                  type="number" step="0.5"
-                  style={{ textAlign: 'center', padding: '4px', fontSize: '12px' }}
-                  value={form[`offset_${ax}`] ?? 0}
-                  onChange={e => set(`offset_${ax}`, parseFloat(e.target.value) || 0)}
-                />
-              </div>
-            ))}
-          </div>
-          <p style={{ fontSize: '10px', color: 'var(--faint)', marginTop: '5px', marginBottom: 0 }}>
-            Unidades Three.js. Y positivo = sube el modelo. Útil para ajustar posición sobre el mapa.
-          </p>
+        {/* Info: posición controlada por edificio */}
+        <div style={{
+          marginTop: '10px', padding: '8px 10px',
+          background: 'var(--bg-soft, #f8fafc)',
+          border: '1px solid var(--border-soft, #e5e7eb)',
+          borderRadius: '6px', fontSize: '11px', color: 'var(--muted)',
+          display: 'flex', alignItems: 'flex-start', gap: '6px',
+        }}>
+          <span>ℹ️</span>
+          <span>La posición (X, Y, Z) la controla el <strong>edificio padre</strong>. Edítala en la sección Edificios.</span>
         </div>
       </div>
     </div>
   )
 }
 
-// ─── Helpers de display ───────────────────────────────────────
 function scaleLabel(m) {
   const x = parseFloat(m.scale_x) || 1
   const y = parseFloat(m.scale_y) || 1
@@ -146,19 +118,14 @@ function scaleLabel(m) {
   return `X:${x} Y:${y} Z:${z}`
 }
 
-function offsetLabel(m) {
-  const ox = parseFloat(m.offset_x) || 0
-  const oy = parseFloat(m.offset_y) || 0
-  const oz = parseFloat(m.offset_z) || 0
-  if (ox === 0 && oy === 0 && oz === 0) return null
-  const parts = []
-  if (ox !== 0) parts.push(`${ox > 0 ? '+' : ''}${ox}X`)
-  if (oy !== 0) parts.push(`${oy > 0 ? '+' : ''}${oy}Y`)
-  if (oz !== 0) parts.push(`${oz > 0 ? '+' : ''}${oz}Z`)
-  return parts.join(' ')
+function positionLabel(m) {
+  const x = parseFloat(m.building_offset_x) || 0
+  const y = parseFloat(m.building_offset_y) || 0
+  const z = parseFloat(m.building_offset_z) || 0
+  if (x === 0 && y === 0 && z === 0) return null
+  return `(${x}, ${y}, ${z})`
 }
 
-// ─── Página principal ─────────────────────────────────────────
 export default function Models() {
   const [models,    setModels]    = useState([])
   const [buildings, setBuildings] = useState([])
@@ -186,30 +153,26 @@ export default function Models() {
     setToast({ msg, type }); setTimeout(() => setToast(null), 3500)
   }
 
-  const TRANSFORM_DEFAULTS = { scale_x: 1, scale_y: 1, scale_z: 1, offset_x: 0, offset_y: 0, offset_z: 0 }
+  const SCALE_DEFAULTS = { scale_x: 1, scale_y: 1, scale_z: 1 }
 
   function openNew() {
     setForm({
       model_type: 'exterior', lod_level: 0, format: 'GLB',
       building_id: buildings[0]?.id || '',
-      ...TRANSFORM_DEFAULTS,
+      ...SCALE_DEFAULTS,
     })
     setModal({ type: 'new' })
   }
 
-  function openEditTransform(m) {
+  function openEditScale(m) {
     setForm({
-      scale_x:  parseFloat(m.scale_x)  || 1,
-      scale_y:  parseFloat(m.scale_y)  || 1,
-      scale_z:  parseFloat(m.scale_z)  || 1,
-      offset_x: parseFloat(m.offset_x) || 0,
-      offset_y: parseFloat(m.offset_y) || 0,
-      offset_z: parseFloat(m.offset_z) || 0,
+      scale_x: parseFloat(m.scale_x) || 1,
+      scale_y: parseFloat(m.scale_y) || 1,
+      scale_z: parseFloat(m.scale_z) || 1,
     })
-    setModal({ type: 'edit-transform', id: m.id, name: m.file_path })
+    setModal({ type: 'edit-scale', id: m.id, name: m.file_path })
   }
 
-  // ── Subir archivo ──────────────────────────────────────────
   async function handleFileChange(e) {
     const file = e.target.files?.[0]
     if (!file) return
@@ -252,14 +215,16 @@ export default function Models() {
     finally { setSaving(false) }
   }
 
-  async function confirmEditTransform() {
+  async function confirmEditScale() {
     setSaving(true)
     try {
+      // Solo enviar escala — la posición la controla el edificio
       await api('PUT', `/models/${modal.id}`, {
-        scale_x:  form.scale_x,  scale_y:  form.scale_y,  scale_z:  form.scale_z,
-        offset_x: form.offset_x, offset_y: form.offset_y, offset_z: form.offset_z,
+        scale_x: form.scale_x,
+        scale_y: form.scale_y,
+        scale_z: form.scale_z,
       })
-      setModal(null); showToast('Transform actualizado. Recarga el visor para ver los cambios.'); loadAll()
+      setModal(null); showToast('Escala actualizada. Recarga el visor para ver los cambios.'); loadAll()
     } catch (e) { showToast(e.message, 'error') }
     finally { setSaving(false) }
   }
@@ -288,7 +253,7 @@ export default function Models() {
       <div className="page-hdr">
         <div>
           <div className="page-title">Modelos 3D</div>
-          <div className="page-sub">{models.length} modelos registrados · Archivos GLB/GLTF</div>
+          <div className="page-sub">{models.length} modelos · Posición controlada por el edificio · Escala editable aquí</div>
         </div>
         <button className="btn btn-primary btn-sm" onClick={openNew}>+ Registrar modelo</button>
       </div>
@@ -306,9 +271,9 @@ export default function Models() {
           <table>
             <thead>
               <tr>
-                <th>Edificio</th><th>Tipo</th><th>Resolución</th><th>Formato</th>
-                <th>Ruta del archivo</th><th>Tamaño</th>
-                <th>Transform</th>
+                <th>Edificio</th><th>Tipo</th><th>Resolución</th>
+                <th>Archivo</th><th>Tamaño</th>
+                <th>Escala</th><th>Posición (del edificio)</th>
                 <th>Estado</th><th>Acciones</th>
               </tr>
             </thead>
@@ -323,7 +288,6 @@ export default function Models() {
                     </td>
                     <td><span className="badge b-blue" style={{ textTransform: 'capitalize' }}>{m.model_type}</span></td>
                     <td><span className={`badge ${LOD_BADGE[m.lod_level]}`}>{LOD_LABELS[m.lod_level]}</span></td>
-                    <td><code className="tag">{m.format}</code></td>
                     <td style={{ maxWidth: 200 }}>
                       <code className="mono" style={{
                         fontSize: '11px', color: 'var(--muted)',
@@ -333,16 +297,15 @@ export default function Models() {
                     <td style={{ fontSize: '12px', color: 'var(--muted)' }}>
                       {m.file_size_mb ? `${m.file_size_mb} MB` : '—'}
                     </td>
-                    {/* Transform column */}
                     <td>
-                      <div style={{ fontSize: '11px', lineHeight: '1.5' }}>
-                        {scaleLabel(m)
-                          ? <span style={{ color: 'var(--primary)', fontWeight: 700 }}>⤢ {scaleLabel(m)}</span>
-                          : <span style={{ color: 'var(--faint)' }}>1×</span>}
-                        {offsetLabel(m) && (
-                          <div style={{ color: 'var(--muted)', fontSize: '10px' }}>↕ {offsetLabel(m)}</div>
-                        )}
-                      </div>
+                      {scaleLabel(m)
+                        ? <span style={{ color: 'var(--primary)', fontWeight: 700, fontSize: '12px' }}>⤢ {scaleLabel(m)}</span>
+                        : <span style={{ color: 'var(--faint)', fontSize: '12px' }}>1×</span>}
+                    </td>
+                    <td style={{ fontSize: '11px', color: 'var(--muted)' }}>
+                      {positionLabel(m)
+                        ? <code style={{ fontSize: '10px' }}>{positionLabel(m)}</code>
+                        : <span style={{ color: 'var(--faint)' }}>(0, 0, 0)</span>}
                     </td>
                     <td>
                       {m.is_active
@@ -351,9 +314,8 @@ export default function Models() {
                     </td>
                     <td>
                       <div style={{ display: 'flex', gap: '4px' }}>
-                        {/* Editar transform */}
-                        <button className="btn btn-sm btn-icon" title="Editar escala y posición"
-                          onClick={() => openEditTransform(m)}>⚙</button>
+                        <button className="btn btn-sm btn-icon" title="Editar escala"
+                          onClick={() => openEditScale(m)}>⚙</button>
                         <button className="btn btn-sm btn-icon" title={m.is_active ? 'Desactivar' : 'Activar'}
                           onClick={() => toggleActive(m)}>{m.is_active ? '⊘' : '✓'}</button>
                         <button className="btn btn-sm btn-danger btn-icon" title="Eliminar"
@@ -396,16 +358,14 @@ export default function Models() {
           <div className="form-grid-2">
             <div className="form-group">
               <label className="form-label">Tipo *</label>
-              <select className="form-select" value={form.model_type}
-                onChange={e => set('model_type', e.target.value)}>
+              <select className="form-select" value={form.model_type} onChange={e => set('model_type', e.target.value)}>
                 <option value="exterior">Exterior</option>
                 <option value="interior">Interior</option>
               </select>
             </div>
             <div className="form-group">
               <label className="form-label">Nivel LOD *</label>
-              <select className="form-select" value={form.lod_level}
-                onChange={e => set('lod_level', parseInt(e.target.value))}>
+              <select className="form-select" value={form.lod_level} onChange={e => set('lod_level', parseInt(e.target.value))}>
                 <option value={0}>0 — Alta resolución</option>
                 <option value={1}>1 — Media resolución</option>
                 <option value={2}>2 — Baja resolución</option>
@@ -413,12 +373,9 @@ export default function Models() {
             </div>
           </div>
 
-          {/* File picker */}
           <div className="form-group">
             <label className="form-label">Archivo del modelo *</label>
-            <input ref={fileInputRef} type="file" accept=".glb,.gltf"
-              style={{ display: 'none' }} onChange={handleFileChange} />
-
+            <input ref={fileInputRef} type="file" accept=".glb,.gltf" style={{ display: 'none' }} onChange={handleFileChange} />
             {!form.file_path && !uploading && (
               <button type="button" className="btn btn-primary"
                 style={{ width: '100%', padding: '0.65rem', fontSize: '13px' }}
@@ -428,34 +385,18 @@ export default function Models() {
             )}
             {uploading && (
               <div style={{ border: '1px solid var(--border)', borderRadius: '8px', padding: '12px', textAlign: 'center' }}>
-                <div style={{ fontSize: '12px', color: 'var(--muted)', marginBottom: '8px' }}>
-                  Subiendo… {uploadPct}%
-                </div>
+                <div style={{ fontSize: '12px', color: 'var(--muted)', marginBottom: '8px' }}>Subiendo… {uploadPct}%</div>
                 <div style={{ background: 'var(--bg)', borderRadius: '4px', height: '6px', overflow: 'hidden' }}>
-                  <div style={{
-                    height: '100%', width: `${uploadPct}%`,
-                    background: 'var(--primary, #BC0613)', borderRadius: '4px', transition: 'width 200ms',
-                  }} />
+                  <div style={{ height: '100%', width: `${uploadPct}%`, background: 'var(--primary, #BC0613)', borderRadius: '4px', transition: 'width 200ms' }} />
                 </div>
               </div>
             )}
             {form.file_path && !uploading && (
-              <div style={{
-                border: '1px solid #bbf7d0', borderRadius: '8px', background: '#f0fdf4',
-                padding: '10px 12px', display: 'flex', alignItems: 'center',
-                justifyContent: 'space-between', gap: '8px',
-              }}>
+              <div style={{ border: '1px solid #bbf7d0', borderRadius: '8px', background: '#f0fdf4', padding: '10px 12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
                 <div style={{ minWidth: 0 }}>
                   <div style={{ fontSize: '12px', fontWeight: 600, color: '#15803d' }}>✅ Archivo subido</div>
-                  <div style={{
-                    fontSize: '11px', color: '#166534', marginTop: '2px',
-                    fontFamily: 'monospace', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                  }}>{form.file_path}</div>
-                  {form.file_size_mb && (
-                    <div style={{ fontSize: '11px', color: '#4ade80', marginTop: '1px' }}>
-                      {form.file_size_mb} MB · {form.format}
-                    </div>
-                  )}
+                  <div style={{ fontSize: '11px', color: '#166534', marginTop: '2px', fontFamily: 'monospace', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{form.file_path}</div>
+                  {form.file_size_mb && <div style={{ fontSize: '11px', color: '#4ade80', marginTop: '1px' }}>{form.file_size_mb} MB · {form.format}</div>}
                 </div>
                 <button type="button" className="btn btn-sm" style={{ flexShrink: 0, fontSize: '11px' }}
                   onClick={() => { set('file_path', ''); set('file_size_mb', null); fileInputRef.current?.click() }}>
@@ -464,38 +405,33 @@ export default function Models() {
               </div>
             )}
             <small style={{ color: 'var(--faint)', fontSize: '11px', display: 'block', marginTop: '4px' }}>
-              Se guarda en <code>public/models/</code> del visor público. Máx. 200 MB.
+              Máx. 200 MB · Formatos: .glb, .gltf
             </small>
           </div>
 
-          {/* Transform inicial */}
           <div className="form-group">
-            <label className="form-label">Escala y posición en el mapa</label>
-            <TransformEditor form={form} set={set} />
+            <label className="form-label">Escala inicial</label>
+            <ScaleEditor form={form} set={set} />
           </div>
 
           <div className="form-group">
             <label className="form-label">Versión (opcional)</label>
-            <input className="form-input" placeholder="v1.0"
-              value={form.version || ''} onChange={e => set('version', e.target.value)} />
+            <input className="form-input" placeholder="v1.0" value={form.version || ''} onChange={e => set('version', e.target.value)} />
           </div>
         </Modal>
       )}
 
-      {/* ── Modal: Editar transform ── */}
-      {modal?.type === 'edit-transform' && (
-        <Modal title="Escala y posición del modelo"
-          onConfirm={confirmEditTransform}
-          confirmLabel={saving ? 'Guardando…' : 'Guardar transform'}
+      {/* ── Modal: Editar escala ── */}
+      {modal?.type === 'edit-scale' && (
+        <Modal title="Escala del modelo"
+          onConfirm={confirmEditScale}
+          confirmLabel={saving ? 'Guardando…' : 'Guardar escala'}
           disabled={saving}
           onClose={() => setModal(null)}>
           <p style={{ fontSize: '12px', color: 'var(--muted)', marginBottom: '12px' }}>
             <code className="tag" style={{ fontSize: '10px' }}>{modal.name}</code>
           </p>
-          <div className="form-group">
-            <TransformEditor form={form} set={set} />
-          </div>
-
+          <ScaleEditor form={form} set={set} />
         </Modal>
       )}
 

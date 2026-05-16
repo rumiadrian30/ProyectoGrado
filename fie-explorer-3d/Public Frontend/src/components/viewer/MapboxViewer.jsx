@@ -21,9 +21,8 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
 import { useViewerStore } from '../../store/viewerStore';
 import {
-  getCoords,
+  buildingOffsetToGPS,
   CAMPUS_VIEW,
-  BUILDING_SIZES,
   computeBuildingFlyTo,
 } from '../../utils/buildingCoords';
 
@@ -39,14 +38,16 @@ const PITCH_MIN    = 0;
 const PITCH_MAX    = 85;
 
 // ─── Custom Three.js layer ────────────────────────────────────────────────────
-function createModelLayer({ id, modelUrl, lngLat, modelTransform, dracoLoader, onProgress, onLoaded, onError }) {
+function createModelLayer({ id, modelUrl, lngLat, buildingPos, modelScale, dracoLoader, onProgress, onLoaded, onError }) {
   const state = { scene: null, camera: null, renderer: null, map: null, loaded: false, lngLat };
-  const sx = parseFloat(modelTransform?.scale_x)  || 1;
-  const sy = parseFloat(modelTransform?.scale_y)  || 1;
-  const sz = parseFloat(modelTransform?.scale_z)  || 1;
-  const ox = parseFloat(modelTransform?.offset_x) || 0;
-  const oy = parseFloat(modelTransform?.offset_y) || 0;
-  const oz = parseFloat(modelTransform?.offset_z) || 0;
+  // Building position (inherited by all its models)
+  const bx = parseFloat(buildingPos?.x) || 0;
+  const by = parseFloat(buildingPos?.y) || 0;
+  const bz = parseFloat(buildingPos?.z) || 0;
+  // Model scale only
+  const sx = parseFloat(modelScale?.sx) || 1;
+  const sy = parseFloat(modelScale?.sy) || 1;
+  const sz = parseFloat(modelScale?.sz) || 1;
 
   return {
     id,
@@ -97,9 +98,9 @@ function createModelLayer({ id, modelUrl, lngLat, modelTransform, dracoLoader, o
             model.position.x -= center.x;
             model.position.z -= center.z;
             model.position.y -= box.min.y;
-            model.position.x += ox;
-            model.position.y += oy;
-            model.position.z += oz;
+            model.position.x += bx;
+            model.position.y += by;
+            model.position.z += bz;
             const floorBox = new THREE.Box3().setFromObject(model);
             if (floorBox.min.y < 0) {
               model.position.y -= floorBox.min.y;
@@ -117,7 +118,7 @@ function createModelLayer({ id, modelUrl, lngLat, modelTransform, dracoLoader, o
           },
         );
       } else {
-        addDemoModel(state.scene);
+        addDemoModel(state.scene, bx, by, bz);
         state.loaded = true;
       }
     },
@@ -152,11 +153,12 @@ function createModelLayer({ id, modelUrl, lngLat, modelTransform, dracoLoader, o
   };
 }
 
-function addDemoModel(scene) {
+function addDemoModel(scene, bx = 0, by = 0, bz = 0) {
   const geo  = new THREE.BoxGeometry(10, 12, 8);
   const mat  = new THREE.MeshStandardMaterial({ color: 0xBC0613, roughness: 0.5, metalness: 0.1 });
   const mesh = new THREE.Mesh(geo, mat);
-  mesh.position.y = 6;
+  // Centrar en el suelo (y=0) y aplicar posición del building padre
+  mesh.position.set(bx, by + 6, bz); // +6 = mitad de la altura (12/2)
   mesh.castShadow = true;
   scene.add(mesh);
   const line = new THREE.LineSegments(
@@ -350,22 +352,34 @@ export default function MapboxViewer({ allModels = [], building, hotspots = [], 
 
       newModels.forEach(m => {
         const layerId = `fie-model-${m.building_id}`;
-        const lngLat  = getCoords(m.building_code);
 
+        // ── Anchor GPS fijo + posición heredada del building ─────────────────
+        // Todos los layers comparten CAMPUS_VIEW.center como anchor GPS.
+        // La posición Three.js viene del building padre (offset_x/y/z).
+        // El modelo solo aporta su escala (scale_x/y/z).
         const onDone = () => {
           pendingLoadsRef.current = Math.max(0, pendingLoadsRef.current - 1);
           if (pendingLoadsRef.current === 0) setModelLoading(false);
         };
 
         map.addLayer(createModelLayer({
-          id:             layerId,
-          modelUrl:       m.file_path,
-          lngLat,
-          modelTransform: m,
-          dracoLoader:    dracoLoaderRef.current,
-          onProgress:     (p) => setModelProgress(p),
-          onLoaded:       onDone,
-          onError:        onDone,
+          id:          layerId,
+          modelUrl:    m.file_path,
+          lngLat:      CAMPUS_VIEW.center,        // anchor GPS fijo para todos
+          buildingPos: {                          // posición heredada del building
+            x: parseFloat(m.building_offset_x) || 0,
+            y: parseFloat(m.building_offset_y) || 0,
+            z: parseFloat(m.building_offset_z) || 0,
+          },
+          modelScale: {                           // escala exclusiva del modelo
+            sx: parseFloat(m.scale_x) || 1,
+            sy: parseFloat(m.scale_y) || 1,
+            sz: parseFloat(m.scale_z) || 1,
+          },
+          dracoLoader:  dracoLoaderRef.current,
+          onProgress:   (p) => setModelProgress(p),
+          onLoaded:     onDone,
+          onError:      onDone,
         }));
         installedLayers.current.set(layerId, true);
       });
@@ -431,36 +445,34 @@ export default function MapboxViewer({ allModels = [], building, hotspots = [], 
   // Se instala cuando el edificio seleccionado no tiene modelo real.
   // Se destruye automáticamente cuando allModels cambia e incluye ese edificio
   // (es decir, cuando se sube un modelo real en el admin).
+  {/*
   useEffect(() => {
     const map = mapRef.current;
     if (!building) return;
 
-    const hasRealModel = allModels.some(
-      m => String(m.building_id) === String(building.id)
-    );
+    const hasRealModel = allModels.some(m => m.building_id === building.id);
+    if (hasRealModel) return;
 
     const demoLayerId = `fie-demo-${building.id}`;
 
-    if (hasRealModel) {
-      if (mapRef.current?.getLayer(demoLayerId)) {
-        mapRef.current.removeLayer(demoLayerId);
-      }
-      return;
-    }
-
-    // Obtener coordenadas — si el edificio no está en buildingCoords,
-    // usar las coordenadas del campus como fallback en lugar de undefined
-    const lngLat = getCoords(building.code) ?? CAMPUS_VIEW.center;
-    if (!lngLat) return; // seguridad extra
-
     const install = () => {
       if (map.getLayer(demoLayerId)) return;
+      // const lngLat = getCoords(building.code);
       map.addLayer(createModelLayer({
-        id:             demoLayerId,
-        modelUrl:       null,
-        lngLat,
-        modelTransform: {},
-        dracoLoader:    null,
+        id:          demoLayerId,
+        modelUrl:    null,
+        lngLat:      CAMPUS_VIEW.center,
+        buildingPos: {
+          x: parseFloat(building.offset_x) || 0,
+          y: parseFloat(building.offset_y) || 0,
+          z: parseFloat(building.offset_z) || 0,
+        },
+        modelScale: {
+          sx: 1,
+          sy: 1,
+          sz: 1,
+        },
+        dracoLoader: null,
       }));
     };
 
@@ -468,12 +480,14 @@ export default function MapboxViewer({ allModels = [], building, hotspots = [], 
     else map.once('load', install);
 
     return () => {
+      // Cleanup: al cambiar edificio O al llegar un modelo real
       if (mapRef.current?.getLayer(demoLayerId)) {
         mapRef.current.removeLayer(demoLayerId);
       }
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [building?.id, allModels.map(m => m.building_id).join(',')]);
+  }, [building?.id, allModels.map(m => m.building_id).join(',')]); 
+  */}
 
   // ─── Marcadores de hotspots ────────────────────────────────────────────────
   useEffect(() => {
@@ -485,7 +499,10 @@ export default function MapboxViewer({ allModels = [], building, hotspots = [], 
 
     if (!building || !hotspots.length) return;
 
-    const base = getCoords(building.code);
+    const base = buildingOffsetToGPS(
+      parseFloat(building.offset_x) || 0,
+      parseFloat(building.offset_z) || 0
+    );
     const TYPE_COLORS = { classroom: '#6d28d9', lab: '#BC0613', office: '#2563eb', service: '#16a34a', access: '#d97706' };
     const TYPE_ICONS  = { classroom: '🏫', lab: '🔬', office: '🏢', service: '⚙️', access: '🚪' };
 

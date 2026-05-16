@@ -125,9 +125,9 @@ export default function Explorer() {
     : (interiorModel ? [interiorModel] : []);
 
   const modelInfo = selectedBuilding
-    ? modelsToShow.find(m => m.building_id === selectedBuilding.id) ?? null
+    ? modelsToShow.find(m => String(m.building_id) === String(selectedBuilding.id)) ?? null
     : null;
-
+    
   // ── Hotspots del edificio seleccionado ────────────────────
   useEffect(() => {
     if (!selectedBuilding) return;

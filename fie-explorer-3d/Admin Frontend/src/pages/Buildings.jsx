@@ -4,7 +4,10 @@ import { api, fmt } from '../api'
 const TYPE_LABELS = { main: 'Principal', secondary: 'Secundario', lab: 'Laboratorio' }
 const TYPE_BADGE  = { main: 'b-blue', secondary: 'b-gray', lab: 'b-teal' }
 const LOD_LABELS  = { 0: 'LOD 0 — Alta', 1: 'LOD 1 — Media', 2: 'LOD 2 — Baja' }
-const EMPTY_FORM  = { name: '', code: '', description: '', type: 'main', floor_count: 1 }
+const EMPTY_FORM  = {
+  name: '', code: '', description: '', type: 'main', floor_count: 1,
+  offset_x: 0, offset_y: 0, offset_z: 0,
+}
 
 function Modal({ title, children, onConfirm, confirmLabel = 'Guardar', danger = false, onClose }) {
   return (
@@ -23,8 +26,11 @@ function Modal({ title, children, onConfirm, confirmLabel = 'Guardar', danger = 
 
 function BuildingForm({ data, onChange, isEdit = false }) {
   const set = (k, v) => onChange({ ...data, [k]: v })
+
+
   return (
     <>
+      {/* ── Identificación ── */}
       <div className="form-grid-2">
         <div className="form-group">
           <label className="form-label">Nombre del edificio *</label>
@@ -49,7 +55,7 @@ function BuildingForm({ data, onChange, isEdit = false }) {
           </select>
         </div>
         <div className="form-group">
-          <label className="form-label">Número de plantas *</label>
+          <label className="form-label">Número de plantas</label>
           <input className="form-input" type="number" min="1" max="20"
             value={data.floor_count || 1}
             onChange={e => set('floor_count', parseInt(e.target.value) || 1)} />
@@ -61,6 +67,46 @@ function BuildingForm({ data, onChange, isEdit = false }) {
           placeholder="Descripción del edificio, función principal, etc."
           value={data.description || ''} onChange={e => set('description', e.target.value)} />
       </div>
+
+      {/* ── Posición en el mapa (offset Three.js) ── */}
+      <div className="form-group">
+        <label className="form-label">Posición en el mapa</label>
+        <p style={{ fontSize: '11px', color: 'var(--muted)', margin: '0 0 8px', lineHeight: 1.5 }}>
+          Desplazamiento en metros desde el centro del campus. X = Este, Y = Altura, Z = Norte.
+          Los modelos del edificio heredan esta posición automáticamente.
+        </p>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px' }}>
+          {[
+            { field: 'offset_x', label: 'X — Este',    placeholder: '0', hint: '+Este / -Oeste' },
+            { field: 'offset_y', label: 'Y — Altura',  placeholder: '0', hint: '+Sube / -Baja'  },
+            { field: 'offset_z', label: 'Z — Norte',   placeholder: '0', hint: '+Norte / -Sur'  },
+          ].map(({ field, label, placeholder, hint }) => (
+            <div className="form-group" key={field}>
+              <label className="form-label" style={{ fontSize: '11px' }}>{label}</label>
+              <input
+                className="form-input"
+                type="number" step="0.5"
+                placeholder={placeholder}
+                value={data[field] ?? 0}
+                onChange={e => set(field, parseFloat(e.target.value) || 0)}
+                style={{ textAlign: 'center', padding: '5px 6px', fontSize: '13px' }}
+              />
+              <small style={{ fontSize: '10px', color: 'var(--faint)', display: 'block', textAlign: 'center' }}>{hint}</small>
+            </div>
+          ))}
+        </div>
+        <button
+          type="button"
+          onClick={() => { set('offset_x', 0); set('offset_y', 0); set('offset_z', 0) }}
+          style={{
+            marginTop: '6px', fontSize: '11px', padding: '3px 10px',
+            border: '1px solid var(--border)', borderRadius: '4px',
+            background: 'transparent', color: 'var(--muted)', cursor: 'pointer',
+          }}>
+          Resetear a (0, 0, 0)
+        </button>
+      </div>
+
       {isEdit && (
         <div className="form-group">
           <label className="form-label">Estado</label>
@@ -99,21 +145,17 @@ function BuildingModels({ building, onToast }) {
     setOpen(o => !o)
   }
 
-  // ── Subir archivo al backend ────────────────────────────────
   async function handleFileChange(e) {
     const file = e.target.files?.[0]
     if (!file) return
     const ext = file.name.split('.').pop().toLowerCase()
     if (!['glb', 'gltf'].includes(ext)) {
-      onToast('Solo se aceptan archivos .glb o .gltf', 'error')
-      return
+      onToast('Solo se aceptan archivos .glb o .gltf', 'error'); return
     }
-    setUploading(true)
-    setUploadPct(0)
+    setUploading(true); setUploadPct(0)
     try {
       const formData = new FormData()
       formData.append('model', file)
-
       const result = await new Promise((resolve, reject) => {
         const xhr = new XMLHttpRequest()
         xhr.open('POST', '/api/models/upload')
@@ -122,29 +164,18 @@ function BuildingModels({ building, onToast }) {
           if (ev.lengthComputable) setUploadPct(Math.round(ev.loaded / ev.total * 100))
         }
         xhr.onload = () => {
-          if (xhr.status >= 200 && xhr.status < 300) {
-            resolve(JSON.parse(xhr.responseText))
-          } else {
-            try { reject(new Error(JSON.parse(xhr.responseText).error || 'Error al subir')) }
-            catch { reject(new Error(`Error ${xhr.status}`)) }
-          }
+          if (xhr.status >= 200 && xhr.status < 300) resolve(JSON.parse(xhr.responseText))
+          else { try { reject(new Error(JSON.parse(xhr.responseText).error || 'Error al subir')) } catch { reject(new Error(`Error ${xhr.status}`)) } }
         }
         xhr.onerror = () => reject(new Error('Error de red al subir el archivo'))
         xhr.send(formData)
       })
-
-      setForm(f => ({
-        ...f,
-        file_path:    result.file_path,
-        file_size_mb: result.file_size_mb,
-        format:       result.format,
-      }))
+      setForm(f => ({ ...f, file_path: result.file_path, file_size_mb: result.file_size_mb, format: result.format }))
       onToast(`✅ "${file.name}" subido correctamente.`)
     } catch (err) {
       onToast(err.message, 'error')
     } finally {
-      setUploading(false)
-      setUploadPct(0)
+      setUploading(false); setUploadPct(0)
       if (fileInputRef.current) fileInputRef.current.value = ''
     }
   }
@@ -196,12 +227,8 @@ function BuildingModels({ building, onToast }) {
 
       {open && (
         <div style={{ paddingBottom: '8px' }}>
-          {models === null && (
-            <div style={{ fontSize: '12px', color: 'var(--faint)', padding: '4px 0' }}>Cargando…</div>
-          )}
-          {models !== null && models.length === 0 && (
-            <div style={{ fontSize: '12px', color: 'var(--faint)', padding: '4px 0' }}>Sin modelos registrados.</div>
-          )}
+          {models === null && <div style={{ fontSize: '12px', color: 'var(--faint)', padding: '4px 0' }}>Cargando…</div>}
+          {models !== null && models.length === 0 && <div style={{ fontSize: '12px', color: 'var(--faint)', padding: '4px 0' }}>Sin modelos registrados.</div>}
           {models !== null && models.map(m => (
             <div key={m.id} style={{
               display: 'flex', alignItems: 'center', justifyContent: 'space-between',
@@ -241,14 +268,10 @@ function BuildingModels({ building, onToast }) {
         </div>
       )}
 
-      {/* Modal nuevo modelo */}
       {modal?.type === 'new' && (
-        <Modal
-          title={`Nuevo modelo — ${building.name}`}
-          onConfirm={confirmNew}
-          confirmLabel={saving ? 'Registrando…' : 'Registrar modelo'}
-          onClose={() => setModal(null)}
-        >
+        <Modal title={`Nuevo modelo — ${building.name}`}
+          onConfirm={confirmNew} confirmLabel={saving ? 'Registrando…' : 'Registrar modelo'}
+          onClose={() => setModal(null)}>
           <div className="form-grid-2">
             <div className="form-group">
               <label className="form-label">Tipo *</label>
@@ -266,100 +289,48 @@ function BuildingModels({ building, onToast }) {
               </select>
             </div>
           </div>
-
-          {/* ── Selector de archivo (reemplaza al input de ruta) ── */}
           <div className="form-group">
             <label className="form-label">Archivo del modelo *</label>
-
-            {/* Input oculto */}
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".glb,.gltf"
-              style={{ display: 'none' }}
-              onChange={handleFileChange}
-            />
-
-            {/* Estado: sin archivo aún */}
+            <input ref={fileInputRef} type="file" accept=".glb,.gltf" style={{ display: 'none' }} onChange={handleFileChange} />
             {!form.file_path && !uploading && (
-              <button
-                type="button"
-                className="btn btn-primary"
+              <button type="button" className="btn btn-primary"
                 style={{ width: '100%', padding: '0.65rem', fontSize: '13px' }}
-                onClick={() => fileInputRef.current?.click()}
-              >
+                onClick={() => fileInputRef.current?.click()}>
                 📂 Seleccionar archivo .glb / .gltf
               </button>
             )}
-
-            {/* Estado: subiendo */}
             {uploading && (
-              <div style={{
-                border: '1px solid var(--border)', borderRadius: '8px',
-                padding: '12px', textAlign: 'center',
-              }}>
-                <div style={{ fontSize: '12px', color: 'var(--muted)', marginBottom: '8px' }}>
-                  Subiendo… {uploadPct}%
-                </div>
+              <div style={{ border: '1px solid var(--border)', borderRadius: '8px', padding: '12px', textAlign: 'center' }}>
+                <div style={{ fontSize: '12px', color: 'var(--muted)', marginBottom: '8px' }}>Subiendo… {uploadPct}%</div>
                 <div style={{ background: 'var(--bg)', borderRadius: '4px', height: '6px', overflow: 'hidden' }}>
-                  <div style={{
-                    height: '100%', width: `${uploadPct}%`,
-                    background: 'var(--primary, #BC0613)', borderRadius: '4px',
-                    transition: 'width 200ms',
-                  }} />
+                  <div style={{ height: '100%', width: `${uploadPct}%`, background: 'var(--primary, #BC0613)', borderRadius: '4px', transition: 'width 200ms' }} />
                 </div>
               </div>
             )}
-
-            {/* Estado: archivo subido */}
             {form.file_path && !uploading && (
-              <div style={{
-                border: '1px solid #bbf7d0', borderRadius: '8px',
-                background: '#f0fdf4', padding: '10px 12px',
-                display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px',
-              }}>
+              <div style={{ border: '1px solid #bbf7d0', borderRadius: '8px', background: '#f0fdf4', padding: '10px 12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
                 <div style={{ minWidth: 0 }}>
                   <div style={{ fontSize: '12px', fontWeight: 600, color: '#15803d' }}>✅ Archivo subido</div>
-                  <div style={{
-                    fontSize: '11px', color: '#166534', marginTop: '2px',
-                    fontFamily: 'monospace', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                  }}>{form.file_path}</div>
-                  {form.file_size_mb && (
-                    <div style={{ fontSize: '11px', color: '#4ade80', marginTop: '1px' }}>
-                      {form.file_size_mb} MB · {form.format}
-                    </div>
-                  )}
+                  <div style={{ fontSize: '11px', color: '#166534', marginTop: '2px', fontFamily: 'monospace', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{form.file_path}</div>
+                  {form.file_size_mb && <div style={{ fontSize: '11px', color: '#4ade80', marginTop: '1px' }}>{form.file_size_mb} MB · {form.format}</div>}
                 </div>
-                <button
-                  type="button"
-                  className="btn btn-sm"
-                  style={{ flexShrink: 0, fontSize: '11px' }}
-                  onClick={() => {
-                    set('file_path', '')
-                    set('file_size_mb', null)
-                    fileInputRef.current?.click()
-                  }}
-                >
+                <button type="button" className="btn btn-sm" style={{ flexShrink: 0, fontSize: '11px' }}
+                  onClick={() => { set('file_path', ''); set('file_size_mb', null); fileInputRef.current?.click() }}>
                   Cambiar
                 </button>
               </div>
             )}
-
             <small style={{ color: 'var(--faint)', fontSize: '11px', display: 'block', marginTop: '4px' }}>
               Se guarda en <code>public/models/</code> del visor público. Máx. 200 MB.
             </small>
           </div>
-
-          {/* Versión opcional */}
           <div className="form-group">
             <label className="form-label">Versión (opcional)</label>
-            <input className="form-input" placeholder="v1.0"
-              value={form.version || ''} onChange={e => set('version', e.target.value)} />
+            <input className="form-input" placeholder="v1.0" value={form.version || ''} onChange={e => set('version', e.target.value)} />
           </div>
         </Modal>
       )}
 
-      {/* Modal eliminar modelo */}
       {modal?.type === 'del-model' && (
         <Modal title="Eliminar modelo" onConfirm={confirmDeleteModel}
           confirmLabel="Eliminar" danger onClose={() => setModal(null)}>
@@ -394,22 +365,36 @@ export default function Buildings() {
     setToast({ msg, type }); setTimeout(() => setToast(null), 3500)
   }
 
+  function validateForm(f) {
+    if (!f.name?.trim()) { showToast('El nombre es obligatorio.', 'error'); return false }
+    if (!f.code?.trim()) { showToast('El código es obligatorio.', 'error'); return false }
+    return true
+  }
+
+  function buildPayload(f) {
+    return {
+      ...f,
+      offset_x: parseFloat(f.offset_x) || 0,
+      offset_y: parseFloat(f.offset_y) || 0,
+      offset_z: parseFloat(f.offset_z) || 0,
+    }
+  }
+
   async function confirmCreate() {
-    if (!form.name?.trim()) return showToast('El nombre es obligatorio.', 'error')
-    if (!form.code?.trim()) return showToast('El código es obligatorio.', 'error')
+    if (!validateForm(form)) return
     setSaving(true)
     try {
-      await api('POST', '/buildings', form)
+      await api('POST', '/buildings', buildPayload(form))
       setModal(null); showToast(`Edificio "${form.name}" creado correctamente.`); load()
     } catch (e) { showToast(e.message, 'error') }
     finally { setSaving(false) }
   }
 
   async function confirmEdit() {
-    if (!form.name?.trim()) return showToast('El nombre es obligatorio.', 'error')
+    if (!validateForm(form)) return
     setSaving(true)
     try {
-      await api('PUT', `/buildings/${modal.id}`, form)
+      await api('PUT', `/buildings/${modal.id}`, buildPayload(form))
       setModal(null); showToast('Edificio actualizado correctamente.'); load()
     } catch (e) { showToast(e.message, 'error') }
     finally { setSaving(false) }
@@ -463,10 +448,17 @@ export default function Buildings() {
                   <span className={`badge ${TYPE_BADGE[b.type] || 'b-gray'}`}>{TYPE_LABELS[b.type] || b.type}</span>
                   <code className="tag">{b.code}</code>
                 </div>
-                <span style={{
-                  width: 8, height: 8, borderRadius: '50%', flexShrink: 0, marginTop: 4, display: 'inline-block',
-                  background: b.is_active ? 'var(--success)' : 'var(--danger)',
-                }} />
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span
+                    title={`Posición: X=${parseFloat(b.offset_x)||0} Y=${parseFloat(b.offset_y)||0} Z=${parseFloat(b.offset_z)||0}`}
+                    style={{ fontSize: '13px', cursor: 'help' }}>
+                    📍
+                  </span>
+                  <span style={{
+                    width: 8, height: 8, borderRadius: '50%', flexShrink: 0, display: 'inline-block',
+                    background: b.is_active ? 'var(--success)' : 'var(--danger)',
+                  }} />
+                </div>
               </div>
               <h3 style={{ fontSize: '14px', fontWeight: 600, marginBottom: '4px' }}>{b.name}</h3>
               <p style={{
@@ -491,7 +483,10 @@ export default function Buildings() {
                     {b.is_active ? '⏸' : '▶'}
                   </button>
                   <button className="btn btn-sm" title="Editar"
-                    onClick={() => { setForm({ ...b }); setModal({ type: 'edit', id: b.id }) }}>✏</button>
+                    onClick={() => {
+                      setForm({ ...b, offset_x: parseFloat(b.offset_x) || 0, offset_y: parseFloat(b.offset_y) || 0, offset_z: parseFloat(b.offset_z) || 0 })
+                      setModal({ type: 'edit', id: b.id })
+                    }}>✏</button>
                   <button className="btn btn-sm" title="Eliminar"
                     onClick={() => setModal({ type: 'delete', id: b.id, name: b.name, hotspot_count: b.hotspot_count })}
                     style={{ color: 'var(--danger)' }}>🗑</button>
