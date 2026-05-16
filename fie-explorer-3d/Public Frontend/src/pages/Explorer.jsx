@@ -7,6 +7,7 @@ import { useViewerStore } from '../store/viewerStore';
 import { buildingsService } from '../services/buildingsService';
 import { hotspotsService } from '../services/hotspotsService';
 import { modelsService } from '../services/modelsService';
+import { isOpenNow } from '../utils/scheduleUtils';
 
 const SIDEBAR_W = 280;
 
@@ -57,6 +58,7 @@ export default function Explorer() {
   const [allExteriorModels, setAllExteriorModels]  = useState([]);
   const [interiorModel,     setInteriorModel]      = useState(null);
   const [typeFilter,        setTypeFilter]         = useState('all');
+  const [openNowOnly,       setOpenNowOnly]        = useState(false);
 
   useEffect(() => { if (isMobile) setSidebarOpen(false); }, [isMobile]);
 
@@ -67,7 +69,7 @@ export default function Explorer() {
       .catch(console.error);
   }, []);
 
-  // validar edificio restaurado desde localStorage ─
+  // ── HU-09: validar edificio restaurado desde localStorage ─
   useEffect(() => {
     if (!buildings.length) return;
 
@@ -123,13 +125,14 @@ export default function Explorer() {
     : (interiorModel ? [interiorModel] : []);
 
   const modelInfo = selectedBuilding
-    ? modelsToShow.find(m => m.building_id === selectedBuilding.id) ?? null
+    ? modelsToShow.find(m => String(m.building_id) === String(selectedBuilding.id)) ?? null
     : null;
-
+    
   // ── Hotspots del edificio seleccionado ────────────────────
   useEffect(() => {
     if (!selectedBuilding) return;
-    setTypeFilter('all'); // resetear filtro al cambiar edificio
+    setTypeFilter('all');  // resetear filtros al cambiar edificio
+    setOpenNowOnly(false);
     const params = { building_id: selectedBuilding.id };
     if (viewMode === 'interior') params.floor = currentFloor;
     hotspotsService.getAll(params)
@@ -138,9 +141,9 @@ export default function Explorer() {
   }, [selectedBuilding, currentFloor, viewMode, setHotspots]);
 
   // ── Hotspots filtrados + tipos presentes ─────────────────
-  const filteredHotspots = typeFilter === 'all'
-    ? hotspots
-    : hotspots.filter(h => h.type === typeFilter);
+  const filteredHotspots = hotspots
+    .filter(h => typeFilter === 'all' || h.type === typeFilter)
+    .filter(h => !openNowOnly      || isOpenNow(h.schedule) === true);
 
   const presentTypes = [...new Set(hotspots.map(h => h.type))];
 
@@ -342,25 +345,38 @@ export default function Explorer() {
               </div>
 
               {/* Chips de filtro — solo tipos que existen en este edificio */}
-              {presentTypes.length > 1 && (
+              {(presentTypes.length > 1 || hotspots.some(h => h.schedule)) && (
                 <div style={{
                   padding: '0.3rem 0.75rem 0.5rem',
                   display: 'flex', flexWrap: 'wrap', gap: 4,
                   flexShrink: 0,
                 }}>
-                  <FilterChip
-                    active={typeFilter === 'all'}
-                    onClick={() => setTypeFilter('all')}
-                    label="Todos"
-                  />
-                  {presentTypes.map(t => (
+                  {presentTypes.length > 1 && (
+                    <>
+                      <FilterChip
+                        active={typeFilter === 'all'}
+                        onClick={() => setTypeFilter('all')}
+                        label="Todos"
+                      />
+                      {presentTypes.map(t => (
+                        <FilterChip
+                          key={t}
+                          active={typeFilter === t}
+                          onClick={() => setTypeFilter(t)}
+                          label={`${TYPE_ICONS[t] || '📍'} ${TYPE_LABELS[t] || t}`}
+                        />
+                      ))}
+                    </>
+                  )}
+                  {/* Filtro abierto ahora — solo si algún hotspot tiene horario */}
+                  {hotspots.some(h => h.schedule) && (
                     <FilterChip
-                      key={t}
-                      active={typeFilter === t}
-                      onClick={() => setTypeFilter(t)}
-                      label={`${TYPE_ICONS[t] || '📍'} ${TYPE_LABELS[t] || t}`}
+                      active={openNowOnly}
+                      onClick={() => setOpenNowOnly(o => !o)}
+                      label="🟢 Abierto ahora"
+                      accent
                     />
-                  ))}
+                  )}
                 </div>
               )}
             </>
@@ -495,16 +511,19 @@ export default function Explorer() {
 }
 
 // ── Chip de filtro ────────────────────────────────────────────
-function FilterChip({ active, onClick, label }) {
+function FilterChip({ active, onClick, label, accent = false }) {
+  const activeColor = accent ? '#15803d' : 'var(--color-primary)';
+  const activeBg    = accent ? '#dcfce7' : 'var(--color-primary)';
+  const activeText  = accent ? '#15803d' : '#fff';
   return (
     <button
       onClick={onClick}
       style={{
         padding: '0.25rem 0.6rem',
         fontSize: '0.7rem', fontWeight: 600,
-        background: active ? 'var(--color-primary)' : 'var(--color-bg-soft)',
-        color: active ? '#fff' : 'var(--color-text-3)',
-        border: `1px solid ${active ? 'var(--color-primary)' : 'var(--color-border)'}`,
+        background: active ? activeBg    : 'var(--color-bg-soft)',
+        color:      active ? activeText  : 'var(--color-text-3)',
+        border: `1px solid ${active ? activeColor : 'var(--color-border)'}`,
         borderRadius: 'var(--radius-full)',
         cursor: 'pointer',
         transition: 'all var(--transition)',

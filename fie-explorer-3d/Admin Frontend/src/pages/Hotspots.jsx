@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { api, fmt, typeBadgeClass } from '../api'
+import SchedulePicker from '../components/SchedulePicker'
 
 function Modal({ title, children, onConfirm, confirmLabel = 'Guardar', danger = false, onClose }) {
   return (
@@ -94,13 +95,17 @@ function HotspotForm({ data, onChange, buildings = [] }) {
           )}
         </div>
       </div>
-
+      <div className="form-group">
+        <label className="form-label">Docente / Responsable</label>
+        <input className="form-input" placeholder="Ej. Ing. Juan Pérez"
+        value={data.teacher || ''} onChange={e => set('teacher', e.target.value)} />
+      </div>
       {/* ── Información del espacio ── */}
       <div className="form-grid-2">
         <div className="form-group">
-          <label className="form-label">Docente / Responsable</label>
-          <input className="form-input" placeholder="Ej. Ing. Juan Pérez"
-            value={data.teacher || ''} onChange={e => set('teacher', e.target.value)} />
+          <label className="form-label">Teléfono / Extensión</label>
+          <input className="form-input" placeholder="Ej. +593 3 294-xxxx ext. 1234"
+            value={data.phone || ''} onChange={e => set('phone', e.target.value)} />
         </div>
         <div className="form-group">
           <label className="form-label">Capacidad (personas)</label>
@@ -108,17 +113,11 @@ function HotspotForm({ data, onChange, buildings = [] }) {
             value={data.capacity || ''} onChange={e => set('capacity', e.target.value ? parseInt(e.target.value) : null)} />
         </div>
       </div>
-      <div className="form-grid-2">
-        <div className="form-group">
-          <label className="form-label">Horario</label>
-          <input className="form-input" placeholder="Ej. Lun-Vie 07:00-21:00"
-            value={data.schedule || ''} onChange={e => set('schedule', e.target.value)} />
-        </div>
-        <div className="form-group">
-          <label className="form-label">Teléfono / Extensión</label>
-          <input className="form-input" placeholder="Ej. +593 3 294-xxxx ext. 1234"
-            value={data.phone || ''} onChange={e => set('phone', e.target.value)} />
-        </div>
+      <div className="form-group">
+        <SchedulePicker
+          value={data.schedule || ''}
+          onChange={v => set('schedule', v)}
+        />
       </div>
       <div className="form-group">
         <label className="form-label">URL de imagen</label>
@@ -255,7 +254,7 @@ export default function Hotspots() {
             <thead>
               <tr>
                 <th>Nombre</th><th>Tipo</th><th>Edificio</th><th>Piso</th>
-                <th>Docente</th><th>Horario</th><th>Cap.</th>
+                <th>Docente</th><th>Cap.</th>
                 <th>Estado</th><th>Actualizado</th><th>Acciones</th>
               </tr>
             </thead>
@@ -280,7 +279,6 @@ export default function Hotspots() {
                     </td>
                     <td>{h.floor}</td>
                     <td style={{ fontSize: '12px' }}>{h.teacher || <span style={{ color: 'var(--faint)' }}>—</span>}</td>
-                    <td style={{ fontSize: '11px' }}>{h.schedule || <span style={{ color: 'var(--faint)' }}>—</span>}</td>
                     <td style={{ fontSize: '12px' }}>{h.capacity ?? <span style={{ color: 'var(--faint)' }}>—</span>}</td>
                     <td>
                       {h.is_active
