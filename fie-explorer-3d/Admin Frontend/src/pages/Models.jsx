@@ -102,7 +102,6 @@ function ScaleEditor({ form, set }) {
           borderRadius: '6px', fontSize: '11px', color: 'var(--muted)',
           display: 'flex', alignItems: 'flex-start', gap: '6px',
         }}>
-          <span>ℹ️</span>
           <span>La posición (X, Y, Z) la controla el <strong>edificio padre</strong>. Edítala en la sección Edificios.</span>
         </div>
       </div>
