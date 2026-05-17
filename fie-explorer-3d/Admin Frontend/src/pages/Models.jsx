@@ -102,12 +102,125 @@ function ScaleEditor({ form, set }) {
           borderRadius: '6px', fontSize: '11px', color: 'var(--muted)',
           display: 'flex', alignItems: 'flex-start', gap: '6px',
         }}>
+          <span>ℹ️</span>
           <span>La posición (X, Y, Z) la controla el <strong>edificio padre</strong>. Edítala en la sección Edificios.</span>
         </div>
       </div>
     </div>
   )
 }
+
+// ─── Editor de rotación ───────────────────────────────────────────────────────
+function RotationEditor({ form, set }) {
+  // Y es el eje más importante (orientación horizontal del modelo)
+  const Y_PRESETS = [0, 45, 90, 135, 180, 225, 270, 315]
+
+  return (
+    <div style={{ border: '1px solid var(--border)', borderRadius: '10px', overflow: 'hidden', marginTop: '8px' }}>
+      <div style={{
+        background: 'var(--bg)', padding: '8px 12px',
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+      }}>
+        <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--muted)' }}>
+          Rotación del modelo (grados)
+        </span>
+        <button type="button" className="btn btn-sm"
+          style={{ fontSize: '11px', padding: '2px 8px' }}
+          onClick={() => { set('rotate_x', 0); set('rotate_y', 0); set('rotate_z', 0) }}>
+          Resetear 0°
+        </button>
+      </div>
+
+      <div style={{ padding: '10px 12px' }}>
+        {/* Eje Y — Orientación (el más útil) */}
+        <div style={{ marginBottom: '10px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '5px' }}>
+            <label style={{ fontSize: '12px', fontWeight: 600 }}>Y — Orientación (guiñada)</label>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <input
+                type="number" step="1" min="-360" max="360"
+                value={form.rotate_y ?? 0}
+                onChange={e => set('rotate_y', parseFloat(e.target.value) || 0)}
+                style={{
+                  width: '70px', padding: '3px 6px', textAlign: 'center',
+                  border: '1px solid var(--border)', borderRadius: '5px',
+                  fontSize: '12px', fontWeight: 700,
+                }}
+              />
+              <span style={{ fontSize: '11px', color: 'var(--faint)' }}>°</span>
+            </div>
+          </div>
+          {/* Slider visual para Y */}
+          <input
+            type="range" min="-180" max="180" step="1"
+            value={form.rotate_y ?? 0}
+            onChange={e => set('rotate_y', parseFloat(e.target.value))}
+            style={{ width: '100%', accentColor: 'var(--primary, #BC0613)', cursor: 'pointer' }}
+          />
+          {/* Presets Y */}
+          <div style={{ display: 'flex', gap: '3px', flexWrap: 'wrap', marginTop: '4px' }}>
+            {Y_PRESETS.map(v => (
+              <button key={v} type="button"
+                style={{
+                  flex: 1, padding: '2px 0', fontSize: '10px', borderRadius: '4px',
+                  border: '1px solid var(--border)', cursor: 'pointer', minWidth: '30px',
+                  background: (form.rotate_y ?? 0) === v ? 'var(--primary, #BC0613)' : 'transparent',
+                  color:      (form.rotate_y ?? 0) === v ? '#fff' : 'var(--muted)',
+                }}
+                onClick={() => set('rotate_y', v)}>
+                {v}°
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Ejes X y Z — uso avanzado */}
+        <details style={{ marginTop: '4px' }}>
+          <summary style={{ fontSize: '11px', color: 'var(--muted)', cursor: 'pointer', userSelect: 'none', padding: '3px 0' }}>
+            Avanzado: X (cabeceo) y Z (alabeo)
+          </summary>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginTop: '8px' }}>
+            {[
+              { ax: 'x', label: 'X — Cabeceo', hint: '+adelanta / -retrocede' },
+              { ax: 'z', label: 'Z — Alabeo',  hint: '+derecha / -izquierda' },
+            ].map(({ ax, label, hint }) => (
+              <div key={ax}>
+                <label style={{ fontSize: '11px', color: 'var(--muted)', display: 'block', marginBottom: '3px' }}>{label}</label>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <input
+                    type="number" step="1" min="-180" max="180"
+                    value={form[`rotate_${ax}`] ?? 0}
+                    onChange={e => set(`rotate_${ax}`, parseFloat(e.target.value) || 0)}
+                    style={{
+                      flex: 1, padding: '4px 6px', textAlign: 'center',
+                      border: '1px solid var(--border)', borderRadius: '5px', fontSize: '12px',
+                    }}
+                  />
+                  <span style={{ fontSize: '11px', color: 'var(--faint)' }}>°</span>
+                </div>
+                <div style={{ display: 'flex', gap: '2px', marginTop: '3px' }}>
+                  {[-90, -45, 0, 45, 90].map(v => (
+                    <button key={v} type="button"
+                      style={{
+                        flex: 1, padding: '1px 0', fontSize: '9px', borderRadius: '3px',
+                        border: '1px solid var(--border)', cursor: 'pointer',
+                        background: (form[`rotate_${ax}`] ?? 0) === v ? 'var(--primary, #BC0613)' : 'transparent',
+                        color:      (form[`rotate_${ax}`] ?? 0) === v ? '#fff' : 'var(--muted)',
+                      }}
+                      onClick={() => set(`rotate_${ax}`, v)}>
+                      {v}°
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </details>
+      </div>
+    </div>
+  )
+}
+
 
 function scaleLabel(m) {
   const x = parseFloat(m.scale_x) || 1
@@ -152,24 +265,27 @@ export default function Models() {
     setToast({ msg, type }); setTimeout(() => setToast(null), 3500)
   }
 
-  const SCALE_DEFAULTS = { scale_x: 1, scale_y: 1, scale_z: 1 }
+  const TRANSFORM_DEFAULTS = { scale_x: 1, scale_y: 1, scale_z: 1, rotate_x: 0, rotate_y: 0, rotate_z: 0 }
 
   function openNew() {
     setForm({
       model_type: 'exterior', lod_level: 0, format: 'GLB',
       building_id: buildings[0]?.id || '',
-      ...SCALE_DEFAULTS,
+      ...TRANSFORM_DEFAULTS,
     })
     setModal({ type: 'new' })
   }
 
-  function openEditScale(m) {
+  function openEditTransform(m) {
     setForm({
-      scale_x: parseFloat(m.scale_x) || 1,
-      scale_y: parseFloat(m.scale_y) || 1,
-      scale_z: parseFloat(m.scale_z) || 1,
+      scale_x:  parseFloat(m.scale_x)  || 1,
+      scale_y:  parseFloat(m.scale_y)  || 1,
+      scale_z:  parseFloat(m.scale_z)  || 1,
+      rotate_x: parseFloat(m.rotate_x) || 0,
+      rotate_y: parseFloat(m.rotate_y) || 0,
+      rotate_z: parseFloat(m.rotate_z) || 0,
     })
-    setModal({ type: 'edit-scale', id: m.id, name: m.file_path })
+    setModal({ type: 'edit-transform', id: m.id, name: m.file_path })
   }
 
   async function handleFileChange(e) {
@@ -214,16 +330,18 @@ export default function Models() {
     finally { setSaving(false) }
   }
 
-  async function confirmEditScale() {
+  async function confirmEditTransform() {
     setSaving(true)
     try {
-      // Solo enviar escala — la posición la controla el edificio
       await api('PUT', `/models/${modal.id}`, {
-        scale_x: form.scale_x,
-        scale_y: form.scale_y,
-        scale_z: form.scale_z,
+        scale_x:  form.scale_x,
+        scale_y:  form.scale_y,
+        scale_z:  form.scale_z,
+        rotate_x: form.rotate_x,
+        rotate_y: form.rotate_y,
+        rotate_z: form.rotate_z,
       })
-      setModal(null); showToast('Escala actualizada. Recarga el visor para ver los cambios.'); loadAll()
+      setModal(null); showToast('Escala y rotación actualizadas. Recarga el visor para ver los cambios.'); loadAll()
     } catch (e) { showToast(e.message, 'error') }
     finally { setSaving(false) }
   }
@@ -272,13 +390,13 @@ export default function Models() {
               <tr>
                 <th>Edificio</th><th>Tipo</th><th>Resolución</th>
                 <th>Archivo</th><th>Tamaño</th>
-                <th>Escala</th><th>Posición (del edificio)</th>
+                <th>Escala</th><th>Rotación Y</th><th>Posición (del edificio)</th>
                 <th>Estado</th><th>Acciones</th>
               </tr>
             </thead>
             <tbody>
               {filtered.length === 0
-                ? <tr><td colSpan={9}><div className="empty-state">Sin modelos registrados</div></td></tr>
+                ? <tr><td colSpan={10}><div className="empty-state">Sin modelos registrados</div></td></tr>
                 : filtered.map(m => (
                   <tr key={m.id}>
                     <td>
@@ -302,6 +420,12 @@ export default function Models() {
                         : <span style={{ color: 'var(--faint)', fontSize: '12px' }}>1×</span>}
                     </td>
                     <td style={{ fontSize: '11px', color: 'var(--muted)' }}>
+                      {/* Rotación Y si no es 0 */}
+                      {parseFloat(m.rotate_y) !== 0 && (
+                        <span style={{ color: '#6d28d9', fontWeight: 700, fontSize: '12px' }}>⟳ {parseFloat(m.rotate_y)||0}°</span>
+                      )}
+                    </td>
+                    <td style={{ fontSize: '11px', color: 'var(--muted)' }}>
                       {positionLabel(m)
                         ? <code style={{ fontSize: '10px' }}>{positionLabel(m)}</code>
                         : <span style={{ color: 'var(--faint)' }}>(0, 0, 0)</span>}
@@ -313,8 +437,8 @@ export default function Models() {
                     </td>
                     <td>
                       <div style={{ display: 'flex', gap: '4px' }}>
-                        <button className="btn btn-sm btn-icon" title="Editar escala"
-                          onClick={() => openEditScale(m)}>⚙</button>
+                        <button className="btn btn-sm btn-icon" title="Escala y rotación"
+                          onClick={() => openEditTransform(m)}>⚙</button>
                         <button className="btn btn-sm btn-icon" title={m.is_active ? 'Desactivar' : 'Activar'}
                           onClick={() => toggleActive(m)}>{m.is_active ? '⊘' : '✓'}</button>
                         <button className="btn btn-sm btn-danger btn-icon" title="Eliminar"
@@ -412,6 +536,10 @@ export default function Models() {
             <label className="form-label">Escala inicial</label>
             <ScaleEditor form={form} set={set} />
           </div>
+          <div className="form-group">
+            <label className="form-label">Rotación inicial</label>
+            <RotationEditor form={form} set={set} />
+          </div>
 
           <div className="form-group">
             <label className="form-label">Versión (opcional)</label>
@@ -421,16 +549,17 @@ export default function Models() {
       )}
 
       {/* ── Modal: Editar escala ── */}
-      {modal?.type === 'edit-scale' && (
-        <Modal title="Escala del modelo"
-          onConfirm={confirmEditScale}
-          confirmLabel={saving ? 'Guardando…' : 'Guardar escala'}
+      {modal?.type === 'edit-transform' && (
+        <Modal title="Escala y rotación del modelo"
+          onConfirm={confirmEditTransform}
+          confirmLabel={saving ? 'Guardando…' : 'Guardar cambios'}
           disabled={saving}
           onClose={() => setModal(null)}>
           <p style={{ fontSize: '12px', color: 'var(--muted)', marginBottom: '12px' }}>
             <code className="tag" style={{ fontSize: '10px' }}>{modal.name}</code>
           </p>
           <ScaleEditor form={form} set={set} />
+          <RotationEditor form={form} set={set} />
         </Modal>
       )}
 

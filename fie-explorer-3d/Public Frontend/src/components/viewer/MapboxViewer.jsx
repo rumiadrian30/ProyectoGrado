@@ -48,6 +48,11 @@ function createModelLayer({ id, modelUrl, lngLat, buildingPos, modelScale, draco
   const sx = parseFloat(modelScale?.sx) || 1;
   const sy = parseFloat(modelScale?.sy) || 1;
   const sz = parseFloat(modelScale?.sz) || 1;
+  // Model rotation (degrees → radians)
+  const toRad = deg => (parseFloat(deg) || 0) * Math.PI / 180;
+  const rx = toRad(modelScale?.rx);
+  const ry = toRad(modelScale?.ry);
+  const rz = toRad(modelScale?.rz);
 
   return {
     id,
@@ -371,10 +376,13 @@ export default function MapboxViewer({ allModels = [], building, hotspots = [], 
             y: parseFloat(m.building_offset_y) || 0,
             z: parseFloat(m.building_offset_z) || 0,
           },
-          modelScale: {                           // escala exclusiva del modelo
-            sx: parseFloat(m.scale_x) || 1,
-            sy: parseFloat(m.scale_y) || 1,
-            sz: parseFloat(m.scale_z) || 1,
+          modelScale: {                           // escala y rotación del modelo
+            sx: parseFloat(m.scale_x)  || 1,
+            sy: parseFloat(m.scale_y)  || 1,
+            sz: parseFloat(m.scale_z)  || 1,
+            rx: parseFloat(m.rotate_x) || 0,
+            ry: parseFloat(m.rotate_y) || 0,
+            rz: parseFloat(m.rotate_z) || 0,
           },
           dracoLoader:  dracoLoaderRef.current,
           onProgress:   (p) => setModelProgress(p),
@@ -445,8 +453,7 @@ export default function MapboxViewer({ allModels = [], building, hotspots = [], 
   // Se instala cuando el edificio seleccionado no tiene modelo real.
   // Se destruye automáticamente cuando allModels cambia e incluye ese edificio
   // (es decir, cuando se sube un modelo real en el admin).
-  {/*
-  useEffect(() => {
+  {/*useEffect(() => {
     const map = mapRef.current;
     if (!building) return;
 
@@ -457,22 +464,13 @@ export default function MapboxViewer({ allModels = [], building, hotspots = [], 
 
     const install = () => {
       if (map.getLayer(demoLayerId)) return;
-      // const lngLat = getCoords(building.code);
+      const lngLat = getCoords(building.code);
       map.addLayer(createModelLayer({
-        id:          demoLayerId,
-        modelUrl:    null,
-        lngLat:      CAMPUS_VIEW.center,
-        buildingPos: {
-          x: parseFloat(building.offset_x) || 0,
-          y: parseFloat(building.offset_y) || 0,
-          z: parseFloat(building.offset_z) || 0,
-        },
-        modelScale: {
-          sx: 1,
-          sy: 1,
-          sz: 1,
-        },
-        dracoLoader: null,
+        id:             demoLayerId,
+        modelUrl:       null,       // → addDemoModel (cubo rojo)
+        lngLat,
+        modelTransform: {},
+        dracoLoader:    null,
       }));
     };
 
@@ -486,8 +484,7 @@ export default function MapboxViewer({ allModels = [], building, hotspots = [], 
       }
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [building?.id, allModels.map(m => m.building_id).join(',')]); 
-  */}
+  }, [building?.id, allModels.map(m => m.building_id).join(',')]); */}
 
   // ─── Marcadores de hotspots ────────────────────────────────────────────────
   useEffect(() => {

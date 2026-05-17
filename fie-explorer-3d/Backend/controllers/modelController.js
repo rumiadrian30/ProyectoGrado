@@ -31,6 +31,7 @@ async function create(req, res, next) {
     lod_level, format, version,
     scale_x, scale_y, scale_z,
     offset_x, offset_y, offset_z,
+    rotate_x, rotate_y, rotate_z,
   } = req.body;
 
   if (!building_id || !model_type || !file_path) {
@@ -44,15 +45,17 @@ async function create(req, res, next) {
         building_id, model_type, file_path, file_size_mb, triangle_count,
         lod_level, format, version,
         scale_x, scale_y, scale_z,
-        offset_x, offset_y, offset_z
+        offset_x, offset_y, offset_z,
+        rotate_x, rotate_y, rotate_z
       )
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING *
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17) RETURNING *
     `, [
       building_id, model_type, file_path,
       file_size_mb || null, triangle_count || null,
       lod_level ?? 0, format || 'GLB', version || null,
       scale_x  ?? 1.0, scale_y  ?? 1.0, scale_z  ?? 1.0,
       offset_x ?? 0.0, offset_y ?? 0.0, offset_z ?? 0.0,
+      rotate_x ?? 0.0, rotate_y ?? 0.0, rotate_z ?? 0.0,
     ]);
 
     const m = rows[0];
@@ -80,11 +83,11 @@ async function create(req, res, next) {
 // ── PUT /:id ─────────────────────────────────────────────────
 async function update(req, res, next) {
   const { id } = req.params;
-  // offset_x/y/z ya no se actualizan desde este endpoint
-  // La posición viene exclusivamente del building padre
+  // offset_x/y/z no se actualizan (posición viene del building padre)
   const {
     file_path, file_size_mb, triangle_count, version, is_active,
     scale_x, scale_y, scale_z,
+    rotate_x, rotate_y, rotate_z,
   } = req.body;
 
   try {
@@ -104,11 +107,15 @@ async function update(req, res, next) {
         scale_x        = COALESCE($6,  scale_x),
         scale_y        = COALESCE($7,  scale_y),
         scale_z        = COALESCE($8,  scale_z),
+        rotate_x       = COALESCE($9,  rotate_x),
+        rotate_y       = COALESCE($10, rotate_y),
+        rotate_z       = COALESCE($11, rotate_z),
         updated_at     = NOW()
-      WHERE id = $9 RETURNING *
+      WHERE id = $12 RETURNING *
     `, [
       file_path, file_size_mb, triangle_count, version, is_active,
       scale_x, scale_y, scale_z,
+      rotate_x, rotate_y, rotate_z,
       id,
     ]);
 
@@ -116,8 +123,8 @@ async function update(req, res, next) {
     await writeAudit({
       user_id: req.admin.id, action: 'UPDATE',
       entity_type: 'models_3d', entity_id: id,
-      old_values: { file_path: old.file_path, is_active: old.is_active, offset_x: old.offset_x, offset_z: old.offset_z },
-      new_values: { file_path: m.file_path,   is_active: m.is_active,   offset_x: m.offset_x,   offset_z: m.offset_z },
+      old_values: { file_path: old.file_path, is_active: old.is_active, rotate_y: old.rotate_y },
+      new_values: { file_path: m.file_path,   is_active: m.is_active,   rotate_y: m.rotate_y   },
       ip_address: req.ip, user_agent: req.headers['user-agent'],
     });
     log(`✏️  ACTUALIZADO — modelo ${id}`);
