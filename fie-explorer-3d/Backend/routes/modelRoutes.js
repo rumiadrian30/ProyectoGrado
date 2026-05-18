@@ -7,7 +7,7 @@ const ctrl   = require('../controllers/modelController');
 const { upload, MODELS_DIR } = require('../middleware/uploadMiddleware');
 
 // ── Pública: el visor 3D lee modelos sin login ────────────────
-router.get('/', authOptional, ctrl.list); 
+router.get('/', authOptional, ctrl.list);
 
 // ── Upload de archivo .glb / .gltf ───────────────────────────
 router.post('/upload', auth, upload.single('model'), (req, res, next) => {
@@ -15,8 +15,8 @@ router.post('/upload', auth, upload.single('model'), (req, res, next) => {
     const e = new Error('No se recibió ningún archivo.'); e.status = 400; return next(e);
   }
 
-  const fileSizeMB  = parseFloat((req.file.size / (1024 * 1024)).toFixed(2));
-  const filePath    = `/models/${req.file.filename}`;
+  const fileSizeMB = parseFloat((req.file.size / (1024 * 1024)).toFixed(2));
+  const filePath   = `/models/${req.file.filename}`;
 
   console.log(`  \x1b[36m[UPLOAD]\x1b[0m ✅ ${req.file.filename} (${fileSizeMB} MB) → ${MODELS_DIR}`);
 
@@ -25,6 +25,18 @@ router.post('/upload', auth, upload.single('model'), (req, res, next) => {
     filename:     req.file.filename,
     file_size_mb: fileSizeMB,
     format:       path.extname(req.file.filename).replace('.', '').toUpperCase(),
+  });
+});
+
+// ── Servir archivo GLB para preview en el admin ───────────────
+// res.sendFile requiere ruta absoluta; path.resolve la garantiza.
+router.get('/file/:filename', authOptional, (req, res, next) => {
+  const filename = path.basename(req.params.filename); // evitar path traversal
+  const absPath  = path.resolve(MODELS_DIR, filename); // siempre absoluta
+  res.sendFile(absPath, { root: '/' }, err => {
+    if (err) {
+      const e = new Error('Archivo de modelo no encontrado.'); e.status = 404; next(e);
+    }
   });
 });
 

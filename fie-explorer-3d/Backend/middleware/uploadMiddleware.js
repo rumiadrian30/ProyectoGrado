@@ -3,10 +3,13 @@ const multer = require('multer');
 const path   = require('path');
 const fs     = require('fs');
 
-// Carpeta destino: Public Frontend/public/models/
-// Configurable con MODELS_DIR en .env
-const MODELS_DIR = process.env.MODELS_DIR ||
-  path.resolve(__dirname, '../../Public Frontend/public/models');
+// Carpeta destino de los modelos GLB/GLTF.
+// Prioridad: variable de entorno MODELS_DIR → carpeta local uploads/models/
+// (La carpeta uploads/models está dentro del propio Backend para que
+//  res.sendFile y multer siempre resuelvan la misma ruta absoluta.)
+const MODELS_DIR = process.env.MODELS_DIR
+  ? path.resolve(process.env.MODELS_DIR)
+  : path.resolve(__dirname, '../uploads/models');
 
 // Crear carpeta si no existe
 if (!fs.existsSync(MODELS_DIR)) {

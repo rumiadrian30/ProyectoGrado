@@ -1,17 +1,12 @@
 /**
  * MapboxViewer.jsx
  *
- * Visor integrado: Mapbox GL JS Standard (sin objetos 3D nativos para que
- * solo se vean los modelos GLB propios) + Three.js custom layer.
+ * Visor integrado: Mapbox GL JS Standard + Three.js custom layer.
  *
  * Navegación: W/A/S/D o flechas → mover cámara
  *             Q/E               → rotar bearing
  *             R/F               → subir/bajar pitch
  *
- * Centrado dinámico al seleccionar edificio (computeBuildingFlyTo):
- *   1. Si existe modelo 3D → coords del modelo + offsets del admin
- *   2. Si hay hotspots con posición → centroide convertido a GPS
- *   3. Fallback → coordenadas estáticas del campus
  */
 
 import React, { useEffect, useRef, useCallback, useState } from 'react';
