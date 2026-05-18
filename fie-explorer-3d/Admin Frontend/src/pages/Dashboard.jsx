@@ -82,7 +82,7 @@ export default function Dashboard({ onErrCount }) {
           </div>
           {recentAudit.length === 0
             ? <div className="empty-state">Sin actividad</div>
-            : recentAudit.map(l => (
+            : recentAudit.slice(0, 6).map(l => (
               <div key={l.id} style={{ display:'flex', alignItems:'center', gap:'8px', padding:'7px 0', borderBottom:'1px solid rgba(0,0,0,.05)' }}>
                 <span className={`badge ${actionBadgeClass(l.action)}`}>{l.action}</span>
                 <span style={{ flex:1, fontSize:'12px', color:'var(--muted)' }}>{l.entity_type || 'auth'}</span>
