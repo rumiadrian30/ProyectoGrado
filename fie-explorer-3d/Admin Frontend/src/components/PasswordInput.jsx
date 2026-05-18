@@ -37,7 +37,7 @@ export default function PasswordInput({ value, onChange, label = 'Contraseña', 
         <button type="button" onClick={() => setShow(s => !s)}
           style={{ position:'absolute', right:8, top:'50%', transform:'translateY(-50%)',
             background:'none', border:'none', cursor:'pointer', fontSize:'14px', padding:'2px' }}>
-          {show ? '🙈' : '👁️'}
+          {show ? '◐' : '◉'}
         </button>
       </div>
 
