@@ -98,6 +98,7 @@ function createModelLayer({ id, modelUrl, lngLat, buildingPos, modelScale, draco
           (gltf) => {
             const model = gltf.scene;
             model.scale.set(sx, sy, sz);
+            model.rotation.set(rx, ry, rz);
             const box    = new THREE.Box3().setFromObject(model);
             const center = box.getCenter(new THREE.Vector3());
             model.position.x -= center.x;
@@ -341,21 +342,39 @@ export default function MapboxViewer({ allModels = [], building, hotspots = [], 
     const install = () => {
       const targetIds = new Set(allModels.map(m => `fie-model-${m.building_id}`));
 
-      installedLayers.current.forEach((_, layerId) => {
+      // Remover layers que ya no están en allModels
+      installedLayers.current.forEach((oldHash, layerId) => {
         if (!targetIds.has(layerId) && map.getLayer(layerId)) {
           map.removeLayer(layerId);
           installedLayers.current.delete(layerId);
         }
       });
 
-      const newModels = allModels.filter(m => !installedLayers.current.has(`fie-model-${m.building_id}`));
-      if (!newModels.length) return;
+      // Detectar modelos nuevos O con cambios de transform
+      const modelsToInstall = allModels.filter(m => {
+        const layerId = `fie-model-${m.building_id}`;
+        const newHash = `${m.scale_x},${m.scale_y},${m.scale_z},${m.rotate_x},${m.rotate_y},${m.rotate_z}`;
+        const oldHash = installedLayers.current.get(layerId);
+        
+        // Instalar si: no existe el layer O el hash cambió
+        if (!oldHash || oldHash !== newHash) {
+          // Si el layer existe pero el hash cambió, removerlo primero
+          if (oldHash && map.getLayer(layerId)) {
+            map.removeLayer(layerId);
+            installedLayers.current.delete(layerId);
+          }
+          return true;
+        }
+        return false;
+      });
 
-      pendingLoadsRef.current += newModels.length;
+      if (!modelsToInstall.length) return;
+
+      pendingLoadsRef.current += modelsToInstall.length;
       setModelLoading(true);
       setModelProgress(0);
 
-      newModels.forEach(m => {
+      modelsToInstall.forEach(m => {
         const layerId = `fie-model-${m.building_id}`;
 
         // ── Anchor GPS fijo + posición heredada del building ─────────────────
@@ -389,7 +408,9 @@ export default function MapboxViewer({ allModels = [], building, hotspots = [], 
           onLoaded:     onDone,
           onError:      onDone,
         }));
-        installedLayers.current.set(layerId, true);
+        // Guardar hash del transform para detectar cambios de escala/rotación
+        const transformHash = `${m.scale_x},${m.scale_y},${m.scale_z},${m.rotate_x},${m.rotate_y},${m.rotate_z}`;
+        installedLayers.current.set(layerId, transformHash);
       });
     };
 
@@ -403,8 +424,11 @@ export default function MapboxViewer({ allModels = [], building, hotspots = [], 
       installedLayers.current.clear();
       pendingLoadsRef.current = 0;
     };
+  // Incluir hash del transform en las deps para detectar cambios de escala/rotación
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [allModels.map(m => m.building_id).join(',')]);
+  }, [allModels.map(m =>
+    `${m.building_id}:${m.scale_x},${m.scale_y},${m.scale_z},${m.rotate_x},${m.rotate_y},${m.rotate_z}`
+  ).join('|')]);
 
   // ─── Volar al edificio seleccionado ───────────────────────────────────────
   useEffect(() => {
@@ -453,7 +477,8 @@ export default function MapboxViewer({ allModels = [], building, hotspots = [], 
   // Se instala cuando el edificio seleccionado no tiene modelo real.
   // Se destruye automáticamente cuando allModels cambia e incluye ese edificio
   // (es decir, cuando se sube un modelo real en el admin).
-  {/*useEffect(() => {
+  {/*}
+  useEffect(() => {
     const map = mapRef.current;
     if (!building) return;
 

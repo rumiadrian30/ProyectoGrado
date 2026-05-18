@@ -104,11 +104,25 @@ export default function Explorer() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [buildings]);
 
-  // ── Cargar todos los modelos exteriores una sola vez ──────
+  // ── Cargar modelos exteriores con polling cada 10 s ─────
+  // Permite que cambios de escala/rotación del admin aparezcan
+  // en el visor sin recargar la página (HT-18: cambios en ≤10 s).
   useEffect(() => {
-    modelsService.getAllActive('exterior')
-      .then(setAllExteriorModels)
-      .catch(console.error);
+    let cancelled = false;
+
+    function fetchModels() {
+      modelsService.getAllActive('exterior')
+        .then(data => { if (!cancelled) setAllExteriorModels(data); })
+        .catch(console.error);
+    }
+
+    fetchModels(); // carga inicial inmediata
+    const interval = setInterval(fetchModels, 10_000); // re-fetch cada 10 s
+
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
   }, []);
 
   // ── Modelo interior para el edificio seleccionado ─────────
@@ -125,9 +139,9 @@ export default function Explorer() {
     : (interiorModel ? [interiorModel] : []);
 
   const modelInfo = selectedBuilding
-    ? modelsToShow.find(m => String(m.building_id) === String(selectedBuilding.id)) ?? null
+    ? modelsToShow.find(m => m.building_id === selectedBuilding.id) ?? null
     : null;
-    
+
   // ── Hotspots del edificio seleccionado ────────────────────
   useEffect(() => {
     if (!selectedBuilding) return;
