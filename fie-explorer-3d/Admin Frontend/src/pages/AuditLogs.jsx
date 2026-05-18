@@ -27,6 +27,7 @@ export default function AuditLogs() {
 
   // ── Exportación ────────────────────────────────────────────
   const [exporting, setExporting]   = useState(false)
+  const [exportingPdf, setExportingPdf] = useState(false)
 
   // ── Carga ─────────────────────────────────────────────────
   const load = useCallback(async () => {
@@ -81,6 +82,109 @@ export default function AuditLogs() {
     setRevealed(r => ({ ...r, [id]: !r[id] }))
   }
 
+
+  async function exportPDF() {
+    setExportingPdf(true)
+    try {
+      // Recopilar todos los datos filtrados (hasta 5000)
+      const params = new URLSearchParams({
+        per_page: 500, page: 1,
+        ...(action   !== 'ALL' && { action }),
+        ...(dateFrom && { date_from: dateFrom }),
+        ...(dateTo   && { date_to:   dateTo   }),
+      })
+      const res  = await api('GET', `/audit-logs?${params}`)
+      const data = res.data || []
+
+      // Construir HTML del PDF
+      const actionColors = {
+        CREATE:'#16a34a', UPDATE:'#1d4ed8', DELETE:'#dc2626',
+        LOGIN:'#0891b2', LOGOUT:'#6b7280', ACTIVATE:'#16a34a', DEACTIVATE:'#9a3412',
+      }
+
+      const rows = data.map(l => {
+        const color = actionColors[l.action] || '#374151'
+        const fecha = l.created_at ? new Date(l.created_at).toLocaleString('es-EC') : '—'
+        const ip    = l.ip_address || '••••••••'
+        const old_v = l.old_values ? JSON.stringify(l.old_values).slice(0,60) : ''
+        const new_v = l.new_values ? JSON.stringify(l.new_values).slice(0,60) : ''
+        return `<tr>
+          <td>${fecha}</td>
+          <td><strong>${l.admin_name||'—'}</strong><br><small>${l.admin_email||''}</small></td>
+          <td><span style="color:${color};font-weight:700;font-size:11px">${l.action}</span></td>
+          <td><code>${l.entity_type||'auth'}</code>${l.entity_id?'<br><small>'+String(l.entity_id).slice(0,8)+'…</small>':''}</td>
+          <td>${ip}</td>
+          <td>${old_v ? '<span style="background:#fee2e2;padding:1px 4px;border-radius:3px;font-size:10px">'+old_v+'</span>' : ''}<br>${new_v ? '<span style="background:#dcfce7;padding:1px 4px;border-radius:3px;font-size:10px">'+new_v+'</span>' : ''}</td>
+        </tr>`
+      }).join('')
+
+      const filterDesc = [
+        action !== 'ALL' ? `Acción: ${action}` : '',
+        dateFrom ? `Desde: ${dateFrom}` : '',
+        dateTo   ? `Hasta: ${dateTo}`   : '',
+      ].filter(Boolean).join('  ·  ') || 'Sin filtros'
+
+      const html = `<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8"/>
+<title>Logs de Auditoría — FIE Explorer 3D</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: Arial, sans-serif; font-size: 11px; color: #111; }
+  .header { background: #BC0613; color: #fff; padding: 14px 20px; margin-bottom: 14px; }
+  .header h1 { font-size: 16px; margin-bottom: 2px; }
+  .header p  { font-size: 10px; opacity: .8; }
+  .meta { display: flex; justify-content: space-between; padding: 0 20px 10px;
+    font-size: 10px; color: #555; border-bottom: 1px solid #e5e7eb; margin-bottom: 10px; }
+  table { width: 100%; border-collapse: collapse; margin: 0 auto; }
+  th { background: #1F3864; color: #fff; padding: 6px 8px; text-align: left; font-size: 10px; }
+  td { padding: 5px 8px; border-bottom: 1px solid #f0f0f0; vertical-align: top; font-size: 10px; }
+  tr:nth-child(even) td { background: #f9fafb; }
+  code { background: #f1f5f9; padding: 1px 4px; border-radius: 3px; font-size: 9px; }
+  small { color: #6b7280; font-size: 9px; }
+  .footer { margin-top: 16px; padding: 8px 20px; border-top: 1px solid #e5e7eb;
+    font-size: 9px; color: #9ca3af; text-align: center; }
+</style>
+</head>
+<body>
+<div class="header">
+  <h1>Registros de Auditoría — FIE Explorer 3D</h1>
+  <p>Facultad de Informática y Electrónica · ESPOCH · Generado el ${new Date().toLocaleString('es-EC')}</p>
+</div>
+<div class="meta">
+  <span>Filtros: ${filterDesc}</span>
+  <span>Total de registros: ${data.length.toLocaleString()}</span>
+</div>
+<table>
+  <thead>
+    <tr>
+      <th>Fecha / Hora</th><th>Administrador</th><th>Acción</th>
+      <th>Entidad</th><th>IP</th><th>Valores old → new</th>
+    </tr>
+  </thead>
+  <tbody>${rows}</tbody>
+</table>
+<div class="footer">
+  FIE Explorer 3D · Panel Administrativo · Documento generado automáticamente · Solo lectura
+</div>
+</body>
+</html>`
+
+      // Abrir ventana e imprimir como PDF
+      const win = window.open('', '_blank', 'width=1100,height=800')
+      win.document.write(html)
+      win.document.close()
+      win.onload = () => {
+        setTimeout(() => {
+          win.print()
+          win.close()
+        }, 400)
+      }
+    } catch (e) { alert('Error al generar PDF: ' + e.message) }
+    finally     { setExportingPdf(false) }
+  }
+
   // ── Paginación ─────────────────────────────────────────────
   const pageStart = total === 0 ? 0 : (page - 1) * perPage + 1
   const pageEnd   = Math.min(page * perPage, total)
@@ -103,7 +207,15 @@ export default function AuditLogs() {
             disabled={exporting || loading || total === 0}
             title="Exportar registros filtrados a CSV"
           >
-            {exporting ? '⏳ Exportando…' : '⬇ Exportar CSV'}
+            {exporting ? 'Exportando…' : 'Exportar CSV'}
+          </button>
+          <button
+            className="btn btn-sm"
+            onClick={exportPDF}
+            disabled={exportingPdf || loading || total === 0}
+            title="Exportar registros filtrados a PDF"
+          >
+            {exportingPdf ? 'Generando…' : 'Exportar PDF'}
           </button>
         </div>
       </div>
