@@ -1,31 +1,128 @@
-import { defineConfig } from 'vite'
+/**
+ * vite.config.js - Configuración de Vite para el proyecto FIE Explorer 3D Admin Frontend
+ */
+
+import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
 
-export default defineConfig({
-  plugins: [react()],
+// Importación condicional del plugin de ofuscación
+let obfuscatorPlugin = null
+try {
+  const mod = await import('vite-plugin-javascript-obfuscator')
+  obfuscatorPlugin = mod.default ?? mod
+} catch {
+  console.warn(
+    '[vite.config] vite-plugin-javascript-obfuscator no encontrado. ' +
+    'Solo se aplicará ofuscación via Terser. ' +
+    'Instale el paquete para máxima protección en producción.'
+  )
+}
 
-  server: {
-    port: 5173,
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, process.cwd(), '')
+  const isProd = mode === 'production'
 
-    headers: {
-      'Content-Security-Policy': `
+  // ── Configuración del plugin de ofuscación (solo producción) ───────────────
+  const obfuscatorConfig = isProd && obfuscatorPlugin
+    ? obfuscatorPlugin({
+        // Incluye todos los chunks JS generados por Vite
+        include: ['**/*.{js,jsx,ts,tsx}'],
+        exclude: [/node_modules/],
+        apply: 'build',
+        options: {
+          sourceMap: false,
+          stringArray: true,
+          stringArrayEncoding: ['base64'],
+          stringArrayThreshold: 0.80,
+          rotateStringArray: true,
+          shuffleStringArray: true,
+          controlFlowFlattening: true,
+          controlFlowFlatteningThreshold: 0.50,
+          deadCodeInjection: true,
+          deadCodeInjectionThreshold: 0.25,
+          renameLocals: true,
+          debugProtection: false, 
+          disableConsoleOutput: true,
+          identifierNamesGenerator: 'hexadecimal',
+          seed: 0,                 
+        },
+      })
+    : null
+
+  return {
+    plugins: [
+      react(),
+      obfuscatorConfig,       
+    ].filter(Boolean),
+
+    // ── Configuración del build de producción ───────────────────────────────
+    build: {
+      // SOURCE MAPS: SIEMPRE false en producción.
+      sourcemap: false,
+      // MINIFICADOR: Terser con configuración agresiva.
+      minify: 'terser',
+      terserOptions: {
+        compress: {
+          drop_console: true,
+          drop_debugger: true,
+          passes: 3,
+          dead_code: true,
+          evaluate: true,
+          collapse_vars: true,
+          pure_funcs: ['console.log', 'console.info', 'console.warn', 'console.debug', 'console.error'],
+          booleans: true,
+          join_vars: true,
+        },
+        mangle: {
+          toplevel: true,
+          eval: true,
+          properties: {
+            regex: /^_[^_]/,        
+            reserved: [],
+          },
+        },
+        format: {
+          comments: false,
+          ascii_only: true,
+          beautify: false,
+        },
+      },
+
+      // Rollup: chunks y assets con nombres hasheados
+      rollupOptions: {
+        output: {
+          // Nombres de archivo basados en hash de contenido.
+          chunkFileNames:  'assets/[hash].js',
+          entryFileNames:  'assets/[hash].js',
+          assetFileNames:  'assets/[hash][extname]',
+        },
+      },
+      outDir: 'dist',
+      emptyOutDir: true,
+    },
+
+    //  Servidor de desarrollo
+    server: {
+      port: 5173,
+      headers: {
+        'Content-Security-Policy': `
           default-src 'self';
           script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.gstatic.com blob:;
           style-src 'self' 'unsafe-inline';
           img-src 'self' data: blob:;
           connect-src 'self' http://localhost:3001 https://www.gstatic.com blob:;
           worker-src 'self' blob:;
-      `.replace(/\n/g, ' '),
+        `.replace(/\n/g, ' ').trim(),
 
-      'X-Frame-Options': 'SAMEORIGIN',
-      'X-Content-Type-Options': 'nosniff',
+        'X-Frame-Options':        'SAMEORIGIN',
+        'X-Content-Type-Options': 'nosniff',
+      },
+      proxy: {
+        '/api': {
+          target:       'http://localhost:3001',
+          changeOrigin: true,
+        },
+      },
     },
-
-    proxy: {
-      '/api': {
-        target: 'http://localhost:3001',
-        changeOrigin: true,
-      }
-    }
   }
 })

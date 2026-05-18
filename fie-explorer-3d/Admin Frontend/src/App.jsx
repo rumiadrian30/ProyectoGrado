@@ -1,29 +1,38 @@
-import { useState, useEffect } from 'react'
-import { setToken, clearToken, onUnauthorized } from './api'
-import AdminLogin from './AdminLogin'
-import AdminShell from './AdminShell'
+/**
+ * App.jsx — Punto de entrada principal del Admin Frontend
+ */
 
-// ── Flujo idéntico al HTML: renderLogin → doLogin → renderShell ──
+import { useState, useEffect }       from 'react'
+import { setToken, clearToken, onUnauthorized } from './api'
+import { useContextMenuGuard }        from './hooks/useContextMenuGuard'
+import AdminLogin                     from './AdminLogin'
+import AdminShell                     from './AdminShell'
+
 export default function App() {
+  useContextMenuGuard()
+
+  // Estado de sesión
   const [user, setUser] = useState(() => {
     try {
-      const saved = sessionStorage.getItem('admin_user');
-      return saved ? JSON.parse(saved) : null;
-    } catch { return null; }
-  });
+      const saved = sessionStorage.getItem('admin_user')
+      return saved ? JSON.parse(saved) : null
+    } catch {
+      return null
+    }
+  })
 
   function handleLogout() {
-    clearToken()   // limpia sessionStorage
+    clearToken()
     setUser(null)
   }
 
-  // Cuando cualquier petición reciba 401 (sesión expirada) → logout automático
+  // Logout automático ante respuesta 401 (sesión expirada)
   useEffect(() => {
-    onUnauthorized(handleLogout);
-  }, []);
+    onUnauthorized(handleLogout)
+  }, [])
 
   function handleSuccess(token, user) {
-    setToken(token)  // no-op si el backend usa solo cookies HttpOnly
+    setToken(token)
     sessionStorage.setItem('admin_user', JSON.stringify(user))
     setUser(user)
   }
