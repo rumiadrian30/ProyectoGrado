@@ -1,12 +1,11 @@
 /**
  * GlbPreview — Mini-visor Three.js para archivos .glb dentro del admin.
- * Usa three.js instalado vía npm (sin CDN), compatible con el CSP del proyecto.
  */
 import { useEffect, useRef, useState } from 'react'
-import * as THREE from 'three'
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
+import * as THREE                       from 'three'
+import { GLTFLoader }   from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
-import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js'
+import { DRACOLoader }  from 'three/examples/jsm/loaders/DRACOLoader.js'
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001'
 
@@ -55,8 +54,8 @@ export default function GlbPreview({ filePath, height = 220 }) {
 
     // ── OrbitControls ────────────────────────────────────────────
     const controls = new OrbitControls(camera, renderer.domElement)
-    controls.enableDamping = true
-    controls.dampingFactor = 0.08
+    controls.enableDamping  = true
+    controls.dampingFactor  = 0.08
 
     // ── Grid ─────────────────────────────────────────────────────
     scene.add(new THREE.GridHelper(6, 14, 0x333366, 0x222244))
@@ -74,7 +73,7 @@ export default function GlbPreview({ filePath, height = 220 }) {
     loader.load(
       url,
       (gltf) => {
-        const model = gltf.scene
+        const model  = gltf.scene
         const box    = new THREE.Box3().setFromObject(model)
         const center = box.getCenter(new THREE.Vector3())
         const size   = box.getSize(new THREE.Vector3())
@@ -136,7 +135,13 @@ export default function GlbPreview({ filePath, height = 220 }) {
   }, [filePath, height])
 
   return (
-    <div style={{ position: 'relative', borderRadius: '10px', overflow: 'hidden', background: '#1a1a2e' }}>
+    // EXCEPCIÓN DE CLIC DERECHO
+    <div
+      style={{ position: 'relative', borderRadius: '10px', overflow: 'hidden', background: '#1a1a2e' }}
+      onContextMenu={e => e.stopPropagation()}
+      data-three-preview="true"         
+      aria-label="Visor de modelo 3D"
+    >
       <div ref={containerRef} style={{ width: '100%', height: `${height}px` }} />
 
       {status === 'loading' && (
@@ -165,7 +170,7 @@ export default function GlbPreview({ filePath, height = 220 }) {
           color: '#a5b4fc', fontSize: '10px', padding: '2px 8px', borderRadius: '10px',
           backdropFilter: 'blur(4px)',
         }}>
-          🔷 Preview 3D · arrastra para rotar
+          🔷 Preview 3D · arrastra para rotar · clic derecho para pan
         </div>
       )}
 
