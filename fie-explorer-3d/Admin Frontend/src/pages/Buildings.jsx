@@ -243,7 +243,7 @@ function BuildingForm({ data, onChange, isEdit = false }) {
 }
 
 // ── BuildingModels — formulario idéntico al de Models ─────────────────────────
-function BuildingModels({ building, onToast }) {
+function BuildingModels({ building, onToast, onReloadBuildings }) {
   const [models,    setModels]    = useState(null)
   const [open,      setOpen]      = useState(false)
   const [modal,     setModal]     = useState(null)
@@ -309,9 +309,21 @@ function BuildingModels({ building, onToast }) {
 
   async function toggleModel(m) {
     try {
-      await api('PUT', `/models/${m.id}`, { is_active: !m.is_active })
-      onToast(`Modelo ${!m.is_active ? 'activado' : 'desactivado'}.`); load()
-    } catch (e) { onToast(e.message, 'error') }
+      await api('PUT', `/models/${m.id}`, {
+        is_active: !m.is_active
+      })
+
+      onToast(`Modelo ${!m.is_active ? 'activado' : 'desactivado'}.`)
+
+      await load()
+
+      if (onReloadBuildings) {
+        await onReloadBuildings()
+      }
+
+    } catch (e) {
+      onToast(e.message, 'error')
+    }
   }
 
   // Verificación previa antes de eliminar
@@ -330,7 +342,10 @@ function BuildingModels({ building, onToast }) {
     setDeleting(true)
     try {
       await api('DELETE', `/models/${modal.id}`)
-      setModal(null); setDeleteModel(null); onToast('Modelo eliminado.'); load()
+      setModal(null); setDeleteModel(null); onToast('Modelo eliminado.'); await load()
+      if (onReloadBuildings) {
+        await onReloadBuildings()
+      }
     } catch (e) { onToast(e.message, 'error') }
     finally { setDeleting(false) }
   }
@@ -515,7 +530,6 @@ function BuildingModels({ building, onToast }) {
             danger disabled={deleting}
             onClose={() => { setModal(null); setDeleteModel(null) }}>
             <div style={{ background: '#fff7ed', border: '1px solid #fed7aa', borderRadius: '8px', padding: '10px 14px', marginBottom: '14px', display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
-              <span style={{ fontSize: '18px', flexShrink: 0 }}>⚠️</span>
               <div>
                 <div style={{ fontSize: '13px', fontWeight: 600, color: '#9a3412' }}>Esta acción es irreversible</div>
                 <div style={{ fontSize: '11px', color: '#c2410c', marginTop: '2px' }}>El archivo GLB será eliminado permanentemente del servidor.</div>
@@ -611,9 +625,19 @@ export default function Buildings() {
   }
 
   async function handleToggle(b) {
+    // Si se va a DESACTIVAR y tiene modelos activos → pedir confirmación por modal
+    if (b.is_active && (b.model_count ?? 0) > 0) {
+      setModal({ type: 'deactivate', id: b.id, name: b.name, model_count: b.model_count })
+      return
+    }
+    await doToggle(b)
+  }
+
+  async function doToggle(b) {
     try {
       await api('PATCH', `/buildings/${b.id}/toggle`)
-      showToast(`Edificio "${b.name}" ${b.is_active ? 'desactivado' : 'activado'}.`); load()
+      showToast(`Edificio "${b.name}" ${b.is_active ? 'desactivado' : 'activado'}.`)
+      load()
     } catch (e) { showToast(e.message, 'error') }
   }
 
@@ -676,11 +700,15 @@ export default function Buildings() {
                       setModal({ type: 'edit', id: b.id })
                     }}>✏</button>
                   <button className="btn btn-sm" title="Eliminar"
-                    onClick={() => setModal({ type: 'delete', id: b.id, name: b.name, hotspot_count: b.hotspot_count })}
+                    onClick={() => setModal({ type: 'delete', id: b.id, name: b.name, hotspot_count: b.hotspot_count, total_hotspot_count: b.total_hotspot_count, model_count: b.model_count })}
                     style={{ color: 'var(--danger)' }}>🗑</button>
                 </div>
               </div>
-              <BuildingModels building={b} onToast={showToast} />
+              <BuildingModels
+                building={b}
+                onToast={showToast}
+                onReloadBuildings={load}
+              />
             </div>
           ))}
         </div>
@@ -698,18 +726,87 @@ export default function Buildings() {
           <BuildingForm data={form} onChange={setForm} isEdit />
         </Modal>
       )}
-      {modal?.type === 'delete' && (
-        <Modal title="Eliminar edificio" onConfirm={confirmDelete}
-          confirmLabel={saving ? 'Eliminando…' : 'Eliminar'} danger onClose={() => setModal(null)}>
-          <p style={{ marginBottom: '12px' }}>¿Eliminar <strong>"{modal.name}"</strong>?</p>
-          {(modal.hotspot_count ?? 0) > 0
-            ? <div className="alert alert-error">Tiene <strong>{modal.hotspot_count} hotspot(s) activo(s)</strong>. Desactívalos primero.</div>
-            : <div className="alert alert-error" style={{ fontSize: '13px' }}>Esta acción es <strong>irreversible</strong>.</div>
-          }
+      {modal?.type === 'delete' && (() => {
+        const activeHs    = modal.hotspot_count       ?? 0
+        const totalHs     = modal.total_hotspot_count ?? activeHs
+        const inactiveHs  = totalHs - activeHs
+        const activeModels = modal.model_count ?? 0
+        const blocked = activeHs > 0 || activeModels > 0
+        return (
+          <Modal title="Eliminar edificio"
+            onConfirm={blocked ? undefined : confirmDelete}
+            confirmLabel={blocked ? 'No disponible' : saving ? 'Eliminando…' : 'Eliminar'}
+            danger disabled={blocked || saving}
+            onClose={() => setModal(null)}>
+            <p style={{ marginBottom: '12px' }}>¿Eliminar <strong>"{modal.name}"</strong>?</p>
+
+            {/* Bloqueo: hay hotspots ACTIVOS */}
+            {activeHs > 0 && (
+              <div className="alert alert-error" style={{ marginBottom: '8px' }}>
+                Tiene <strong>{activeHs} hotspot{activeHs !== 1 ? 's' : ''} activo{activeHs !== 1 ? 's' : ''}</strong>.
+                Ve a <em>Hotspots</em> y desactívalos antes de eliminar el edificio.
+              </div>
+            )}
+
+            {/* SOLO mostrar hotspots inactivos si NO hay activos */}
+            {activeHs === 0 && inactiveHs > 0 && (
+              <div
+                className="alert"
+                style={{
+                  background: '#fefce8',
+                  border: '1px solid #fde047',
+                  color: '#713f12',
+                  marginBottom: '8px',
+                  fontSize: '13px',
+                }}
+              >
+                El edificio tiene <strong>{inactiveHs} hotspot{inactiveHs !== 1 ? 's' : ''} inactivo{inactiveHs !== 1 ? 's' : ''}
+                </strong> que también se eliminarán.
+              </div>
+            )}
+
+            {/* SIEMPRE mostrar modelos */}
+            {activeModels > 0 && (
+              <div
+                className="alert alert-error"
+                style={{ marginBottom: '8px' }}
+              >
+                Tiene <strong>{activeModels} modelo{activeModels !== 1 ? 's' : ''} 3D activo{activeModels !== 1 ? 's' : ''}</strong>.
+                Ve a <em>Modelos 3D</em> y desactívalos antes de eliminar el edificio.
+              </div>
+            )}
+
+            {/* Aviso irreversible genérico */}
+            {(
+              <div className="alert alert-error" style={{ fontSize: '13px' }}>
+                Esta acción es <strong>irreversible</strong>.
+              </div>
+            )}
+          </Modal>
+        )
+      })()}
+
+      {modal?.type === 'deactivate' && (
+        <Modal title="Desactivar edificio"
+          onConfirm={async () => {
+            const b = buildings.find(x => x.id === modal.id)
+            setModal(null)
+            if (b) await doToggle(b)
+          }}
+          confirmLabel="Sí, desactivar"
+          danger
+          onClose={() => setModal(null)}>
+          <p style={{ marginBottom: '12px' }}>¿Desactivar <strong>"{modal.name}"</strong>?</p>
+          <div className="alert" style={{ background: '#fff7ed', border: '1px solid #fed7aa', color: '#7c2d12', marginBottom: '8px', fontSize: '13px' }}>
+            Este edificio tiene <strong>{modal.model_count} modelo{modal.model_count !== 1 ? 's' : ''} 3D activo{modal.model_count !== 1 ? 's' : ''}</strong>.
+            Al desactivar el edificio, los modelos seguirán activos. Considera desactivarlos también desde la sección <em>Modelos 3D</em>.
+          </div>
+          <div className="alert" style={{ background: '#f8fafc', border: '1px solid var(--border)', color: 'var(--muted)', fontSize: '12px' }}>
+            Puedes volver a activar el edificio en cualquier momento.
+          </div>
         </Modal>
       )}
 
-      {toast && <div className={`alert alert-${toast.type} toast`}>{toast.msg}</div>}
     </>
   )
 }
