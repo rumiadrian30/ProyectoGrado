@@ -9,6 +9,7 @@ async function list(req, res, next) {
     const { rows } = await pool.query(`
       SELECT b.*,
         (SELECT COUNT(*)::int FROM hotspots  h WHERE h.building_id = b.id AND h.is_active) AS hotspot_count,
+        (SELECT COUNT(*)::int FROM hotspots  h WHERE h.building_id = b.id)                 AS total_hotspot_count,
         (SELECT COUNT(*)::int FROM models_3d m WHERE m.building_id = b.id AND m.is_active) AS model_count
       FROM buildings b ORDER BY b.name ASC
     `);
