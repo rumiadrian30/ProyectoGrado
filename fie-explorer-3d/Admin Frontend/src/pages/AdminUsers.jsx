@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { api, fmt } from '../api'
 import PasswordInput, { isPasswordValid } from '../components/PasswordInput'
 
-function Modal({ title, children, onConfirm, confirmLabel = 'Guardar', danger = false, onClose }) {
+function Modal({ title, children, onConfirm, confirmLabel = 'Guardar', danger = false, onClose, disabled = false }) {
   return (
     <div className="overlay" onClick={e => e.target.className === 'overlay' && onClose()}>
       <div className="modal">
@@ -10,7 +10,13 @@ function Modal({ title, children, onConfirm, confirmLabel = 'Guardar', danger = 
         {children}
         <div className="modal-footer">
           <button className="btn" onClick={onClose}>Cancelar</button>
-          <button className={`btn ${danger ? 'btn-danger' : 'btn-primary'}`} onClick={onConfirm}>{confirmLabel}</button>
+          <button
+            className={`btn ${danger ? 'btn-danger' : 'btn-primary'}`}
+            onClick={onConfirm}
+            disabled={disabled || !onConfirm}
+            style={disabled || !onConfirm ? { opacity: 0.45, cursor: 'not-allowed' } : undefined}>
+            {confirmLabel}
+          </button>
         </div>
       </div>
     </div>
@@ -27,6 +33,7 @@ export default function AdminUsers({ currentUser }) {
   const [pwd,     setPwd]     = useState('')
   const [newPwd,  setNewPwd]  = useState('')
   const [pwdErrors, setPwdErrors] = useState([])
+  const [deleteConfirmText, setDeleteConfirmText] = useState('')
 
   useEffect(() => { load() }, [])
 
@@ -81,6 +88,15 @@ export default function AdminUsers({ currentUser }) {
       if (e.data?.passwordErrors) { setPwdErrors(e.data.passwordErrors) }
       showToast(e.message, 'error')
     }
+  }
+
+  async function confirmDelete() {
+    try {
+      await api('DELETE', `/admin-users/${modal.id}`)
+      setModal(null)
+      showToast(`Usuario "${modal.name}" eliminado permanentemente.`, 'success')
+      load()
+    } catch (e) { showToast(e.message, 'error') }
   }
 
   if (loading) return <div className="loader">Cargando…</div>
@@ -150,6 +166,16 @@ export default function AdminUsers({ currentUser }) {
                         onClick={() => setModal({ type:'toggle', id: u.id, name: u.full_name, isActive: u.is_active })}>
                         {u.is_active ? '⊘' : '✓'}
                       </button>
+                      {/* Eliminar — solo superadmin, no a sí mismo */}
+                      {currentUser?.role === 'superadmin' && u.id !== currentUser?.id && (
+                        <button
+                          className="btn btn-sm"
+                          title="Eliminar usuario permanentemente"
+                          style={{ color: 'var(--danger)' }}
+                          onClick={() => { setDeleteConfirmText(''); setModal({ type:'delete', id: u.id, name: u.full_name, email: u.email, role: u.role }) }}>
+                          🗑
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>
@@ -223,6 +249,53 @@ export default function AdminUsers({ currentUser }) {
           <PasswordInput value={newPwd} onChange={setNewPwd} label="Nueva contraseña *" />
         </Modal>
       )}
+
+      {/* Modal eliminación permanente */}
+      {modal?.type === 'delete' && (() => {
+        const CONFIRM_WORD = 'ELIMINAR'
+        const canDelete = deleteConfirmText === CONFIRM_WORD
+        return (
+          <Modal title="Eliminar usuario permanentemente"
+            onConfirm={canDelete ? confirmDelete : undefined}
+            confirmLabel="Eliminar permanentemente"
+            danger
+            onClose={() => setModal(null)}>
+
+            <div className="alert alert-error" style={{ marginBottom: '12px', fontSize: '13px' }}>
+              Esta acción es <strong>irreversible</strong>. El usuario y sus credenciales
+              serán eliminados definitivamente de la base de datos.
+            </div>
+
+            <div style={{ background: 'var(--bg-soft, #f8fafc)', borderRadius: '8px', padding: '10px 12px', marginBottom: '14px', fontSize: '13px' }}>
+              <div><span style={{ color: 'var(--muted)' }}>Nombre:</span> <strong>{modal.name}</strong></div>
+              <div><span style={{ color: 'var(--muted)' }}>Correo:</span> {modal.email}</div>
+              <div><span style={{ color: 'var(--muted)' }}>Rol:</span> <span className={`badge ${modal.role === 'superadmin' ? 'b-purple' : 'b-blue'}`}>{modal.role}</span></div>
+            </div>
+
+            <div className="form-group" style={{ marginBottom: 0 }}>
+              <label className="form-label" style={{ fontSize: '12px' }}>
+                Para confirmar, escribe <strong style={{ letterSpacing: '0.05em' }}>{CONFIRM_WORD}</strong> en el campo:
+              </label>
+              <input
+                className="form-input"
+                placeholder={CONFIRM_WORD}
+                value={deleteConfirmText}
+                onChange={e => setDeleteConfirmText(e.target.value.toUpperCase())}
+                style={{ fontFamily: 'monospace', letterSpacing: '0.1em', fontSize: '13px',
+                  borderColor: canDelete ? 'var(--danger)' : undefined }}
+                autoFocus
+              />
+            </div>
+
+            {/* Sobrescribir el botón confirm con disabled visual cuando no coincide */}
+            {!canDelete && (
+              <p style={{ fontSize: '11px', color: 'var(--muted)', marginTop: '6px' }}>
+                El botón se habilitará cuando escribas la palabra exacta.
+              </p>
+            )}
+          </Modal>
+        )
+      })()}
 
       {toast && <div className={`alert alert-${toast.type} toast`}>{toast.msg}</div>}
     </>

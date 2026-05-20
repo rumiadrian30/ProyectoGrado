@@ -326,7 +326,7 @@ export default function Explorer() {
                   fontFamily: 'var(--font-body)', fontSize: '0.78rem', fontWeight: 600,
                   cursor: 'pointer', transition: 'all var(--transition)',
                 }}>
-                  {m === 'exterior' ? '🏛️' : '🏠'} {m.charAt(0).toUpperCase() + m.slice(1)}
+                  {m === 'exterior' ? '' : ''} {m.charAt(0).toUpperCase() + m.slice(1)}
                 </button>
               ))}
             </div>
@@ -453,7 +453,6 @@ export default function Explorer() {
 
             {selectedBuilding && hotspots.length === 0 && !modelLoading && (
               <div style={{ textAlign: 'center', padding: '1.5rem 1rem', color: 'var(--color-text-3)' }}>
-                <div style={{ fontSize: '1.5rem', marginBottom: '0.4rem' }}>📍</div>
                 <p style={{ fontSize: '0.78rem', margin: 0 }}>Sin hotspots registrados.</p>
               </div>
             )}

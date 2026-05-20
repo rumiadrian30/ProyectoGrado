@@ -20,6 +20,8 @@ import {
   CAMPUS_VIEW,
   computeBuildingFlyTo,
 } from '../../utils/buildingCoords';
+import ControlsOverlay from './ControlsOverlay';
+import ViewerControls  from './ViewerControls';
 
 mapboxgl.accessToken = import.meta.env.VITE_MAPBOX_TOKEN;
 
@@ -188,7 +190,11 @@ export default function MapboxViewer({ allModels = [], building, hotspots = [], 
 
   const { setModelLoading, setModelProgress } = useViewerStore();
 
-  const [webglError, setWebglError] = useState(false);
+  const [webglError,      setWebglError]      = useState(false);
+  // Overlay de instrucciones: visible una vez por sesión
+  const [showOverlay, setShowOverlay] = useState(
+    () => sessionStorage.getItem('fie-overlay-dismissed') !== '1'
+  );
 
   useEffect(() => { allModelsRef.current = allModels; }, [allModels]);
   useEffect(() => { hotspotsRef.current  = hotspots;  }, [hotspots]);
@@ -592,6 +598,17 @@ export default function MapboxViewer({ allModels = [], building, hotspots = [], 
     <div style={{ position: 'relative', width: '100%', height: '100%' }}>
       <div ref={containerRef} style={{ width: '100%', height: '100%' }} />
 
+      {/* ── Overlay de instrucciones ─────────────────────────────── */}
+      {showOverlay && (
+        <ControlsOverlay
+          isMobile={isMobile}
+          onDismiss={() => {
+            setShowOverlay(false);
+            sessionStorage.setItem('fie-overlay-dismissed', '1');
+          }}
+        />
+      )}
+
       {/* Botón volver al campus */}
       {building && (
         <button
@@ -617,36 +634,8 @@ export default function MapboxViewer({ allModels = [], building, hotspots = [], 
         </button>
       )}
 
-      {/* Hint de teclado */}
-      {!isMobile && (
-        <div style={{
-          position: 'absolute', top: 54, right: 12, zIndex: 20,
-          background: 'var(--color-bg)', border: '1px solid var(--color-border)',
-          borderRadius: 'var(--radius-sm)', padding: '0.45rem 0.6rem',
-          boxShadow: 'var(--shadow-xs)', fontSize: '0.62rem',
-          color: 'var(--color-text-3)', lineHeight: 1.7,
-          display: 'flex', flexDirection: 'column', gap: 1,
-        }}>
-          {[
-            ['W / ↑', 'Avanzar'],
-            ['S / ↓', 'Retroceder'],
-            ['A / ←', 'Izquierda'],
-            ['D / →', 'Derecha'],
-            ['Q / E', 'Rotar'],
-            ['R / F', 'Pitch'],
-          ].map(([key, label]) => (
-            <div key={key} style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-              <kbd style={{
-                background: 'var(--color-bg-soft)', border: '1px solid var(--color-border)',
-                borderRadius: 4, padding: '0 4px', fontSize: '0.6rem',
-                fontFamily: 'monospace', color: 'var(--color-text-2)',
-                minWidth: 38, textAlign: 'center', flexShrink: 0,
-              }}>{key}</kbd>
-              <span>{label}</span>
-            </div>
-          ))}
-        </div>
-      )}
+      {/* Hint de controles colapsable */}
+      <ViewerControls isMobile={isMobile} />
 
       {/* Badge estado edificio */}
       {building && (
