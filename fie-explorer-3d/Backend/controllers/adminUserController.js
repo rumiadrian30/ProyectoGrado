@@ -145,4 +145,83 @@ async function resetPassword(req, res, next) {
   } catch (err) { next(err); }
 }
 
-module.exports = { list, create, toggleActive, resetPassword };
+/**
+ * DELETE /api/admin-users/:id
+ * Eliminación física (hard delete). Exclusivo para superadmin.
+ *
+ * Protecciones:
+ *  - Solo superadmin puede ejecutarlo.
+ *  - No puede eliminarse a sí mismo.
+ *  - No puede eliminar al último superadmin activo del sistema.
+ *  - Si el usuario no existe, responde 404.
+ *  - El registro de auditoría se escribe ANTES del DELETE,
+ *    porque tras la eliminación el user_id ya no existe.
+ */
+async function remove(req, res, next) {
+  if (req.admin.role !== 'superadmin') {
+    const e = new Error('Acceso restringido a superadministradores.'); e.status = 403; return next(e);
+  }
+
+  const { id } = req.params;
+
+  // No puede eliminarse a sí mismo
+  if (id === String(req.admin.id)) {
+    const e = new Error('No puedes eliminar tu propia cuenta.'); e.status = 400; return next(e);
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    // 1. Verificar que el usuario existe y obtener sus datos
+    const { rows: found } = await client.query(
+      `SELECT id, full_name, email, role, is_active FROM admin_users WHERE id = $1`,
+      [id]
+    );
+    if (!found[0]) {
+      await client.query('ROLLBACK');
+      const e = new Error('Usuario no encontrado.'); e.status = 404; return next(e);
+    }
+    const target = found[0];
+
+    // 2. Proteger al último superadmin activo
+    if (target.role === 'superadmin') {
+      const { rows: superCount } = await client.query(
+        `SELECT COUNT(*)::int AS cnt FROM admin_users WHERE role = 'superadmin' AND is_active = true`
+      );
+      if (superCount[0].cnt <= 1) {
+        await client.query('ROLLBACK');
+        const e = new Error(
+          'No se puede eliminar al único superadministrador activo del sistema.'
+        ); e.status = 409; return next(e);
+      }
+    }
+
+    // 3. Escribir auditoría ANTES del delete (el user_id aún existe)
+    await writeAudit({
+      user_id:     req.admin.id,
+      action:      'DELETE',
+      entity_type: 'admin_users',
+      entity_id:   id,
+      old_values:  { full_name: target.full_name, email: target.email, role: target.role },
+      ip_address:  req.ip,
+      user_agent:  req.headers['user-agent'],
+    });
+
+    // 4. Borrado físico — la FK de audit_logs tiene ON DELETE SET NULL (migración 004)
+    await client.query(`DELETE FROM admin_users WHERE id = $1`, [id]);
+
+    await client.query('COMMIT');
+
+    log(`🗑️  HARD DELETE — ${target.email} (${target.role}) eliminado por ${req.admin.email}`);
+    res.json({ message: `Usuario "${target.full_name}" eliminado permanentemente.` });
+
+  } catch (err) {
+    await client.query('ROLLBACK');
+    next(err);
+  } finally {
+    client.release();
+  }
+}
+
+module.exports = { list, create, toggleActive, resetPassword, remove };
