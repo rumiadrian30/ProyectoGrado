@@ -44,7 +44,6 @@ export const modelsService = {
   getAllActive: (modelType = 'exterior') => {
     return api.get('/models').then(r => {
       const all = Array.isArray(r.data) ? r.data : (r.data?.data ?? []);
-      console.log(`[modelsService] Total modelos en BD: ${all.length}`);
 
       // Mejor modelo activo por edificio (LOD más bajo = mayor calidad)
       const byBuilding = {};
@@ -59,7 +58,6 @@ export const modelsService = {
         ...m,
         file_path: `${API_BASE}${m.file_path}`,
       }));
-      console.log(`[modelsService] Modelos ${modelType} activos: ${models.length}`);
       return models;
     });
   },
