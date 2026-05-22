@@ -38,6 +38,12 @@ function useIsMobile(breakpoint = 768) {
   return isMobile;
 }
 
+// ─── Feature flag: Vista Interior ──────────────────────────────────────────
+// Establece en `true` cuando el edificio principal tenga su modelo de
+// interior registrado y listo para publicar. Mientras sea `false`, el
+// selector Vista (Exterior / Interior) no se muestra al usuario.
+const INTERIOR_VIEW_ENABLED = false;
+
 export default function Explorer() {
   const { buildingId } = useParams();
   const navigate       = useNavigate();
@@ -48,15 +54,15 @@ export default function Explorer() {
     activeHotspot,    setActiveHotspot,
     hotspots,         setHotspots,
     modelLoading,     modelProgress,
-    viewMode,         setViewMode,
     currentFloor,
+    // Reservados: solo activos cuando INTERIOR_VIEW_ENABLED = true
+    viewMode,  setViewMode,
   } = useViewerStore();
 
   const [buildings,         setBuildings]         = useState([]);
   const [showSelector,      setShowSelector]       = useState(false);
   const [sidebarOpen,       setSidebarOpen]        = useState(true);
   const [allExteriorModels, setAllExteriorModels]  = useState([]);
-  const [interiorModel,     setInteriorModel]      = useState(null);
   const [typeFilter,        setTypeFilter]         = useState('all');
   const [openNowOnly,       setOpenNowOnly]        = useState(false);
 
@@ -125,18 +131,9 @@ export default function Explorer() {
     };
   }, []);
 
-  // ── Modelo interior para el edificio seleccionado ─────────
-  useEffect(() => {
-    if (viewMode !== 'interior' || !selectedBuilding) { setInteriorModel(null); return; }
-    modelsService.getActive(selectedBuilding.id, 'interior', 0)
-      .then(setInteriorModel)
-      .catch(() => setInteriorModel(null));
-  }, [selectedBuilding, viewMode]);
-
-  // ── Modelos a renderizar según vista ──────────────────────
-  const modelsToShow = viewMode === 'exterior'
-    ? allExteriorModels
-    : (interiorModel ? [interiorModel] : []);
+  // ── Modelos a renderizar (siempre exteriores mientras INTERIOR_VIEW_ENABLED = false)
+  // Cuando se active el flag, restaurar la lógica de viewMode/interiorModel.
+  const modelsToShow = allExteriorModels;
 
   const modelInfo = selectedBuilding
     ? modelsToShow.find(m => m.building_id === selectedBuilding.id) ?? null
@@ -148,11 +145,11 @@ export default function Explorer() {
     setTypeFilter('all');  // resetear filtros al cambiar edificio
     setOpenNowOnly(false);
     const params = { building_id: selectedBuilding.id };
-    if (viewMode === 'interior') params.floor = currentFloor;
+    // Cuando INTERIOR_VIEW_ENABLED = true, añadir: if (viewMode === 'interior') params.floor = currentFloor;
     hotspotsService.getAll(params)
       .then(res => setHotspots(Array.isArray(res) ? res : (res?.data ?? [])))
       .catch(() => setHotspots([]));
-  }, [selectedBuilding, currentFloor, viewMode, setHotspots]);
+  }, [selectedBuilding, currentFloor, setHotspots]);
 
   // ── Hotspots filtrados + tipos presentes ─────────────────
   const filteredHotspots = hotspots
@@ -305,8 +302,8 @@ export default function Explorer() {
           </div>
         )}
 
-        {/* Toggle exterior / interior */}
-        {selectedBuilding && (
+        {/* Toggle exterior / interior — oculto hasta INTERIOR_VIEW_ENABLED = true */}
+        {INTERIOR_VIEW_ENABLED && selectedBuilding && (
           <div style={{
             padding: '0.75rem 1.25rem',
             borderBottom: '1px solid var(--color-border)', flexShrink: 0,
@@ -326,7 +323,7 @@ export default function Explorer() {
                   fontFamily: 'var(--font-body)', fontSize: '0.78rem', fontWeight: 600,
                   cursor: 'pointer', transition: 'all var(--transition)',
                 }}>
-                  {m === 'exterior' ? '' : ''} {m.charAt(0).toUpperCase() + m.slice(1)}
+                  {m === 'exterior' ? 'Exterior' : 'Interior'}
                 </button>
               ))}
             </div>
