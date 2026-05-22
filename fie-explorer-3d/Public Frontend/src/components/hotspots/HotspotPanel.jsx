@@ -1,13 +1,5 @@
 /**
  * HotspotPanel.jsx  —  Public Frontend/src/components/hotspots/HotspotPanel.jsx
- *
- * CORRECCIONES HU-04:
- *   · Todos los iconos de tipo y de campo reemplazan los emojis por SVG inline
- *     alineados con el design system corporativo (paleta ESPOCH, sin unicode emoji).
- *   · El botón de cierre limpia activeHotspot en el store (setActiveHotspot(null)).
- *   · El overlay móvil tiene pointer-events activos para cerrar el panel al
- *     tocar fuera de él en pantallas pequeñas.
- *   · Se conservan sin cambios todos los CSS custom properties y la tipografía.
  */
 
 import React, { useState } from 'react';

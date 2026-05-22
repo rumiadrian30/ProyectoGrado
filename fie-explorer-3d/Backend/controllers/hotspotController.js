@@ -1,13 +1,4 @@
 // controllers/hotspotController.js
-//
-// CORRECCIONES HU-04:
-//   Bug #1 — list() ahora filtra por req.query.building_id en PostgreSQL.
-//   Bug #2 — Clave de caché dinámica: hotspots:list:<building_id> | hotspots:list:all
-//            Las mutaciones invalidan la clave específica del edificio Y la global.
-//
-// GET /api/hotspots?building_id=<uuid>  → hotspots del edificio (caché "hotspots:list:<uuid>")
-// GET /api/hotspots                      → todos los hotspots   (caché "hotspots:list:all")
-// POST / PUT / PATCH / DELETE            → invalidan la clave del edificio afectado + "all"
 
 'use strict';
 

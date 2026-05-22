@@ -1,12 +1,5 @@
 // Public Frontend/src/services/hotspotsService.js
 //
-// CORRECCIÓN HU-04 (Bug Frontend):
-//   El backend devuelve `res.json(rows)` → el array llega en `r.data` (axios).
-//   El servicio usaba `r.data.data` que siempre era undefined, dejando el
-//   store vacío y el panel sin datos.
-//
-//   Se unifica el accessor a `r.data` con fallback defensivo para arrays
-//   (mismo patrón robusto de buildingsService.js).
 
 import api from './api';
 
