@@ -253,3 +253,47 @@ tr:hover td  { background: #f8fafc; }
 .sql-title { font-size: 13px; font-weight: 500; }
 .sql-block { font-family: 'Consolas', 'Courier New', monospace; font-size: 12px; background: #0f172a; color: #e2e8f0; padding: 14px 18px; margin: 0; overflow-x: auto; line-height: 1.6; white-space: pre; }
 .sql-expected { padding: 8px 16px; border-top: 1px solid var(--border); background: #fffbeb; font-size: 11px; }
+
+.toast {
+  position: fixed;
+  top: 18px;
+  right: 18px;
+  z-index: 9999;
+
+  min-width: 280px;
+  max-width: 420px;
+
+  padding: 12px 16px;
+  border-radius: 10px;
+
+  color: #fff;
+  font-size: 13px;
+  font-weight: 500;
+
+  box-shadow: 0 10px 25px rgba(0,0,0,.15);
+
+  animation: toastIn .18s ease-out;
+}
+
+.toast-success {
+  background: #16a34a;
+}
+
+.toast-error {
+  background: #dc2626;
+}
+
+.toast-warning {
+  background: #d97706;
+}
+
+@keyframes toastIn {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

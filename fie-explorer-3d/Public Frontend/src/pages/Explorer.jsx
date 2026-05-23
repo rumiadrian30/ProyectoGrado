@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import MapboxViewer from '../components/viewer/MapboxViewer';
 import HotspotPanel from '../components/hotspots/HotspotPanel';
@@ -8,15 +8,17 @@ import { buildingsService } from '../services/buildingsService';
 import { hotspotsService } from '../services/hotspotsService';
 import { modelsService } from '../services/modelsService';
 import { isOpenNow } from '../utils/scheduleUtils';
+import { buildingOffsetToGPS } from '../utils/buildingCoords';
 
 const SIDEBAR_W = 280;
 
-const TYPE_ICONS = {
-  classroom: '🏫',
-  lab:       '🔬',
-  office:    '🏢',
-  service:   '⚙️',
-  access:    '🚪',
+// Iconos SVG inline por tipo — sin emojis, paleta corporativa
+const TYPE_ICONS_SVG = {
+  classroom: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18M3 7l9-4 9 4M4 7v14M20 7v14M9 21V12h6v9"/></svg>',
+  lab:       '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3h6m-3 0v5.5L16.5 17H7.5L12 8.5V3"/><path d="M6.5 17.5h11"/></svg>',
+  office:    '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M7 8h10M7 12h7M7 16h4"/></svg>',
+  service:   '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/></svg>',
+  access:    '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 4h6v16h-6"/><path d="M8 16l-4-4 4-4M4 12h10"/></svg>',
 };
 
 const TYPE_LABELS = {
@@ -38,12 +40,6 @@ function useIsMobile(breakpoint = 768) {
   return isMobile;
 }
 
-// ─── Feature flag: Vista Interior ──────────────────────────────────────────
-// Establece en `true` cuando el edificio principal tenga su modelo de
-// interior registrado y listo para publicar. Mientras sea `false`, el
-// selector Vista (Exterior / Interior) no se muestra al usuario.
-const INTERIOR_VIEW_ENABLED = false;
-
 export default function Explorer() {
   const { buildingId } = useParams();
   const navigate       = useNavigate();
@@ -54,9 +50,9 @@ export default function Explorer() {
     activeHotspot,    setActiveHotspot,
     hotspots,         setHotspots,
     modelLoading,     modelProgress,
+    viewMode,         setViewMode,
     currentFloor,
-    // Reservados: solo activos cuando INTERIOR_VIEW_ENABLED = true
-    viewMode,  setViewMode,
+    searchQuery,      setSearchQuery,
   } = useViewerStore();
 
   const [buildings,         setBuildings]         = useState([]);
@@ -131,8 +127,7 @@ export default function Explorer() {
     };
   }, []);
 
-  // ── Modelos a renderizar (siempre exteriores mientras INTERIOR_VIEW_ENABLED = false)
-  // Cuando se active el flag, restaurar la lógica de viewMode/interiorModel.
+  // ── Modelos a renderizar (exteriores — INTERIOR_VIEW_ENABLED = false)
   const modelsToShow = allExteriorModels;
 
   const modelInfo = selectedBuilding
@@ -144,8 +139,9 @@ export default function Explorer() {
     if (!selectedBuilding) return;
     setTypeFilter('all');  // resetear filtros al cambiar edificio
     setOpenNowOnly(false);
+    setSearchQuery('');       // limpiar búsqueda al cambiar de edificio
     const params = { building_id: selectedBuilding.id };
-    // Cuando INTERIOR_VIEW_ENABLED = true, añadir: if (viewMode === 'interior') params.floor = currentFloor;
+    // Cuando INTERIOR_VIEW_ENABLED = true: añadir params.floor = currentFloor si viewMode === 'interior'
     hotspotsService.getAll(params)
       .then(res => setHotspots(Array.isArray(res) ? res : (res?.data ?? [])))
       .catch(() => setHotspots([]));
@@ -154,7 +150,16 @@ export default function Explorer() {
   // ── Hotspots filtrados + tipos presentes ─────────────────
   const filteredHotspots = hotspots
     .filter(h => typeFilter === 'all' || h.type === typeFilter)
-    .filter(h => !openNowOnly      || isOpenNow(h.schedule) === true);
+    .filter(h => !openNowOnly || isOpenNow(h.schedule) === true)
+    .filter(h => {
+      if (!searchQuery.trim()) return true;
+      const q = searchQuery.toLowerCase();
+      return (
+        h.name?.toLowerCase().includes(q) ||
+        h.description?.toLowerCase().includes(q) ||
+        h.teacher?.toLowerCase().includes(q)
+      );
+    });
 
   const presentTypes = [...new Set(hotspots.map(h => h.type))];
 
@@ -169,6 +174,23 @@ export default function Explorer() {
 
   const handleHotspotClick = useCallback((hs) => setActiveHotspot(hs), [setActiveHotspot]);
 
+  // ── Posición GPS de cada edificio para los building pins ────────────────
+  // Combina buildings y allExteriorModels en el mismo lugar donde ambos están
+  // disponibles, evitando problemas de timing y matching de IDs en MapboxViewer.
+  //
+  // Prioridad: model.building_offset_x/z → building.offset_x/z → 0
+  // (La tabla buildings puede tener offset vacío mientras models sí lo tiene)
+  const buildingsWithGPS = useMemo(() => {
+    return buildings.map(b => {
+      const model = allExteriorModels.find(
+        m => String(m.building_id) === String(b.id)
+      );
+      const ox = parseFloat(model?.building_offset_x ?? b.offset_x) || 0;
+      const oz = parseFloat(model?.building_offset_z ?? b.offset_z) || 0;
+      return { ...b, _lngLat: buildingOffsetToGPS(ox, oz) };
+    });
+  }, [buildings, allExteriorModels]);
+
   return (
     <div style={{
       position: 'fixed', inset: 0, top: 'var(--nav-h)',
@@ -178,9 +200,10 @@ export default function Explorer() {
       {/* ── MAPA ─────────────────────────────────────────────────────── */}
       <MapboxViewer
         allModels={modelsToShow}
+        buildings={buildingsWithGPS}
         building={selectedBuilding}
-        hotspots={hotspots}
-        onHotspotClick={handleHotspotClick}
+        hotspots={selectedBuilding ? hotspots : []}
+        onBuildingClick={handleSelectBuilding}
         isMobile={isMobile}
       />
 
@@ -295,15 +318,20 @@ export default function Explorer() {
             padding: '1.5rem 1.25rem', textAlign: 'center',
             borderBottom: '1px solid var(--color-border)', flexShrink: 0,
           }}>
-            <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>🏛️</div>
+            <div style={{ marginBottom: '0.5rem', color: 'var(--color-text-4)' }}>
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none"
+                stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M3 21h18M3 7l9-4 9 4M4 7v14M20 7v14M9 21V12h6v9"/>
+              </svg>
+            </div>
             <p style={{ fontSize: '0.8rem', color: 'var(--color-text-3)', lineHeight: 1.5, margin: 0 }}>
               Selecciona un edificio para explorarlo en el mapa 3D.
             </p>
           </div>
         )}
 
-        {/* Toggle exterior / interior — oculto hasta INTERIOR_VIEW_ENABLED = true */}
-        {INTERIOR_VIEW_ENABLED && selectedBuilding && (
+        {/* Toggle exterior / interior — oculto hasta implementar vista interior */}
+        {false && selectedBuilding && (
           <div style={{
             padding: '0.75rem 1.25rem',
             borderBottom: '1px solid var(--color-border)', flexShrink: 0,
@@ -323,7 +351,7 @@ export default function Explorer() {
                   fontFamily: 'var(--font-body)', fontSize: '0.78rem', fontWeight: 600,
                   cursor: 'pointer', transition: 'all var(--transition)',
                 }}>
-                  {m === 'exterior' ? 'Exterior' : 'Interior'}
+                  {m === 'exterior' ? '' : ''} {m.charAt(0).toUpperCase() + m.slice(1)}
                 </button>
               ))}
             </div>
@@ -334,9 +362,126 @@ export default function Explorer() {
         <div style={{ flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column' }}>
           {hotspots.length > 0 && (
             <>
+              {/* Barra de búsqueda */}
+              <div style={{ padding: '0.5rem 0.75rem 0', flexShrink: 0 }}>
+                <div style={{
+                  display: 'flex', alignItems: 'center', gap: 6,
+                  background: 'var(--color-bg-soft)',
+                  border: '1px solid var(--color-border)',
+                  borderRadius: 'var(--radius-md)',
+                  padding: '0.4rem 0.65rem',
+                }}>
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
+                    stroke="var(--color-text-3)" strokeWidth="2.5" strokeLinecap="round">
+                    <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+                  </svg>
+                  <input
+                    type="text"
+                    placeholder="Buscar por nombre, docente…"
+                    value={searchQuery}
+                    onChange={e => setSearchQuery(e.target.value)}
+                    style={{
+                      flex: 1, border: 'none', background: 'transparent',
+                      fontSize: '0.78rem', color: 'var(--color-text)',
+                      fontFamily: 'var(--font-body)', outline: 'none', minWidth: 0,
+                    }}
+                  />
+                  {searchQuery && (
+                    <button
+                      onClick={() => setSearchQuery('')}
+                      aria-label="Limpiar búsqueda"
+                      style={{
+                        background: 'none', border: 'none', cursor: 'pointer',
+                        color: 'var(--color-text-3)', padding: 0, lineHeight: 1,
+                        display: 'flex', alignItems: 'center',
+                      }}
+                    >
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                        <path d="M18 6 6 18M6 6l12 12"/>
+                      </svg>
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* ── Sistema de filtros ─────────────────────────────── */}
+              {(presentTypes.length > 1 || hotspots.some(h => h.schedule)) && (
+                <div style={{
+                  padding: '0.5rem 0.75rem 0',
+                  borderBottom: '1px solid var(--color-border)',
+                  flexShrink: 0,
+                }}>
+                  {/* Fila: label + contador activo */}
+                  <div style={{
+                    display: 'flex', alignItems: 'center',
+                    justifyContent: 'space-between', marginBottom: '0.4rem',
+                  }}>
+                    <span style={{
+                      fontSize: '0.62rem', fontWeight: 700,
+                      color: 'var(--color-text-3)',
+                      textTransform: 'uppercase', letterSpacing: '0.08em',
+                    }}>Filtros</span>
+                    {(typeFilter !== 'all' || openNowOnly || searchQuery) && (
+                      <button
+                        onClick={() => {
+                          setTypeFilter('all');
+                          setOpenNowOnly(false);
+                          setSearchQuery('');
+                        }}
+                        style={{
+                          fontSize: '0.62rem', fontWeight: 600,
+                          color: 'var(--color-primary)', background: 'none',
+                          border: 'none', cursor: 'pointer', padding: 0,
+                          fontFamily: 'var(--font-body)',
+                        }}
+                      >
+                        Limpiar
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Chips de tipo */}
+                  {presentTypes.length > 1 && (
+                    <div style={{
+                      display: 'flex', flexWrap: 'wrap', gap: 4,
+                      marginBottom: hotspots.some(h => h.schedule) ? '0.4rem' : '0.5rem',
+                    }}>
+                      <FilterChip
+                        active={typeFilter === 'all'}
+                        onClick={() => setTypeFilter('all')}
+                        label="Todos"
+                      />
+                      {presentTypes.map(t => (
+                        <FilterChip
+                          key={t}
+                          active={typeFilter === t}
+                          onClick={() => setTypeFilter(t)}
+                          label={TYPE_LABELS[t] || t}
+                          iconSvg={TYPE_ICONS_SVG[t]}
+                        />
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Chip: abierto ahora */}
+                  {hotspots.some(h => h.schedule) && (
+                    <div style={{ marginBottom: '0.5rem' }}>
+                      <FilterChip
+                        active={openNowOnly}
+                        onClick={() => setOpenNowOnly(o => !o)}
+                        label="Abierto ahora"
+                        showDot
+                        accent
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Encabezado + contador */}
               <div style={{
-                padding: '0.6rem 1.25rem 0.3rem',
+                padding: '0.55rem 1.25rem 0.3rem',
                 display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                 flexShrink: 0,
               }}>
@@ -354,42 +499,6 @@ export default function Explorer() {
                   {filteredHotspots.length}/{hotspots.length}
                 </span>
               </div>
-
-              {/* Chips de filtro — solo tipos que existen en este edificio */}
-              {(presentTypes.length > 1 || hotspots.some(h => h.schedule)) && (
-                <div style={{
-                  padding: '0.3rem 0.75rem 0.5rem',
-                  display: 'flex', flexWrap: 'wrap', gap: 4,
-                  flexShrink: 0,
-                }}>
-                  {presentTypes.length > 1 && (
-                    <>
-                      <FilterChip
-                        active={typeFilter === 'all'}
-                        onClick={() => setTypeFilter('all')}
-                        label="Todos"
-                      />
-                      {presentTypes.map(t => (
-                        <FilterChip
-                          key={t}
-                          active={typeFilter === t}
-                          onClick={() => setTypeFilter(t)}
-                          label={`${TYPE_ICONS[t] || '📍'} ${TYPE_LABELS[t] || t}`}
-                        />
-                      ))}
-                    </>
-                  )}
-                  {/* Filtro abierto ahora — solo si algún hotspot tiene horario */}
-                  {hotspots.some(h => h.schedule) && (
-                    <FilterChip
-                      active={openNowOnly}
-                      onClick={() => setOpenNowOnly(o => !o)}
-                      label="🟢 Abierto ahora"
-                      accent
-                    />
-                  )}
-                </div>
-              )}
             </>
           )}
 
@@ -397,7 +506,12 @@ export default function Explorer() {
           <div style={{ padding: '0 0.75rem 0.75rem', flex: 1 }}>
             {filteredHotspots.length === 0 && hotspots.length > 0 && (
               <div style={{ textAlign: 'center', padding: '1.25rem 1rem', color: 'var(--color-text-3)' }}>
-                <div style={{ fontSize: '1.5rem', marginBottom: '0.4rem' }}>🔍</div>
+                <div style={{ marginBottom: '0.4rem', color: 'var(--color-text-4)' }}>
+                  <svg width="26" height="26" viewBox="0 0 24 24" fill="none"
+                    stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+                    <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+                  </svg>
+                </div>
                 <p style={{ fontSize: '0.78rem', margin: 0 }}>
                   Sin {TYPE_LABELS[typeFilter]?.toLowerCase() || 'resultados'} en este edificio.
                 </p>
@@ -428,7 +542,19 @@ export default function Explorer() {
                     e.currentTarget.style.background = 'transparent';
                 }}
               >
-                <span style={{ fontSize: '1rem', flexShrink: 0 }}>{TYPE_ICONS[h.type] || '📍'}</span>
+                <span
+                  style={{
+                    flexShrink: 0, width: 26, height: 26, borderRadius: '50%',
+                    background: activeHotspot?.id === h.id
+                      ? 'var(--color-primary-100)' : 'var(--color-bg-soft)',
+                    border: '1px solid var(--color-border)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    color: activeHotspot?.id === h.id
+                      ? 'var(--color-primary)' : 'var(--color-text-3)',
+                    transition: 'all var(--transition)',
+                  }}
+                  dangerouslySetInnerHTML={{ __html: TYPE_ICONS_SVG[h.type] || TYPE_ICONS_SVG.service }}
+                />
                 <div style={{ minWidth: 0, flex: 1 }}>
                   <p style={{
                     fontWeight: 600, fontSize: '0.8rem',
@@ -521,7 +647,7 @@ export default function Explorer() {
 }
 
 // ── Chip de filtro ────────────────────────────────────────────
-function FilterChip({ active, onClick, label, accent = false }) {
+function FilterChip({ active, onClick, label, accent = false, iconSvg, showDot }) {
   const activeColor = accent ? '#15803d' : 'var(--color-primary)';
   const activeBg    = accent ? '#dcfce7' : 'var(--color-primary)';
   const activeText  = accent ? '#15803d' : '#fff';
@@ -531,16 +657,30 @@ function FilterChip({ active, onClick, label, accent = false }) {
       style={{
         padding: '0.25rem 0.6rem',
         fontSize: '0.7rem', fontWeight: 600,
-        background: active ? activeBg    : 'var(--color-bg-soft)',
-        color:      active ? activeText  : 'var(--color-text-3)',
+        background: active ? activeBg   : 'var(--color-bg-soft)',
+        color:      active ? activeText : 'var(--color-text-3)',
         border: `1px solid ${active ? activeColor : 'var(--color-border)'}`,
         borderRadius: 'var(--radius-full)',
         cursor: 'pointer',
         transition: 'all var(--transition)',
         fontFamily: 'var(--font-body)',
         whiteSpace: 'nowrap',
+        display: 'flex', alignItems: 'center', gap: 4,
       }}
     >
+      {showDot && (
+        <span style={{
+          width: 6, height: 6, borderRadius: '50%', flexShrink: 0,
+          background: active ? activeText : '#16a34a',
+          display: 'inline-block',
+        }} />
+      )}
+      {iconSvg && (
+        <span
+          style={{ lineHeight: 0, flexShrink: 0 }}
+          dangerouslySetInnerHTML={{ __html: iconSvg }}
+        />
+      )}
       {label}
     </button>
   );
