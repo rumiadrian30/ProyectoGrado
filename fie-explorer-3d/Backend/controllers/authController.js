@@ -103,7 +103,7 @@ async function login(req, res, next) {
     }
 
     // ── Login correcto ────────────────────────────────────────
-    const SESSION_HOURS = await getConfig('session.token_expires_hours', 8);
+    const SESSION_MINUTES = await getConfig('session.token_expires_minutes', 30);
 
     await pool.query(
       `UPDATE admin_users SET failed_attempts=0, locked_until=NULL,
@@ -114,14 +114,14 @@ async function login(req, res, next) {
     const token = jwt.sign(
       { userId:user.id, email:user.email, role:user.role },
       process.env.JWT_SECRET,
-      { expiresIn: `${SESSION_HOURS}h` }
+      { expiresIn: `${SESSION_MINUTES}m` }
     );
 
     res.cookie('token', token, {
       httpOnly: true,
       secure:   process.env.NODE_ENV === 'production',
       sameSite: 'lax',
-      maxAge:   SESSION_HOURS * 60 * 60 * 1000,
+      maxAge:   SESSION_MINUTES * 60 * 1000,
     });
 
     await writeAudit({ user_id:user.id, action:'LOGIN', ip_address:ip, user_agent });

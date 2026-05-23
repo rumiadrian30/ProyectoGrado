@@ -29,6 +29,12 @@ export const useViewerStore = create(
 
       activeLOD: 0,
       setActiveLOD: (l) => set({ activeLOD: l }),
+
+      // ── Búsqueda en el panel izquierdo ────────────────────────────────────
+      // Se persiste para que el usuario no pierda el contexto al navegar.
+      // Se resetea en handleSelectBuilding al cambiar de edificio.
+      searchQuery:    '',
+      setSearchQuery: (q) => set({ searchQuery: q }),
     }),
     {
       name: LS_KEY,

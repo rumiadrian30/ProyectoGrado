@@ -43,35 +43,6 @@ const PITCH_SPEED  = 1.0;
 const PITCH_MIN    = 0;
 const PITCH_MAX    = 85;
 
-// ─── Colores e iconos SVG por tipo (sin emojis, paleta corporativa) ───────────
-const TYPE_COLORS = {
-  classroom: '#6d28d9',
-  lab:       '#BC0613',
-  office:    '#2563eb',
-  service:   '#16a34a',
-  access:    '#d97706',
-};
-
-/**
- * Genera un SVG compacto como inner HTML del marcador DOM.
- * Cada tipo tiene su propio path reconocible; el fondo usa el color corporativo.
- */
-function markerSVG(type, color) {
-  const icons = {
-    classroom: '<path d="M3 21h18M3 7l9-4 9 4M4 7v14M20 7v14M9 21V12h6v9" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/>',
-    lab:       '<path d="M9 3h6m-3 0v6l4 8H8L4 9V3m0 6h12" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/>',
-    office:    '<rect x="4" y="4" width="16" height="16" rx="2" stroke="#fff" stroke-width="1.8" fill="none"/><path d="M8 9h8M8 13h5" stroke="#fff" stroke-width="1.5" stroke-linecap="round" fill="none"/>',
-    service:   '<circle cx="12" cy="12" r="3" stroke="#fff" stroke-width="1.8" fill="none"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14" stroke="#fff" stroke-width="1.8" fill="none"/>',
-    access:    '<path d="M13 4h6v16h-6M8 16l-4-4 4-4m-4 4h10" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/>',
-  };
-  const path = icons[type] || icons.service;
-  return `
-    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"
-         style="pointer-events:none;display:block">
-      ${path}
-    </svg>`;
-}
-
 // ─── Custom Three.js layer ────────────────────────────────────────────────────
 function createModelLayer({
   id, modelUrl, lngLat, buildingPos, modelScale,
@@ -221,11 +192,16 @@ function addDemoModel(scene, bx = 0, by = 0, bz = 0) {
 
 // ─── Componente ───────────────────────────────────────────────────────────────
 export default function MapboxViewer({
-  allModels = [], building, hotspots = [], onHotspotClick, isMobile,
+  allModels = [], buildings = [], building, hotspots = [],
+  onBuildingClick, isMobile,
+  // onHotspotClick eliminado: los hotspots se navegan desde el panel izquierdo.
+  // El visor 3D solo expone interacción a nivel de edificio (building pins).
 }) {
   const containerRef    = useRef(null);
   const mapRef          = useRef(null);
   const markersRef      = useRef([]);
+  const buildingPinsRef  = useRef([]);   // un pin por edificio en vista global
+  const pinElemsRef      = useRef([]);   // refs a {pin,ring} para actualizar tamaño en zoom
   const mapReadyRef     = useRef(false);
   const keysRef         = useRef(new Set());
   const rafRef          = useRef(null);
@@ -264,8 +240,8 @@ export default function MapboxViewer({
         bearing:   CAMPUS_VIEW.bearing ?? -15,
         center:    CAMPUS_VIEW.center,
         projection: 'mercator',
-        style:     'mapbox://styles/mapbox/standard',
-        config:    { basemap: { show3dObjects: false } },
+        style:     'mapbox://styles/mapbox/outdoors-v12',
+        config:    { basemap: { show3dObjects: true } },
         antialias: true,
       });
     } catch {
@@ -291,6 +267,8 @@ export default function MapboxViewer({
     mapRef.current = map;
     return () => {
       cancelAnimationFrame(rafRef.current);
+      markersRef.current.forEach(m => m.remove());
+      buildingPinsRef.current.forEach(m => m.remove());
       map.remove();
       mapRef.current      = null;
       mapReadyRef.current = false;
@@ -487,156 +465,242 @@ export default function MapboxViewer({
   }, [hotspotIdsKey, building?.id]);
 
   // ─────────────────────────────────────────────────────────────────────────
-  // CORRECCIÓN HU-04 — Marcadores de hotspots
+  // BUILDING PINS ─────────────────────────────────────────────────────────────
   //
-  // Problema anterior:
-  //   Los marcadores se colocaban en un patrón circular (angle + r) que
-  //   ignoraba completamente pos_x / pos_z, por lo que nunca reflejaban
-  //   la posición real del hotspot en el modelo 3D.
+  // Comportamiento:
+  //   · SIEMPRE visibles — se muestran los N pins de todos los edificios.
+  //   · El edificio seleccionado (building) recibe estilo activo (rojo intenso
+  //     + anillo pulsante). Los demás permanecen en estado normal (gris oscuro).
+  //   · Sin texto: solo icono SVG de edificio dentro de un círculo.
+  //   · Clic → onBuildingClick(b) → Explorer carga hotspots en panel izquierdo.
+  // ─────────────────────────────────────────────────────────────────────────────
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !buildings.length) return;
+
+    // Limpiar todos los pins y redibujar
+    buildingPinsRef.current.forEach(m => m.remove());
+    buildingPinsRef.current = [];
+    pinElemsRef.current = [];
+
+    const ICON_SVG = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none"
+      stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+      style="pointer-events:none;display:block">
+      <path d="M3 21h18M3 7l9-4 9 4M4 7v14M20 7v14M9 21V12h6v9"/>
+    </svg>`;
+
+    buildings.forEach((b) => {
+      const isSelected = building && String(b.id) === String(building.id);
+
+      const lngLat = b._lngLat ?? buildingOffsetToGPS(
+        parseFloat(b.offset_x) || 0,
+        parseFloat(b.offset_z) || 0,
+      );
+
+      // ── Capa externa: Mapbox escribe su transform aquí — NO TOCAR ──────
+      const el = document.createElement('div');
+      el.setAttribute('role', 'button');
+      el.setAttribute('aria-label', b.name);
+      el.style.cssText = [
+        'width:40px',
+        'height:40px',
+        'cursor:pointer',
+        'touch-action:manipulation',
+        '-webkit-tap-highlight-color:transparent',
+        'will-change:transform',   // aísla el contexto de composición
+        'isolation:isolate',       // evita que transforms del padre afecten el tamaño visual
+      ].join(';');
+
+      // ── Anillo pulsante (solo en edificio seleccionado) ────────────────
+      const ring = document.createElement('div');
+      ring.style.cssText = [
+        'position:absolute',
+        'inset:-6px',
+        'border-radius:50%',
+        `border:2px solid ${isSelected ? 'rgba(188,6,19,0.5)' : 'transparent'}`,
+        `animation:${isSelected ? 'pinPulse 1.6s ease-in-out infinite' : 'none'}`,
+        'pointer-events:none',
+      ].join(';');
+      el.style.position = 'relative';
+      el.appendChild(ring);
+
+      // ── Capa interna: círculo con icono SVG ───────────────────────────
+      const pin = document.createElement('div');
+      pin.style.cssText = [
+        'width:40px',
+        'height:40px',
+        'border-radius:50%',
+        `background:${isSelected ? '#BC0613' : '#1f2937'}`,
+        `border:${isSelected ? '3px' : '2.5px'} solid #ffffff`,
+        'display:flex',
+        'align-items:center',
+        'justify-content:center',
+        `box-shadow:${isSelected
+          ? '0 4px 16px rgba(188,6,19,0.5)'
+          : '0 2px 10px rgba(0,0,0,0.35)'}`,
+        'transition:transform 0.15s ease,box-shadow 0.15s ease,background 0.2s ease',
+        'pointer-events:none',
+        `transform:${isSelected ? 'scale(1.1)' : 'scale(1)'}`,
+      ].join(';');
+      pin.innerHTML = ICON_SVG;
+      el.appendChild(pin);
+
+      // ── Bloquear propagación al canvas de Mapbox ──────────────────────
+      ['mousedown', 'mousemove', 'pointerdown', 'pointermove',
+       'wheel', 'dblclick'].forEach(t => {
+        el.addEventListener(t, e => e.stopPropagation());
+      });
+      el.addEventListener('touchstart', e => e.stopPropagation(), { passive: true });
+
+      // ── Hover (solo capa visual pin, nunca el) ────────────────────────
+      el.addEventListener('mouseenter', () => {
+        if (!isSelected) {
+          pin.style.background  = '#BC0613';
+          pin.style.boxShadow   = '0 4px 16px rgba(188,6,19,0.40)';
+        }
+        pin.style.transform = 'scale(1.18)';
+      });
+      el.addEventListener('mouseleave', () => {
+        if (!isSelected) {
+          pin.style.background  = '#1f2937';
+          pin.style.boxShadow   = '0 2px 10px rgba(0,0,0,0.35)';
+        }
+        pin.style.transform = isSelected ? 'scale(1.1)' : 'scale(1)';
+      });
+
+      // ── Clic → seleccionar edificio ───────────────────────────────────
+      el.addEventListener('click', e => {
+        e.stopPropagation();
+        onBuildingClick?.(b);
+      });
+
+      // ── Touch → seleccionar edificio (móvil / tablet) ─────────────────
+      el.addEventListener('touchend', e => {
+        e.preventDefault();
+        e.stopPropagation();
+        onBuildingClick?.(b);
+      }, { passive: false });
+
+      // Guardar refs a los elementos visuales para el listener de zoom
+      pinElemsRef.current.push({ pin, ring, el });
+
+      buildingPinsRef.current.push(
+        new mapboxgl.Marker({
+          element: el,
+          anchor: 'center',
+          pitchAlignment:    'viewport', // evita escalado por perspectiva 3D
+          rotationAlignment: 'viewport', // el marcador siempre mira a cámara
+        })
+          .setLngLat(lngLat)
+          .addTo(map),
+      );
+    });
+
+    // ── Listener de zoom: escalar pins con el nivel del mapa ────────────────
+    // En Mapbox GL 3.x los DOM markers son pixel-fijos, por lo que se hacen
+    // grandes al alejar y pequeños al acercar respecto a las features del mapa.
+    // Se contrarresta actualizando el tamaño del pin en cada evento de zoom.
+    const BASE_ZOOM = 16;    // zoom de referencia donde el pin mide BASE_SIZE
+    const BASE_SIZE = 40;    // px en el zoom de referencia
+    const MIN_SIZE  = 22;    // px mínimo (zoom muy alejado)
+    const MAX_SIZE  = 52;    // px máximo (zoom muy cercano)
+
+    function applyZoomSize() {
+      const zoom  = map.getZoom();
+      const scale = Math.pow(2, zoom - BASE_ZOOM);
+      const size  = Math.round(Math.max(MIN_SIZE, Math.min(MAX_SIZE, BASE_SIZE * scale)));
+      const svg   = size >= 30 ? 18 : 12; // icono proporcional
+
+      pinElemsRef.current.forEach(({ pin, ring }) => {
+        pin.style.width   = `${size}px`;
+        pin.style.height  = `${size}px`;
+        // Actualizar el SVG interno para que escale con el pin
+        const svgEl = pin.querySelector('svg');
+        if (svgEl) { svgEl.setAttribute('width', svg); svgEl.setAttribute('height', svg); }
+        // Anillo: mantener proporción
+        if (ring) {
+          const gap = Math.round(size * 0.15);
+          ring.style.inset = `-${gap}px`;
+        }
+      });
+    }
+
+    applyZoomSize(); // aplicar tamaño inicial
+    map.on('zoom', applyZoomSize);
+
+    return () => { map.off('zoom', applyZoomSize); };
+  }, [buildings, building, onBuildingClick]);
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // BADGE DE CONTEO — un único indicador por edificio seleccionado
   //
-  // Solución:
-  //   1. Cada marcador hereda las coordenadas del edificio padre
-  //      (building.offset_x / offset_z) y suma las del hotspot (pos_x / pos_z).
-  //      GPS = buildingOffsetToGPS(building_offset_x + hs.pos_x,
-  //                                 building_offset_z + hs.pos_z)
-  //   2. Si el hotspot no tiene coordenadas 3D configuradas (pos_x/z ≈ 0),
-  //      se aplica un desplazamiento mínimo en abanico para que los
-  //      marcadores no se sobrepongan en el centro del edificio.
-  //   3. Los eventos click Y touchend disparan onHotspotClick para
-  //      garantizar respuesta en dispositivos táctiles (iOS / Android).
+  // Arquitectura de interacción final:
+  //   · Vista global  → building pins (uno por edificio, useEffect anterior)
+  //   · Edificio seleccionado → badge de conteo pasivo + panel izquierdo
+  //
+  // Se eliminan los N marcadores individuales de hotspot del visor 3D porque:
+  //   · Saturan visualmente el mapa cuando hay muchos hotspots.
+  //   · El panel izquierdo ya provee lista completa con filtros y búsqueda.
+  //   · Los marcadores individuales no tenían posiciones 3D configuradas
+  //     en la mayoría de edificios, resultando en patrones circulares forzados.
+  //
+  // El badge es puramente informativo (no clickeable). La interacción con
+  // hotspots específicos ocurre en el panel izquierdo (lista + detalle).
   // ─────────────────────────────────────────────────────────────────────────
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
 
-    // Limpiar marcadores anteriores
+    // Limpiar badge anterior
     markersRef.current.forEach(m => m.remove());
     markersRef.current = [];
 
+    // Solo mostrar badge cuando hay un edificio seleccionado con hotspots
     if (!building || !hotspots.length) return;
 
-    const buildingOffsetX = parseFloat(building.offset_x) || 0;
-    const buildingOffsetZ = parseFloat(building.offset_z) || 0;
-
-    // Detectar si algún hotspot tiene posición 3D real configurada
-    const anyHasMeaningfulPos = hotspots.some(
-      h => Math.abs(parseFloat(h.pos_x) || 0) > 0.5 ||
-           Math.abs(parseFloat(h.pos_z) || 0) > 0.5
+    // ── Posición del badge: centro GPS del edificio ──────────────────────
+    // Usa _lngLat pre-calculado en Explorer (model.building_offset_x/z)
+    // o cae en el offset del building como fallback.
+    const lngLat = building._lngLat ?? buildingOffsetToGPS(
+      parseFloat(building.offset_x) || 0,
+      parseFloat(building.offset_z) || 0,
     );
 
-    hotspots.forEach((hs, i) => {
-      const color = TYPE_COLORS[hs.type] || '#BC0613';
-      let lngLat;
+    // ── Estructura DOM: capa externa (Mapbox posiciona) + badge interno ──
+    const el = document.createElement('div');
+    el.style.cssText = [
+      'cursor:default',
+      'pointer-events:none',        // badge es pasivo, no captura eventos
+      '-webkit-tap-highlight-color:transparent',
+    ].join(';');
 
-      const hsX = parseFloat(hs.pos_x) || 0;
-      const hsZ = parseFloat(hs.pos_z) || 0;
+    const badge = document.createElement('div');
+    // Badge minimalista: solo un pequeño indicador de actividad
+    badge.style.cssText = [
+      'width:10px', 'height:10px',
+      'border-radius:50%',
+      'background:#BC0613',
+      'border:2px solid #fff',
+      'box-shadow:0 1px 6px rgba(188,6,19,0.6)',
+      'animation:badgeFadeIn 0.2s ease',
+    ].join(';');
 
-      if (anyHasMeaningfulPos && (Math.abs(hsX) > 0.5 || Math.abs(hsZ) > 0.5)) {
-        // ── CASO A: Hotspot con coordenadas 3D reales ────────────────────────
-        // GPS = ancla del campus + offset del edificio + posición local del hotspot
-        lngLat = buildingOffsetToGPS(buildingOffsetX + hsX, buildingOffsetZ + hsZ);
-      } else {
-        // ── CASO B: Sin coordenadas 3D (pos_x/z = 0) ────────────────────────
-        // Distribuir en abanico alrededor del centro del edificio para
-        // evitar que todos los marcadores se solapen en el mismo punto.
-        const FALLBACK_RADIUS = 0.000035; // ~3.5 m en grados
-        const angle = (i / Math.max(hotspots.length, 1)) * Math.PI * 2;
-        const baseGPS = buildingOffsetToGPS(buildingOffsetX, buildingOffsetZ);
-        lngLat = [
-          baseGPS[0] + Math.cos(angle) * FALLBACK_RADIUS,
-          baseGPS[1] + Math.sin(angle) * FALLBACK_RADIUS * 0.85,
-        ];
-      }
+    // badge ya es el dot — se añade directamente al contenedor
+    el.appendChild(badge);
 
-      // ── Estructura de dos capas ──────────────────────────────────────────
-      //
-      // RAÍZ DEL BUG: Mapbox GL posiciona cada marcador escribiendo
-      // `transform: translate(Xpx, Ypx)` sobre el elemento raíz (el).
-      // Si en mouseenter hacemos `el.style.transform = 'scale(1.3)'`
-      // sobreescribimos ese translate y el pin salta a (0, 0).
-      // En el siguiente frame de render Mapbox restaura el translate
-      // correcto → el marcador "vuelve" solo al hacer zoom o pan.
-      //
-      // SOLUCIÓN: dos capas de DOM.
-      //   · el  (capa externa) → Mapbox escribe transform aquí. NUNCA tocar.
-      //   · pin (capa interna) → todos los estilos visuales y el scale
-      //                          de hover van aquí, sin afectar al padre.
-      //
-      //   el (wrapper transparente, tamaño igual al pin)
-      //   └── pin (círculo visible: color, borde, sombra, ícono SVG)
+    markersRef.current.push(
+      new mapboxgl.Marker({
+        element: el,
+        anchor: 'bottom',
+        offset: [0, -8],
+        pitchAlignment:    'viewport',
+        rotationAlignment: 'viewport',
+      })
+        .setLngLat(lngLat)
+        .addTo(map),
+    );
+  }, [hotspots, building]);
 
-      // Capa externa: contenedor neutro que Mapbox posiciona
-      const el = document.createElement('div');
-      el.setAttribute('role', 'button');
-      el.setAttribute('aria-label', hs.name);
-      el.style.cssText = [
-        'width:32px',
-        'height:32px',
-        'cursor:pointer',
-        '-webkit-tap-highlight-color:transparent',
-        'touch-action:manipulation',
-        // Sin background, border-radius, box-shadow ni transform:
-        // todos los estilos visuales van en el pin interno.
-      ].join(';');
-
-      // Capa interna: todo lo visual, animable sin romper el posicionamiento
-      const pin = document.createElement('div');
-      pin.style.cssText = [
-        'width:32px',
-        'height:32px',
-        `background:${color}`,
-        'border:2.5px solid #ffffff',
-        'border-radius:50%',
-        'box-shadow:0 2px 10px rgba(0,0,0,0.35)',
-        'display:flex',
-        'align-items:center',
-        'justify-content:center',
-        'transition:transform 0.15s ease, box-shadow 0.15s ease',
-        'pointer-events:none', // los eventos los captura el padre (el)
-      ].join(';');
-      pin.innerHTML = markerSVG(hs.type, color);
-      el.appendChild(pin);
-
-      // ── Bloquear propagación hacia el canvas de Mapbox ──────────────────
-      ['mousedown', 'mousemove', 'pointerdown', 'pointermove',
-       'wheel', 'dblclick'].forEach(evtType => {
-        el.addEventListener(evtType, (e) => { e.stopPropagation(); });
-      });
-      el.addEventListener('touchstart', (e) => {
-        e.stopPropagation();
-      }, { passive: true });
-
-      // ── Hover visual: animar el PIN, nunca el EL ─────────────────────────
-      // transform en pin no afecta a la matriz que Mapbox calcula para el.
-      el.addEventListener('mouseenter', () => {
-        pin.style.transform = 'scale(1.3)';
-        pin.style.boxShadow = '0 4px 16px rgba(0,0,0,0.45)';
-      });
-      el.addEventListener('mouseleave', () => {
-        pin.style.transform = 'scale(1)';
-        pin.style.boxShadow = '0 2px 10px rgba(0,0,0,0.35)';
-      });
-
-      // ── Click (escritorio) ───────────────────────────────────────────────
-      el.addEventListener('click', (e) => {
-        e.stopPropagation();
-        onHotspotClick?.(hs);
-      });
-
-      // ── Touch (móvil / tablet) ───────────────────────────────────────────
-      el.addEventListener('touchend', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        onHotspotClick?.(hs);
-      }, { passive: false });
-
-      markersRef.current.push(
-        new mapboxgl.Marker({ element: el, anchor: 'center' })
-          .setLngLat(lngLat)
-          .addTo(map),
-      );
-    });
-  }, [hotspots, building, onHotspotClick]);
 
   // ─── Volver al campus ─────────────────────────────────────────────────────
   const flyToCampus = useCallback(() => {
@@ -757,6 +821,18 @@ export default function MapboxViewer({
           }
         </div>
       )}
+
+      {/* Keyframe para animación del badge de conteo */}
+      <style>{`
+        @keyframes badgeFadeIn {
+          from { opacity: 0; transform: translateY(4px) scale(0.95); }
+          to   { opacity: 1; transform: translateY(0)  scale(1);    }
+        }
+        @keyframes pinPulse {
+          0%,100% { transform: scale(1);    opacity: 0.7; }
+          50%      { transform: scale(1.35); opacity: 0.2; }
+        }
+      `}</style>
 
       {!building && (
         <div style={{
