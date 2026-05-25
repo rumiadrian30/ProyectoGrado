@@ -321,7 +321,7 @@ export default function Hotspots() {
           </div>
         </Modal>
       )}
-      {toast && <div className={`alert alert-${toast.type} toast`}>{toast.msg}</div>}
+      {toast && <div className={`toast toast-${toast.type}`}>{toast.msg}</div>}
     </>
   )
 }

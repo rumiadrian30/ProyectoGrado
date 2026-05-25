@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { api } from './api'
 import Dashboard  from './pages/Dashboard'
 import Hotspots   from './pages/Hotspots'
@@ -21,10 +21,16 @@ const TITLES = {
   audit: 'Audit Logs', errors: 'Error Logs', settings: 'Configuración',
 }
 
-export default function AdminShell({ user, onLogout }) {
-  const [page,     setPage]     = useState('dashboard')
-  const [errBadge, setErrBadge] = useState(0)
-  const [dbOk,     setDbOk]     = useState(true)
+const ACTIVITY_EVENTS = ['mousedown', 'keydown', 'touchstart', 'click']
+
+export default function AdminShell({ user, onLogout, inactivityMs }) {
+  const [page,      setPage]      = useState('dashboard')
+  const [errBadge,  setErrBadge]  = useState(0)
+  const [dbOk,      setDbOk]      = useState(true)
+  const [remaining, setRemaining] = useState(inactivityMs)   // ms restantes
+
+  const remainingRef = useRef(inactivityMs)  // ref para el interval sin closures viejos
+  const tickRef      = useRef(null)
 
   const initials = (user.full_name || 'A')
     .split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()
@@ -35,12 +41,55 @@ export default function AdminShell({ user, onLogout }) {
     fetch('/api/health').then(() => setDbOk(true)).catch(() => setDbOk(false))
   }, [])
 
+  // ── Reinicia el contador al máximo ────────────────────────────────────────
+  const resetTimer = useCallback(() => {
+    remainingRef.current = inactivityMs
+    setRemaining(inactivityMs)
+  }, [inactivityMs])
+
+  // ── Tick cada segundo ─────────────────────────────────────────────────────
+  useEffect(() => {
+    tickRef.current = setInterval(() => {
+      remainingRef.current = Math.max(0, remainingRef.current - 1000)
+      setRemaining(remainingRef.current)
+    }, 1000)
+
+    return () => clearInterval(tickRef.current)
+  }, [])
+
+  // ── Escuchar actividad y reiniciar ────────────────────────────────────────
+  useEffect(() => {
+    ACTIVITY_EVENTS.forEach(evt =>
+      window.addEventListener(evt, resetTimer, { passive: true })
+    )
+    return () => {
+      ACTIVITY_EVENTS.forEach(evt =>
+        window.removeEventListener(evt, resetTimer)
+      )
+    }
+  }, [resetTimer])
+
+  // ── Si inactivityMs cambia (settings actualizados) sincronizar ────────────
+  useEffect(() => {
+    resetTimer()
+  }, [inactivityMs, resetTimer])
+
   async function doLogout() {
     try { await api('POST', '/auth/logout') } catch {}
     onLogout()
   }
 
   const PageComponent = PAGES[page] || Dashboard
+
+  // Formato mm:ss
+  const totalSec = Math.ceil(remaining / 1000)
+  const mm = String(Math.floor(totalSec / 60)).padStart(2, '0')
+  const ss = String(totalSec % 60).padStart(2, '0')
+  const timerStr = `${mm}:${ss}`
+
+  // Color según tiempo restante
+  const pct = remaining / inactivityMs
+  const timerColor = pct > 0.25 ? 'var(--muted)' : pct > 0.10 ? '#d97706' : '#dc2626'
 
   return (
     <div id="app">
@@ -93,6 +142,15 @@ export default function AdminShell({ user, onLogout }) {
             <span className="status-dot">
               <span className={`dot ${dbOk ? 'dot-green' : 'dot-red'}`} />
               <span>{dbOk ? 'Conectado' : 'Sin conexión'}</span>
+            </span>
+            <span className="status-dot" title="Tiempo restante de sesión">
+              <span style={{ fontSize: '11px' }}>⏱</span>
+              <span
+                className="mono"
+                style={{ color: timerColor, fontVariantNumeric: 'tabular-nums', transition: 'color .5s' }}
+              >
+                {timerStr}
+              </span>
             </span>
           </div>
         </div>

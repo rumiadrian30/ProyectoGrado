@@ -616,7 +616,7 @@ export default function Models() {
         />
       )}
 
-      {toast && <div className={`alert alert-${toast.type} toast`}>{toast.msg}</div>}
+      {toast && <div className={`toast toast-${toast.type}`}>{toast.msg}</div>}
     </>
   )
 }

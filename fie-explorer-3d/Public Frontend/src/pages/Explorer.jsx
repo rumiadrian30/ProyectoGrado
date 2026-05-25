@@ -107,8 +107,6 @@ export default function Explorer() {
   }, [buildings]);
 
   // ── Cargar modelos exteriores con polling cada 10 s ─────
-  // Permite que cambios de escala/rotación del admin aparezcan
-  // en el visor sin recargar la página (HT-18: cambios en ≤10 s).
   useEffect(() => {
     let cancelled = false;
 

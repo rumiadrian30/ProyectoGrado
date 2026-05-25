@@ -807,6 +807,7 @@ export default function Buildings() {
         </Modal>
       )}
 
+      {toast && <div className={`toast toast-${toast.type}`}>{toast.msg}</div>}
     </>
   )
 }

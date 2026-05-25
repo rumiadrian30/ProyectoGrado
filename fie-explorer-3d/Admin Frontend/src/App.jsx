@@ -2,7 +2,7 @@
  * App.jsx — Punto de entrada principal del Admin Frontend
  */
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { setToken, clearToken, onUnauthorized } from './api'
 import { encryptedSession } from './utils/encryptedStorage'
 import { useContextMenuGuard } from './hooks/useContextMenuGuard'
@@ -11,132 +11,145 @@ import AdminShell from './AdminShell'
 import Toast from './components/Toast'
 import { jwtDecode } from 'jwt-decode'
 
+const DEFAULT_INACTIVITY_MIN = 15
+
 export default function App() {
   useContextMenuGuard()
 
-  // Toast
-  const [toast, setToast] = useState(null)
-
-  // Estado de sesión
-  const [user, setUser] = useState(() => {
+  const [toast,         setToast]         = useState(null)
+  const [user,          setUser]           = useState(() => {
     try {
       const saved = encryptedSession.getItem('admin_user')
       return saved ? JSON.parse(saved) : null
-    } catch {
-      return null
-    }
+    } catch { return null }
   })
+  const [inactivityMs, setInactivityMs]   = useState(DEFAULT_INACTIVITY_MIN * 60 * 1000)
 
-  function showToast(msg, type = 'success') {
+  const inactivityMsRef = useRef(DEFAULT_INACTIVITY_MIN * 60 * 1000)
+  const inactivityTimer = useRef(null)
+
+  // ── Toast ─────────────────────────────────────────────────────────────────
+  function showToast(msg, type = 'success', duration = 3500) {
     setToast({ msg, type })
-
-    setTimeout(() => {
-      setToast(null)
-    }, 3500)
+    setTimeout(() => setToast(null), duration)
   }
 
+  // ── Cargar session.token_expires_minutes desde la BD ─────────────────────────
+  async function loadSessionConfig() {
+    try {
+      const token = encryptedSession.getItem('admin_token')
+      if (!token) return
+      const res = await fetch('/api/settings/config', {
+        credentials: 'include',
+        headers: { Authorization: 'Bearer ' + token },
+      })
+      if (!res.ok) return
+      const data = await res.json()
+      const s = (data.groups?.session ?? [])
+        .find(s => s.config_key === 'session.token_expires_minutes')
+      const n = s ? parseInt(s.config_value) : NaN
+      if (!isNaN(n) && n > 0) {
+        inactivityMsRef.current = n * 60 * 1000
+        setInactivityMs(n * 60 * 1000)   // actualiza el prop de AdminShell
+      }
+    } catch {
+      // Sin conexión: se mantiene el fallback
+    }
+  }
+
+  // ── Logout ────────────────────────────────────────────────────────────────
   function handleLogout(expired = false) {
+    clearTimeout(inactivityTimer.current)
+
+    // Notificar al backend antes de limpiar el token
+    const token = encryptedSession.getItem('admin_token')
+    if (token) {
+      fetch('/api/auth/logout', {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + token,
+        },
+        body: JSON.stringify({ reason: expired ? 'inactivity' : 'manual' }),
+      }).catch(() => {})  
+    }
+
     clearToken()
     setUser(null)
     if (expired) {
-      showToast(
-        'Tu sesión ha expirado. Vuelve a iniciar sesión.',
-        'error'
-      )
+      showToast('Tu sesión se cerró por inactividad. Vuelve a iniciar sesión.', 'error', 5000)
     }
   }
 
-  // Logout automático ante 401
+  // ── Timer de inactividad ──────────────────────────────────────────────────
+  const resetInactivityTimer = useCallback(() => {
+    clearTimeout(inactivityTimer.current)
+    inactivityTimer.current = setTimeout(() => handleLogout(true), inactivityMsRef.current)
+  }, [])
+
+  // ── Escuchar actividad del usuario ────────────────────────────────────────
+  const ACTIVITY_EVENTS = ['mousedown', 'keydown', 'touchstart', 'click']
+
+  useEffect(() => {
+    if (!user) return
+    loadSessionConfig().then(() => resetInactivityTimer())
+    ACTIVITY_EVENTS.forEach(evt =>
+      window.addEventListener(evt, resetInactivityTimer, { passive: true })
+    )
+    return () => {
+      clearTimeout(inactivityTimer.current)
+      ACTIVITY_EVENTS.forEach(evt =>
+        window.removeEventListener(evt, resetInactivityTimer)
+      )
+    }
+  }, [user, resetInactivityTimer])
+
+  // ── Logout automático ante 401 del backend ────────────────────────────────
   useEffect(() => {
     onUnauthorized(() => handleLogout(true))
   }, [])
 
-  // Validación automática de sesión
+  // ── Validar JWT al recuperar el foco ─────────────────────────────────────
   useEffect(() => {
-    async function validateSession() {
+    function validateSession() {
       const token = encryptedSession.getItem('admin_token')
-      if (!token) {
-        return
-      }
+      if (!token) return
       try {
         const decoded = jwtDecode(token)
-        // Token expirado
-        if (decoded.exp * 1000 <= Date.now()) {
-          // Forzar request al backend
-          await fetch('/api/buildings', {
-            credentials: 'include',
-            headers: {
-              Authorization: 'Bearer ' + token
-            }
-          }).catch(() => {})
-          handleLogout()
-        }
+        if (decoded.exp * 1000 <= Date.now()) handleLogout(true)
       } catch {
-        handleLogout()
+        handleLogout(true)
       }
     }
-    // Validar al volver a la pestaña
     window.addEventListener('focus', validateSession)
-    // Validar cuando vuelve visible
-    document.addEventListener(
-      'visibilitychange',
-      validateSession
-    )
-    // Validación inicial
+    document.addEventListener('visibilitychange', validateSession)
     validateSession()
-
     return () => {
-      window.removeEventListener(
-        'focus',
-        validateSession
-      )
-      document.removeEventListener(
-        'visibilitychange',
-        validateSession
-      )
+      window.removeEventListener('focus', validateSession)
+      document.removeEventListener('visibilitychange', validateSession)
     }
   }, [])
 
-  function handleSuccess(token, user) {
-    setToken(token)
-    encryptedSession.setItem(
-      'admin_user',
-      JSON.stringify(user)
-    )
-    setUser(user)
+  // ── Login exitoso ─────────────────────────────────────────────────────────
+  function handleSuccess(token, userData) {
     try {
       const decoded = jwtDecode(token)
-      if (decoded.exp) {
-        const expiresIn =
-          decoded.exp * 1000 - Date.now()
-        // Ya expiró
-        if (expiresIn <= 0) {
-          handleLogout(true)
-          return
-        }
-        // Logout automático exacto
-        setTimeout(async () => {
-          await fetch('/api/buildings', {
-            credentials: 'include',
-            headers: {
-              Authorization: 'Bearer ' + token
-            }
-          }).catch(() => {})
-          handleLogout(true)
-        }, expiresIn)
+      if (decoded.exp && decoded.exp * 1000 <= Date.now()) {
+        showToast('El token recibido ya está expirado.', 'error')
+        return
       }
-
-    } catch (err) {
-      console.error(
-        'Error leyendo JWT:',
-        err
-      )
+    } catch {
+      showToast('Token inválido.', 'error')
+      return
     }
+    setToken(token)
+    encryptedSession.setItem('admin_user', JSON.stringify(userData))
+    setUser(userData)
   }
 
   return (
     <>
-      {/* Toast global */}
       {toast && (
         <Toast
           message={toast.msg}
@@ -144,16 +157,10 @@ export default function App() {
           onClose={() => setToast(null)}
         />
       )}
-      {!user ? (
-        <AdminLogin
-          onSuccess={handleSuccess}
-        />
-      ) : (
-        <AdminShell
-          user={user}
-          onLogout={handleLogout}
-        />
-      )}
+      {!user
+        ? <AdminLogin onSuccess={handleSuccess} />
+        : <AdminShell user={user} onLogout={handleLogout} inactivityMs={inactivityMs} />
+      }
     </>
   )
 }
