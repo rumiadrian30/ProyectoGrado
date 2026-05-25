@@ -161,17 +161,7 @@ tr:hover td  { background: #f8fafc; }
 .tab-btn     { padding: 5px 12px; border-radius: 6px; border: none; background: none; font-size: 12px; font-family: inherit; cursor: pointer; color: var(--muted); transition: all .12s; }
 .tab-btn.active { background: var(--bg); color: var(--text); font-weight: 500; border: 1px solid var(--border); }
 
-/* ── Toast ── */
-.toast {
-  position: fixed; bottom: 20px; right: 20px; z-index: 9999;
-  min-width: 280px; max-width: 400px;
-  box-shadow: 0 4px 20px rgba(0,0,0,.12);
-  animation: slideIn .2s ease;
-}
-@keyframes slideIn {
-  from { transform: translateY(10px); opacity: 0; }
-  to   { transform: translateY(0);    opacity: 1; }
-}
+/* ── Toast — definición única ── */
 
 /* ══════════════════════════════════════════════════════
    Estilos de cifrado AES-256 — FIE Admin
@@ -276,7 +266,8 @@ tr:hover td  { background: #f8fafc; }
 }
 
 .toast-success {
-  background: #16a34a;
+  background: #10b981; /* Esmeralda medio (emerald-500) */
+  color: #ffffff;
 }
 
 .toast-error {

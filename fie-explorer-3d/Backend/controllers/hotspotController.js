@@ -1,32 +1,20 @@
 // controllers/hotspotController.js
-
 'use strict';
 
 const pool           = require('../db/pool');
 const { writeAudit } = require('./authController');
 const { getClient }  = require('../utils/redisClient');
 
-const log = (msg) => console.log(`  \x1b[35m[HOTSPOT]\x1b[0m ${msg}`);
+const log = msg => console.log(`  \x1b[35m[HOTSPOT]\x1b[0m ${msg}`);
 
-const CACHE_TTL   = 60; // segundos
+const CACHE_TTL   = 15;
 const VALID_TYPES = ['lab', 'office', 'service', 'access', 'classroom'];
-
-// Formato UUID v4 estándar que PostgreSQL acepta como tipo uuid
-// Ejemplo válido: "550e8400-e29b-41d4-a716-446655440000"
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const UUID_RE     = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 // ─────────────────────────────────────────────────────────────
-// Helpers de caché
+// Helpers de caché (fire-and-forget)
 // ─────────────────────────────────────────────────────────────
 
-/**
- * Construye la clave de caché para un edificio concreto.
- * Si building_id es null/undefined se usa el segmento "all" para la
- * consulta global, evitando colisiones entre edificios.
- *
- * @param {string|null} building_id  UUID del edificio, p.ej. "550e8400-e29b-41d4-a716-446655440000"
- * @returns {string}  p.ej. "hotspots:list:550e8400-..." | "hotspots:list:all"
- */
 function buildCacheKey(building_id) {
   return building_id ? `hotspots:list:${building_id}` : 'hotspots:list:all';
 }
@@ -36,81 +24,104 @@ async function cacheGet(key) {
   if (!redis) return null;
   try {
     const raw = await redis.get(key);
-    if (raw) {
-      console.log(`  \x1b[36m[Redis]\x1b[0m cache hit  → ${key}`);
-      return JSON.parse(raw);
-    }
-    console.log(`  \x1b[36m[Redis]\x1b[0m cache miss → ${key}`);
+    if (raw) { console.log(`  \x1b[36m[Redis]\x1b[0m HIT  → ${key}`); return JSON.parse(raw); }
+    console.log(`  \x1b[36m[Redis]\x1b[0m MISS → ${key}`);
     return null;
-  } catch (err) {
-    console.warn(`  \x1b[33m[Redis]\x1b[0m get error: ${err.message}`);
-    return null;
-  }
+  } catch (err) { console.warn(`  \x1b[33m[Redis]\x1b[0m get: ${err.message}`); return null; }
 }
 
-async function cacheSet(key, data, ttl = CACHE_TTL) {
+async function cacheSet(key, data) {
   const redis = getClient();
   if (!redis) return;
   try {
-    await redis.set(key, JSON.stringify(data), 'EX', ttl);
-    console.log(`  \x1b[36m[Redis]\x1b[0m cache set  → ${key} (TTL ${ttl}s)`);
-  } catch (err) {
-    console.warn(`  \x1b[33m[Redis]\x1b[0m set error: ${err.message}`);
-  }
+    await redis.set(key, JSON.stringify(data), 'EX', CACHE_TTL);
+    console.log(`  \x1b[36m[Redis]\x1b[0m SET  → ${key} (TTL ${CACHE_TTL}s)`);
+  } catch (err) { console.warn(`  \x1b[33m[Redis]\x1b[0m set: ${err.message}`); }
 }
 
-async function cacheDelete(key) {
+async function cacheDel(key) {
   const redis = getClient();
   if (!redis) return;
   try {
     await redis.del(key);
-    console.log(`  \x1b[36m[Redis]\x1b[0m cache invalidated → ${key}`);
-  } catch (err) {
-    console.warn(`  \x1b[33m[Redis]\x1b[0m del error: ${err.message}`);
-  }
+    console.log(`  \x1b[36m[Redis]\x1b[0m DEL  → ${key}`);
+  } catch (err) { console.warn(`  \x1b[33m[Redis]\x1b[0m del: ${err.message}`); }
 }
 
 /**
- * Invalida el caché del edificio afectado Y la lista global.
- * Cuando un hotspot cambia de edificio (update) se pasan ambos IDs
- * para limpiar también la entrada del edificio origen.
- *
- * @param {string}      building_id      UUID del edificio destino (o único)
- * @param {string|null} old_building_id  UUID del edificio origen (solo en update cross-building)
+ * Invalida entradas de caché afectadas por una mutación de hotspot.
+ * Siempre borra la lista global + la entrada del edificio destino.
+ * Si el hotspot cambió de edificio, también borra el origen.
  */
-async function cacheInvalidateForBuilding(building_id, old_building_id = null) {
-  // 1. Siempre limpiar la vista global sin filtro
-  await cacheDelete('hotspots:list:all');
+async function invalidate(building_id, old_building_id = null) {
+  const keys = new Set(['hotspots:list:all']);
+  if (building_id)     keys.add(`hotspots:list:${building_id}`);
+  if (old_building_id && String(old_building_id) !== String(building_id))
+    keys.add(`hotspots:list:${old_building_id}`);
+  await Promise.all([...keys].map(cacheDel));
+}
 
-  // 2. Limpiar la entrada del edificio afectado
-  if (building_id) {
-    await cacheDelete(`hotspots:list:${building_id}`);
-  }
-
-  // 3. Si el hotspot cambió de edificio, limpiar también el edificio anterior
-  if (old_building_id && String(old_building_id) !== String(building_id)) {
-    await cacheDelete(`hotspots:list:${old_building_id}`);
-  }
+/**
+ * Exportado para que buildingController lo llame cuando un admin
+ * modifique los offsets o coordenadas GPS de un edificio, evitando
+ * que el sistema sirva hotspots con metadatos de edificio obsoletos.
+ *
+ * Borra:
+ *  - hotspots:list:all          (lista global)
+ *  - hotspots:list:<buildingId> (lista filtrada por edificio)
+ *
+ * @param {string} buildingId  UUID del edificio modificado
+ */
+async function cacheInvalidateForBuilding(buildingId) {
+  if (!buildingId) return;
+  await invalidate(buildingId);
+  log(`caché invalidada por cambio de edificio [${buildingId}]`);
 }
 
 // ─────────────────────────────────────────────────────────────
-// GET / — Lista hotspots (filtrada por edificio si se indica)
+// Fragment SQL reutilizable
 // ─────────────────────────────────────────────────────────────
+// IMPORTANTE — pos_x, pos_y, pos_z son coordenadas LOCALES al GLB del edificio.
+// NO se suman los offsets del edificio (building_offset_x/y/z) aquí:
+// esa transformación ocurre exclusivamente en el renderer Three.js del
+// frontend (buildingGroup.position). Mezclarlos en SQL generaría una doble
+// aplicación del desplazamiento y desplazaría los pines ~300 m en escena.
+//
+// Se incluyen b.latitude / b.longitude para que el frontend pueda usar
+// coordenadas GPS exactas en el flyTo y en los pines DOM sin depender
+// de la conversión aproximada offset→GPS.
+const SELECT_FIELDS = `
+  h.id,
+  h.building_id,
+  h.created_by,
+  h.name,
+  h.description,
+  h.type,
+  h.floor,
+  h.is_active,
+  h.schedule,
+  h.equipment,
+  h.teacher,
+  h.capacity,
+  h.phone,
+  h.image_url,
+  h.created_at,
+  h.updated_at,
+  CAST(h.pos_x AS FLOAT8) AS pos_x,
+  CAST(h.pos_y AS FLOAT8) AS pos_y,
+  CAST(h.pos_z AS FLOAT8) AS pos_z,
+  b.name                        AS building_name,
+  b.code                        AS building_code,
+  CAST(b.offset_x  AS FLOAT8)  AS building_offset_x,
+  CAST(b.offset_y  AS FLOAT8)  AS building_offset_y,
+  CAST(b.offset_z  AS FLOAT8)  AS building_offset_z
+`;
 
-/**
- * CORRECCIÓN Bug #1:
- *   Extrae building_id de req.query y lo aplica como filtro en SQL.
- *
- * CORRECCIÓN Bug #2:
- *   La clave de caché incluye el building_id para aislar los datos
- *   de cada edificio y evitar que una consulta envenene la de otra.
- */
+// ─────────────────────────────────────────────────────────────
+// GET / — Lista hotspots
+// ─────────────────────────────────────────────────────────────
 async function list(req, res, next) {
   try {
-    // ── Validar building_id como UUID (la columna en PostgreSQL es tipo uuid) ──
-    // El frontend envía el UUID del edificio: "550e8400-e29b-41d4-a716-446655440000"
-    // parseInt lo convertiría en NaN y PostgreSQL rechazaría la comparación con
-    // el mensaje: "la sintaxis de entrada no es válida para tipo uuid".
     const building_id = req.query.building_id || null;
 
     if (building_id !== null && !UUID_RE.test(building_id)) {
@@ -122,51 +133,40 @@ async function list(req, res, next) {
       return next(e);
     }
 
-    // ── Clave de caché dinámica (Bug #2 corregido) ────────────
     const cacheKey = buildCacheKey(building_id);
     const cached   = await cacheGet(cacheKey);
-    if (cached) return res.json(cached);
-
-    // ── Consulta filtrada por edificio (Bug #1 corregido) ─────
-    let queryText;
-    let queryParams;
-
-    if (building_id) {
-      queryText = `
-        SELECT
-          h.*,
-          b.name AS building_name,
-          b.code AS building_code,
-          b.offset_x AS building_offset_x,
-          b.offset_y AS building_offset_y,
-          b.offset_z AS building_offset_z
-        FROM hotspots h
-        JOIN buildings b ON b.id = h.building_id
-        WHERE h.building_id = $1
-        ORDER BY h.floor ASC, h.created_at DESC
-      `;
-      queryParams = [building_id];
-    } else {
-      // Sin filtro: devuelve todos (uso interno / admin)
-      queryText = `
-        SELECT
-          h.*,
-          b.name AS building_name,
-          b.code AS building_code,
-          b.offset_x AS building_offset_x,
-          b.offset_y AS building_offset_y,
-          b.offset_z AS building_offset_z
-        FROM hotspots h
-        JOIN buildings b ON b.id = h.building_id
-        ORDER BY h.created_at DESC
-      `;
-      queryParams = [];
+    if (cached) {
+      res.set('X-Cache', 'HIT');
+      return res.json(cached);
     }
 
-    const { rows } = await pool.query(queryText, queryParams);
-    log(`Listado [building_id=${building_id ?? 'all'}]: ${rows.length} hotspots`);
+    const { text, params } = building_id
+      ? {
+          text: `
+            SELECT ${SELECT_FIELDS}
+            FROM hotspots h
+            JOIN buildings b ON b.id = h.building_id
+            WHERE h.building_id = $1
+            ORDER BY h.floor ASC, h.created_at DESC
+          `,
+          params: [building_id],
+        }
+      : {
+          text: `
+            SELECT ${SELECT_FIELDS}
+            FROM hotspots h
+            JOIN buildings b ON b.id = h.building_id
+            ORDER BY h.created_at DESC
+          `,
+          params: [],
+        };
 
-    await cacheSet(cacheKey, rows);
+    const { rows } = await pool.query(text, params);
+    log(`list [building=${building_id ?? 'all'}]: ${rows.length} hotspots`);
+
+    cacheSet(cacheKey, rows).catch(() => {});
+
+    res.set('X-Cache', 'MISS');
     res.json(rows);
   } catch (err) { next(err); }
 }
@@ -174,17 +174,10 @@ async function list(req, res, next) {
 // ─────────────────────────────────────────────────────────────
 // GET /:id
 // ─────────────────────────────────────────────────────────────
-
 async function getOne(req, res, next) {
   try {
     const { rows } = await pool.query(
-      `SELECT
-          h.*,
-          b.name AS building_name,
-          b.code AS building_code,
-          b.offset_x AS building_offset_x,
-          b.offset_y AS building_offset_y,
-          b.offset_z AS building_offset_z
+      `SELECT ${SELECT_FIELDS}
        FROM hotspots h
        JOIN buildings b ON b.id = h.building_id
        WHERE h.id = $1`,
@@ -200,14 +193,11 @@ async function getOne(req, res, next) {
 // ─────────────────────────────────────────────────────────────
 // POST /
 // ─────────────────────────────────────────────────────────────
-
 async function create(req, res, next) {
-  const ip = req.ip;
   const {
     building_id, name, description, type, floor,
     pos_x, pos_y, pos_z,
-    schedule, equipment,
-    teacher, capacity, phone, image_url,
+    schedule, equipment, teacher, capacity, phone, image_url,
   } = req.body;
 
   if (!name?.trim())
@@ -222,21 +212,21 @@ async function create(req, res, next) {
     { const e = new Error('El piso mínimo es 1.'); e.status = 400; return next(e); }
 
   try {
-    const buildingRes = await pool.query(
-      `SELECT floor_count FROM buildings WHERE id = $1`, [building_id]
-    );
-    if (!buildingRes.rows[0])
+    const bldRes = await pool.query(`SELECT floor_count FROM buildings WHERE id = $1`, [building_id]);
+    if (!bldRes.rows[0])
       { const e = new Error('Edificio no encontrado.'); e.status = 404; return next(e); }
 
-    const maxFloor = buildingRes.rows[0].floor_count ?? 99;
+    const maxFloor = bldRes.rows[0].floor_count ?? 99;
     if (parsedFloor > maxFloor) {
       const e = new Error(
         `El edificio solo tiene ${maxFloor} ${maxFloor === 1 ? 'planta' : 'plantas'}. ` +
-        `Piso máximo: ${maxFloor}.`
+        `Piso máximo: ${maxFloor}.`,
       );
       e.status = 400; return next(e);
     }
 
+    // pos_x/y/z se almacenan como coordenadas locales puras relativas al GLB.
+    // El frontend aplica building_offset_* en el renderer; no se pre-suman aquí.
     const { rows } = await pool.query(
       `INSERT INTO hotspots
          (building_id, created_by, name, description, type, floor,
@@ -246,10 +236,13 @@ async function create(req, res, next) {
        RETURNING *`,
       [
         building_id, req.admin.id, name.trim(),
-        description || null, type, parsedFloor,
-        pos_x || 0, pos_y || 0, pos_z || 0,
-        schedule || null, equipment || null,
-        teacher || null, capacity || null, phone || null, image_url || null,
+        description  || null, type, parsedFloor,
+        parseFloat(pos_x) || 0,
+        parseFloat(pos_y) || 0,
+        parseFloat(pos_z) || 0,
+        schedule     || null, equipment || null,
+        teacher      || null, capacity  || null,
+        phone        || null, image_url || null,
       ],
     );
     const h = rows[0];
@@ -258,12 +251,10 @@ async function create(req, res, next) {
       user_id: req.admin.id, action: 'CREATE',
       entity_type: 'hotspots', entity_id: h.id,
       new_values: { name: h.name, type: h.type, floor: h.floor, building_id },
-      ip_address: ip, user_agent: req.headers['user-agent'],
+      ip_address: req.ip, user_agent: req.headers['user-agent'],
     });
 
-    // Invalida la entrada del edificio afectado + la lista global
-    await cacheInvalidateForBuilding(building_id);
-
+    await invalidate(building_id);
     log(`CREADO — "${h.name}" (${h.type}) por ${req.admin.email}`);
     res.status(201).json(h);
   } catch (err) { next(err); }
@@ -272,9 +263,7 @@ async function create(req, res, next) {
 // ─────────────────────────────────────────────────────────────
 // PUT /:id
 // ─────────────────────────────────────────────────────────────
-
 async function update(req, res, next) {
-  const ip    = req.ip;
   const { id } = req.params;
   const {
     building_id, name, description, type, floor,
@@ -295,21 +284,23 @@ async function update(req, res, next) {
       if (parsedFloor < 1)
         { const e = new Error('El piso mínimo es 1.'); e.status = 400; return next(e); }
 
-      const buildingRes = await pool.query(
-        `SELECT floor_count FROM buildings WHERE id = $1`, [targetBuildingId]
+      const bldRes = await pool.query(
+        `SELECT floor_count FROM buildings WHERE id = $1`, [targetBuildingId],
       );
-      if (!buildingRes.rows[0])
+      if (!bldRes.rows[0])
         { const e = new Error('Edificio no encontrado.'); e.status = 404; return next(e); }
-      const maxFloor = buildingRes.rows[0].floor_count ?? 99;
+
+      const maxFloor = bldRes.rows[0].floor_count ?? 99;
       if (parsedFloor > maxFloor) {
         const e = new Error(
           `El edificio solo tiene ${maxFloor} ${maxFloor === 1 ? 'planta' : 'plantas'}. ` +
-          `Piso máximo: ${maxFloor}.`
+          `Piso máximo: ${maxFloor}.`,
         );
         e.status = 400; return next(e);
       }
     }
 
+    // pos_x/y/z se actualizan como valores locales puros; sin suma de offsets.
     const { rows } = await pool.query(
       `UPDATE hotspots SET
          building_id = COALESCE($1,  building_id),
@@ -327,11 +318,14 @@ async function update(req, res, next) {
          phone       = COALESCE($13, phone),
          image_url   = COALESCE($14, image_url),
          updated_at  = NOW()
-       WHERE id = $15 RETURNING *`,
+       WHERE id = $15
+       RETURNING *`,
       [
         building_id || null, name, description, type, parsedFloor,
-        pos_x, pos_y, pos_z, schedule, equipment,
-        teacher, capacity, phone, image_url, id,
+        pos_x != null ? parseFloat(pos_x) : null,
+        pos_y != null ? parseFloat(pos_y) : null,
+        pos_z != null ? parseFloat(pos_z) : null,
+        schedule, equipment, teacher, capacity, phone, image_url, id,
       ],
     );
     const h = rows[0];
@@ -340,13 +334,11 @@ async function update(req, res, next) {
       user_id: req.admin.id, action: 'UPDATE',
       entity_type: 'hotspots', entity_id: id,
       old_values: { name: old.name, type: old.type, floor: old.floor, building_id: old.building_id },
-      new_values: { name: h.name, type: h.type, floor: h.floor, building_id: h.building_id },
-      ip_address: ip, user_agent: req.headers['user-agent'],
+      new_values: { name: h.name,   type: h.type,   floor: h.floor,   building_id: h.building_id },
+      ip_address: req.ip, user_agent: req.headers['user-agent'],
     });
 
-    // Invalida edificio nuevo + edificio anterior (si cambió) + lista global
-    await cacheInvalidateForBuilding(h.building_id, old.building_id);
-
+    await invalidate(h.building_id, old.building_id);
     log(`ACTUALIZADO — "${h.name}" por ${req.admin.email}`);
     res.json(h);
   } catch (err) { next(err); }
@@ -355,20 +347,17 @@ async function update(req, res, next) {
 // ─────────────────────────────────────────────────────────────
 // PATCH /:id/toggle
 // ─────────────────────────────────────────────────────────────
-
 async function toggle(req, res, next) {
-  const ip    = req.ip;
   const { id } = req.params;
   try {
     const before = await pool.query(
-      `SELECT id, name, is_active, building_id FROM hotspots WHERE id = $1`, [id]
+      `SELECT id, name, is_active, building_id FROM hotspots WHERE id = $1`, [id],
     );
     if (!before.rows[0])
       { const e = new Error('Hotspot no encontrado.'); e.status = 404; return next(e); }
 
     const { rows } = await pool.query(
-      `UPDATE hotspots
-       SET is_active = NOT is_active, updated_at = NOW()
+      `UPDATE hotspots SET is_active = NOT is_active, updated_at = NOW()
        WHERE id = $1 RETURNING *`,
       [id],
     );
@@ -380,11 +369,10 @@ async function toggle(req, res, next) {
       entity_type: 'hotspots', entity_id: id,
       old_values: { is_active: before.rows[0].is_active },
       new_values: { is_active: h.is_active },
-      ip_address: ip, user_agent: req.headers['user-agent'],
+      ip_address: req.ip, user_agent: req.headers['user-agent'],
     });
 
-    await cacheInvalidateForBuilding(h.building_id);
-
+    await invalidate(h.building_id);
     log(`${h.is_active ? 'ACTIVADO' : 'DESACTIVADO'} — "${h.name}" por ${req.admin.email}`);
     res.json(h);
   } catch (err) { next(err); }
@@ -393,9 +381,7 @@ async function toggle(req, res, next) {
 // ─────────────────────────────────────────────────────────────
 // DELETE /:id
 // ─────────────────────────────────────────────────────────────
-
 async function remove(req, res, next) {
-  const ip    = req.ip;
   const { id } = req.params;
   try {
     const before = await pool.query(`SELECT * FROM hotspots WHERE id = $1`, [id]);
@@ -409,14 +395,13 @@ async function remove(req, res, next) {
       user_id: req.admin.id, action: 'DELETE',
       entity_type: 'hotspots', entity_id: id,
       old_values: { name: deleted.name, type: deleted.type, building_id: deleted.building_id },
-      ip_address: ip, user_agent: req.headers['user-agent'],
+      ip_address: req.ip, user_agent: req.headers['user-agent'],
     });
 
-    await cacheInvalidateForBuilding(deleted.building_id);
-
+    await invalidate(deleted.building_id);
     log(`ELIMINADO — "${deleted.name}" por ${req.admin.email}`);
     res.json({ message: `Hotspot "${deleted.name}" eliminado correctamente.` });
   } catch (err) { next(err); }
 }
 
-module.exports = { list, getOne, create, update, toggle, remove };
+module.exports = { list, getOne, create, update, toggle, remove, cacheInvalidateForBuilding };

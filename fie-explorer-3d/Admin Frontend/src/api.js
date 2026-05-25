@@ -27,7 +27,6 @@ export function onUnauthorized(cb) {
 
 // ── Fetch helper ─────────────────────────────────────────────
 export async function api(method, path, body) {
-
   const opts = {
     method,
     headers: {
@@ -57,7 +56,6 @@ export async function api(method, path, body) {
         _handlingUnauthorized = false;
       }, 1000);
     }
-
     throw Object.assign(
       new Error('Sesión expirada. Vuelve a iniciar sesión.'),
       { status: 401 }
@@ -74,7 +72,6 @@ export async function api(method, path, body) {
       }
     );
   }
-
   return data;
 }
 
@@ -123,3 +120,7 @@ export function typeBadgeClass(t) {
 export function isEncrypted(val) {
   return val === '[CIFRADO]' || val === null;
 }
+// ── Señal de actividad para el timer de inactividad ──────────────────────────
+let _onActivity = null
+export function onActivity(cb) { _onActivity = cb }
+export function signalActivity()  { _onActivity?.() }

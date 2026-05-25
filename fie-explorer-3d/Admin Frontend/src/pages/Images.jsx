@@ -202,7 +202,7 @@ export default function Images() {
           <p style={{ textAlign: 'center', fontSize: '13px' }}>¿Eliminar esta imagen del hotspot?</p>
         </Modal>
       )}
-      {toast && <div className={`alert alert-${toast.type} toast`}>{toast.msg}</div>}
+      {toast && <div className={`toast toast-${toast.type}`}>{toast.msg}</div>}
     </>
   )
 }
