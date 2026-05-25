@@ -205,6 +205,7 @@ export default function Explorer() {
         hotspots={selectedBuilding ? hotspots : []}
         onBuildingClick={handleSelectBuilding}
         isMobile={isMobile}
+        onHotspotClick={handleHotspotClick}
       />
 
       {/* ── BACKDROP ─────────────────────────────────────────────────── */}
