@@ -1,27 +1,35 @@
-import React, { useRef, useEffect } from 'react';
+import { useRef, useEffect, useCallback } from 'react';
 import { useViewerStore } from '../../store/viewerStore';
 
 const TYPE_COLORS = {
-  lab: '#BC0613', office: '#d41a2b',
-  service: '#16a34a', access: '#d97706',
+  lab:     '#BC0613',
+  office:  '#d41a2b',
+  service: '#16a34a',
+  access:  '#d97706',
 };
 
-/**
- * Minimapa 2D con los hotspots del edificio activo.
- * Usa un Canvas 2D para dibujar el esquema de planta.
- */
-export default function MiniMap({ building, hotspots, floor }) {
-  const canvasRef = useRef(null);
-  const { activeHotspot, setActiveHotspot } = useViewerStore();
-  const SIZE = 160;
+const SIZE = 160;
+const PAD  = 18;
 
+export default function MiniMap({ building, hotspots, floor }) {
+  const canvasRef    = useRef(null);
+  const dotsRef      = useRef([]);   // posiciones canvas de cada hotspot para hit-test
+  const { activeHotspot, setActiveHotspot } = useViewerStore();
+
+  // ── Dibuja ────────────────────────────────────────────────────────────────
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const ctx = canvas.getContext('2d');
     const dpr = window.devicePixelRatio || 1;
+
+    // Setear dimensiones físicas SIN tocar el atributo HTML width/height
+    // (evita el artefacto del cuadrado rojo)
+    canvas.style.width  = SIZE + 'px';
+    canvas.style.height = SIZE + 'px';
     canvas.width  = SIZE * dpr;
     canvas.height = SIZE * dpr;
+
+    const ctx = canvas.getContext('2d');
     ctx.scale(dpr, dpr);
 
     // Fondo
@@ -29,73 +37,100 @@ export default function MiniMap({ building, hotspots, floor }) {
     ctx.fillStyle = '#f7f8fa';
     ctx.fillRect(0, 0, SIZE, SIZE);
 
-    // Silueta del edificio (rectángulo simplificado)
-    ctx.fillStyle = '#e2e8f0';
-    ctx.strokeStyle = '#cbd5e1';
-    ctx.lineWidth = 1;
-    const pad = 20;
+    // Silueta del edificio
+    ctx.fillStyle   = '#e9edf2';
+    ctx.strokeStyle = '#d1d9e0';
+    ctx.lineWidth   = 1;
     ctx.beginPath();
-    ctx.roundRect(pad, pad, SIZE - pad * 2, SIZE - pad * 2, 4);
+    ctx.roundRect(PAD, PAD, SIZE - PAD * 2, SIZE - PAD * 2, 4);
     ctx.fill();
     ctx.stroke();
 
     // Grid interior
-    ctx.strokeStyle = '#e8ecf0';
-    ctx.lineWidth = 0.5;
-    for (let x = pad; x < SIZE - pad; x += 20) {
-      ctx.beginPath(); ctx.moveTo(x, pad); ctx.lineTo(x, SIZE - pad); ctx.stroke();
+    ctx.strokeStyle = '#dde2e8';
+    ctx.lineWidth   = 0.5;
+    for (let x = PAD; x < SIZE - PAD; x += 20) {
+      ctx.beginPath(); ctx.moveTo(x, PAD); ctx.lineTo(x, SIZE - PAD); ctx.stroke();
     }
-    for (let y = pad; y < SIZE - pad; y += 20) {
-      ctx.beginPath(); ctx.moveTo(pad, y); ctx.lineTo(SIZE - pad, y); ctx.stroke();
+    for (let y = PAD; y < SIZE - PAD; y += 20) {
+      ctx.beginPath(); ctx.moveTo(PAD, y); ctx.lineTo(SIZE - PAD, y); ctx.stroke();
     }
 
-    if (!hotspots.length) return;
+    if (!hotspots.length) { dotsRef.current = []; return; }
 
-    // Calcular bounds de los hotspots para normalizar
+    // Normalizar posiciones al canvas
     const xs = hotspots.map(h => parseFloat(h.pos_x) || 0);
     const zs = hotspots.map(h => parseFloat(h.pos_z) || 0);
     const minX = Math.min(...xs), maxX = Math.max(...xs);
     const minZ = Math.min(...zs), maxZ = Math.max(...zs);
     const rangeX = (maxX - minX) || 1;
     const rangeZ = (maxZ - minZ) || 1;
-
-    const mapRange = SIZE - pad * 2 - 16;
+    const mapRange = SIZE - PAD * 2 - 16;
 
     const toCanvas = (x, z) => ({
-      cx: pad + 8 + ((x - minX) / rangeX) * mapRange,
-      cy: pad + 8 + ((z - minZ) / rangeZ) * mapRange,
+      cx: PAD + 8 + ((x - minX) / rangeX) * mapRange,
+      cy: PAD + 8 + ((z - minZ) / rangeZ) * mapRange,
     });
 
-    // Dibujar hotspots
-    hotspots.forEach(h => {
-      const { cx, cy } = toCanvas(parseFloat(h.pos_x) || 0, parseFloat(h.pos_z) || 0);
-      const isActive = activeHotspot?.id === h.id;
-      const color = TYPE_COLORS[h.type] || '#BC0613';
+    // Guardar posiciones para hit-test en click
+    dotsRef.current = hotspots.map(h => ({
+      ...toCanvas(parseFloat(h.pos_x) || 0, parseFloat(h.pos_z) || 0),
+      hotspot: h,
+    }));
 
-      // Halo si activo
+    // Dibujar hotspots
+    dotsRef.current.forEach(({ cx, cy, hotspot: h }) => {
+      const isActive = activeHotspot?.id === h.id;
+      const color    = TYPE_COLORS[h.type] || '#BC0613';
+
+      // Halo activo
       if (isActive) {
         ctx.beginPath();
-        ctx.arc(cx, cy, 7, 0, Math.PI * 2);
-        ctx.fillStyle = `${color}30`;
+        ctx.arc(cx, cy, 8, 0, Math.PI * 2);
+        ctx.fillStyle = color + '30';
         ctx.fill();
       }
 
       // Punto
       ctx.beginPath();
-      ctx.arc(cx, cy, isActive ? 5 : 4, 0, Math.PI * 2);
+      ctx.arc(cx, cy, isActive ? 5 : 3.5, 0, Math.PI * 2);
       ctx.fillStyle = color;
       ctx.fill();
       ctx.strokeStyle = '#fff';
-      ctx.lineWidth = 1.5;
+      ctx.lineWidth   = 1.5;
       ctx.stroke();
     });
 
     // Etiqueta de planta
-    ctx.fillStyle = '#6b7280';
-    ctx.font = `bold 8px "DM Sans", sans-serif`;
-    ctx.fillText(`Piso ${floor}`, pad + 2, SIZE - pad + 12);
+    ctx.fillStyle = '#9ca3af';
+    ctx.font      = `bold 8px "DM Sans", sans-serif`;
+    ctx.fillText(`Piso ${floor}`, PAD + 2, SIZE - PAD + 11);
 
   }, [hotspots, activeHotspot, floor]);
+
+  // ── Click: detectar hotspot más cercano al cursor ─────────────────────────
+  const handleClick = useCallback((e) => {
+    const canvas = canvasRef.current;
+    if (!canvas || !dotsRef.current.length) return;
+
+    const rect  = canvas.getBoundingClientRect();
+    const mx    = e.clientX - rect.left;
+    const my    = e.clientY - rect.top;
+    const HIT_R = 10   // radio de hit en px
+
+    let closest = null;
+    let minDist = Infinity;
+
+    dotsRef.current.forEach(({ cx, cy, hotspot }) => {
+      const d = Math.hypot(cx - mx, cy - my);
+      if (d < HIT_R && d < minDist) {
+        minDist = d;
+        closest = hotspot;
+      }
+    });
+
+    if (closest) setActiveHotspot(closest);
+  }, [setActiveHotspot]);
 
   if (!building) return null;
 
@@ -109,7 +144,7 @@ export default function MiniMap({ building, hotspots, floor }) {
       overflow: 'hidden',
       boxShadow: 'var(--shadow-md)',
     }}>
-      {/* Header minimapa */}
+      {/* Header */}
       <div style={{
         padding: '0.3rem 0.6rem',
         borderBottom: '1px solid var(--color-border)',
@@ -128,12 +163,16 @@ export default function MiniMap({ building, hotspots, floor }) {
 
       <canvas
         ref={canvasRef}
-        width={SIZE}
-        height={SIZE}
-        style={{ display: 'block', width: SIZE, height: SIZE, cursor: 'default' }}
+        onClick={handleClick}
+        style={{
+          display: 'block',
+          width: SIZE,
+          height: SIZE,
+          cursor: dotsRef.current.length ? 'crosshair' : 'default',
+        }}
       />
 
-      {/* Leyenda de hotspots presentes */}
+      {/* Leyenda */}
       {hotspots.length > 0 && (
         <div style={{
           padding: '0.3rem 0.5rem',

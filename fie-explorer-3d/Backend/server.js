@@ -22,10 +22,13 @@ const settingsRoutes   = require('./routes/settingsRoutes');
 const { errorMiddleware } = require('./middleware/errorMiddleware');
 const { MODELS_DIR } = require('./middleware/uploadMiddleware');
 const { getClient }  = require('./utils/redisClient');  // ← Redis
+const { clientLogger } = require('./middleware/clientLogger.js');
 
 const app  = express();
 const PORT = process.env.PORT || 3001;
 const isProd = process.env.NODE_ENV === 'production';
+
+app.use(clientLogger);
 
 // ── Seguridad: Helmet ────────────────────────────────────────
 app.use(helmet({
