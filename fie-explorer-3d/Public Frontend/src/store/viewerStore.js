@@ -38,7 +38,17 @@ export const useViewerStore = create(
     }),
     {
       name: LS_KEY,
+
+      // Solo se escribe selectedBuilding en localStorage
       partialize: (state) => ({ selectedBuilding: state.selectedBuilding }),
+
+      // Al rehidratar, se ignora cualquier campo extra que pueda estar
+      // almacenado de versiones anteriores (hotspots, activeHotspot, etc.).
+      // Solo se recupera selectedBuilding; el resto arranca en su valor inicial.
+      merge: (persistedState, currentState) => ({
+        ...currentState,
+        selectedBuilding: persistedState?.selectedBuilding ?? null,
+      }),
     }
   )
 );

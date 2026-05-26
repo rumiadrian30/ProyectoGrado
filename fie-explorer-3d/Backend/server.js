@@ -70,7 +70,7 @@ app.use((_req, res, next) => {
 // ── Rate limiting ────────────────────────────────────────────
 const globalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 300,
+  max: 1500,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Demasiadas solicitudes. Intenta en 15 minutos.' },
