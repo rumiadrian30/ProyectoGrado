@@ -136,6 +136,34 @@ async function login(req, res, next) {
   } catch (err) { next(err); }
 }
 
+// ── POST /api/auth/refresh ──────────────────────────────────
+async function refresh(req, res, next) {
+  try {
+    // req.admin ya está validado por authMiddleware
+    const SESSION_MINUTES = await getConfig('session.token_expires_minutes', 30);
+
+    const newToken = jwt.sign(
+      { userId: req.admin.id, email: req.admin.email, role: req.admin.role },
+      process.env.JWT_SECRET,
+      { expiresIn: `${SESSION_MINUTES}m` }
+    );
+
+    res.cookie('token', newToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: SESSION_MINUTES * 60 * 1000,
+    });
+
+    res.json({ 
+      message: 'Token renovado.',
+      token: newToken 
+    });
+  } catch (err) { next(err); }
+}
+
+module.exports = { login, logout, me, refresh, writeAudit };
+
 // ── POST /api/auth/logout ────────────────────────────────────
 async function logout(req, res, next) {
   const ip = req.ip || req.connection?.remoteAddress;
@@ -162,4 +190,4 @@ async function me(req, res, next) {
   } catch (err) { next(err); }
 }
 
-module.exports = { login, logout, me, writeAudit };
+module.exports = { login, logout, me, refresh, writeAudit };

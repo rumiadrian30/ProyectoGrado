@@ -71,8 +71,9 @@ export default function AdminShell({ user, onLogout, inactivityMs }) {
 
   // ── Si inactivityMs cambia (settings actualizados) sincronizar ────────────
   useEffect(() => {
-    resetTimer()
-  }, [inactivityMs, resetTimer])
+    remainingRef.current = inactivityMs
+    setRemaining(inactivityMs)
+  }, [inactivityMs])
 
   async function doLogout() {
     try { await api('POST', '/auth/logout') } catch {}
