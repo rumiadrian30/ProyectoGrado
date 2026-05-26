@@ -20,7 +20,14 @@ const STYLES = `
   .home-hero-title   { font-size: clamp(2.2rem, 8vw, 4.5rem); }
   .home-hero-sub     { font-size: clamp(0.95rem, 3vw, 1.15rem); }
   .home-cta-wrap     { flex-direction: row; }
-  .home-stats-wrap   { gap: 3rem; }
+  .home-stats-wrap   { gap: 0 3rem; }
+  .home-stat-item    { position: relative; padding: 0 1.5rem; }
+  .home-stat-item + .home-stat-item::before {
+    content: '';
+    position: absolute; left: 0; top: 15%; bottom: 15%;
+    width: 1px;
+    background: rgba(255,255,255,0.2);
+  }
   .home-steps-grid   { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
   .home-buildings-grid { grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
   .home-skeletons      { grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
@@ -30,8 +37,8 @@ const STYLES = `
     .home-hero-section  { padding: 5rem 1.2rem 3rem !important; }
     .home-cta-wrap      { flex-direction: column; align-items: stretch !important; }
     .home-cta-wrap a    { text-align: center; justify-content: center; }
-    .home-stats-wrap    { gap: 1.5rem; }
-    .home-stat-item     { min-width: 70px; }
+    .home-stats-wrap    { gap: 0; border-radius: 16px !important; padding: 1rem 1.2rem !important; }
+    .home-stat-item     { min-width: 70px; padding: 0 0.75rem !important; }
     .home-steps-grid    { grid-template-columns: 1fr !important; gap: 1rem !important; }
     .home-buildings-grid{ grid-template-columns: 1fr !important; }
     .home-skeletons     { grid-template-columns: 1fr !important; }
@@ -105,21 +112,22 @@ export default function Home() {
         alignItems: 'center', justifyContent: 'center',
         padding: '6rem 1.5rem 4rem',
         position: 'relative', overflow: 'hidden',
-        background: '#fff',
+        backgroundImage: 'url(https://www.espoch.edu.ec/wp-content/uploads/2022/08/Fie-scaled.jpg)',
+        backgroundSize: 'cover',
+        backgroundPosition: 'center',
+        backgroundRepeat: 'no-repeat',
       }}>
-        {/* Fondos decorativos */}
+        {/* Overlay oscuro para legibilidad */}
         <div aria-hidden style={{
           position: 'absolute', inset: 0, zIndex: 0,
-          backgroundImage: `
-            radial-gradient(ellipse 80% 60% at 50% -10%, rgba(0,48,135,0.06) 0%, transparent 70%),
-            radial-gradient(circle at 85% 80%, rgba(232,200,74,0.08) 0%, transparent 50%)
-          `,
+          background: 'linear-gradient(160deg, rgba(0,16,60,0.78) 0%, rgba(0,30,90,0.70) 50%, rgba(0,10,40,0.82) 100%)',
         }}/>
+        {/* Overlay de patrón sutil */}
         <div aria-hidden style={{
-          position: 'absolute', inset: 0, zIndex: 0, opacity: 0.025,
+          position: 'absolute', inset: 0, zIndex: 0, opacity: 0.06,
           backgroundImage: `
-            linear-gradient(var(--color-primary, #003087) 1px, transparent 1px),
-            linear-gradient(90deg, var(--color-primary, #003087) 1px, transparent 1px)
+            linear-gradient(rgba(255,255,255,0.8) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(255,255,255,0.8) 1px, transparent 1px)
           `,
           backgroundSize: '60px 60px',
         }}/>
@@ -133,24 +141,25 @@ export default function Home() {
           <div style={{
             display: 'inline-flex', alignItems: 'center', gap: '0.5rem',
             padding: '0.35rem 0.9rem',
-            background: 'var(--color-primary-50, #eef2fb)',
-            border: '1px solid var(--color-primary-100, #bfcfee)',
+            background: 'rgba(255,255,255,0.12)',
+            border: '1px solid rgba(255,255,255,0.3)',
             borderRadius: '999px',
             marginBottom: '1.75rem',
             animation: 'fadeUp .6s ease both',
             maxWidth: '100%',
             flexWrap: 'wrap',
             justifyContent: 'center',
+            backdropFilter: 'blur(8px)',
           }}>
             <span style={{
               width: 6, height: 6, borderRadius: '50%', flexShrink: 0,
-              background: 'var(--color-primary, #003087)',
+              background: 'var(--color-primary, #BC0613)',
               animation: 'pulse-dot 2s ease infinite',
             }}/>
             <span className="home-badge-text" style={{
               fontFamily: 'var(--font-body, sans-serif)',
               fontSize: '0.78rem', fontWeight: 600,
-              color: 'var(--color-primary, #003087)',
+              color: '#fff',
               letterSpacing: '0.06em',
               textTransform: 'uppercase',
             }}>ESPOCH · Facultad de Informática y Electrónica</span>
@@ -161,20 +170,21 @@ export default function Home() {
             fontFamily: 'var(--font-display, serif)',
             fontWeight: 800,
             lineHeight: 1.05,
-            color: 'var(--color-text, #0f172a)',
+            color: '#fff',
             marginBottom: '1.25rem',
             animation: 'fadeUp .7s ease .1s both',
+            textShadow: '0 2px 20px rgba(0,0,0,0.4)',
           }}>
             Explora la{' '}
             <span style={{
-              color: 'var(--color-primary, #003087)',
+              color: 'var(--color-primary, #BC0613)',
               position: 'relative',
               display: 'inline-block',
             }}>
               FIE
               <span aria-hidden style={{
                 position: 'absolute', bottom: '3px', left: 0, right: 0,
-                height: 4, background: 'rgba(0,48,135,0.12)',
+                height: 4, background: 'rgba(188,6,19,0.30)',
                 borderRadius: 2,
               }}/>
             </span>
@@ -186,9 +196,10 @@ export default function Home() {
           {/* Subtítulo */}
           <p className="home-hero-sub" style={{
             lineHeight: 1.7,
-            color: 'var(--color-text-3, #64748b)',
+            color: 'rgba(255,255,255,0.85)',
             maxWidth: 520, margin: '0 auto 2.25rem',
             animation: 'fadeUp .7s ease .2s both',
+            textShadow: '0 1px 8px rgba(0,0,0,0.3)',
           }}>
             Recorre los edificios, laboratorios y espacios de la facultad
             de manera interactiva. Encuentra información detallada de cada
@@ -204,12 +215,12 @@ export default function Home() {
             <Link to="/explorar" style={{
               display: 'inline-flex', alignItems: 'center', gap: '0.5rem',
               padding: '0.85rem 1.75rem',
-              background: 'var(--color-primary, #003087)',
+              background: 'var(--color-primary, #BC0613)',
               color: '#fff',
               borderRadius: '999px',
-              fontWeight: 600, fontSize: '0.95rem',
+              fontWeight: 700, fontSize: '0.95rem',
               textDecoration: 'none',
-              boxShadow: '0 4px 20px rgba(0,48,135,0.25)',
+              boxShadow: '0 4px 24px rgba(188,6,19,0.40)',
               whiteSpace: 'nowrap',
             }}>
               <svg width="17" height="17" viewBox="0 0 24 24" fill="none"
@@ -222,13 +233,14 @@ export default function Home() {
             <a href="#edificios" style={{
               display: 'inline-flex', alignItems: 'center', gap: '0.5rem',
               padding: '0.85rem 1.75rem',
-              background: 'transparent',
-              color: 'var(--color-primary, #003087)',
-              border: '1.5px solid var(--color-primary-100, #bfcfee)',
+              background: 'rgba(255,255,255,0.12)',
+              color: '#fff',
+              border: '1.5px solid rgba(255,255,255,0.4)',
               borderRadius: '999px',
               fontWeight: 600, fontSize: '0.95rem',
               textDecoration: 'none',
               whiteSpace: 'nowrap',
+              backdropFilter: 'blur(8px)',
             }}>
               Ver edificios
             </a>
@@ -242,6 +254,11 @@ export default function Home() {
           display: 'flex',
           flexWrap: 'wrap', justifyContent: 'center',
           animation: 'fadeUp .7s ease .5s both',
+          background: 'rgba(255,255,255,0.07)',
+          backdropFilter: 'blur(12px)',
+          border: '1px solid rgba(255,255,255,0.15)',
+          borderRadius: '999px',
+          padding: '1.25rem 2.5rem',
         }}>
           {[
             { n: '5',    label: 'Edificios' },
@@ -253,11 +270,12 @@ export default function Home() {
               <div style={{
                 fontFamily: 'var(--font-display, serif)',
                 fontWeight: 800, fontSize: 'clamp(1.6rem, 5vw, 2rem)',
-                color: 'var(--color-primary, #003087)',
+                color: '#fff',
+                textShadow: '0 2px 12px rgba(0,0,0,0.3)',
               }}>{n}</div>
               <div style={{
                 fontSize: '0.75rem', fontWeight: 500,
-                color: 'var(--color-text-3, #64748b)',
+                color: 'rgba(255,255,255,0.75)',
                 textTransform: 'uppercase', letterSpacing: '0.08em',
                 marginTop: '0.2rem',
               }}>{label}</div>
