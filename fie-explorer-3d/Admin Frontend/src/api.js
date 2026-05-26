@@ -30,7 +30,8 @@ export async function api(method, path, body) {
   const opts = {
     method,
     headers: {
-      'Content-Type': 'application/json'
+      'Content-Type': 'application/json',
+      'X-Client-App': 'admin',        
     },
     credentials: 'include',
   };
