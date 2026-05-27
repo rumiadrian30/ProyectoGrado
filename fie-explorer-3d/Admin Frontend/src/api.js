@@ -7,7 +7,7 @@ const API = '/api';
 let _token = encryptedSession.getItem('admin_token');
 let _onUnauthorized = null;
 
-// Evita múltiples logout simultáneos
+// Evita multiples logout simultaneos
 let _handlingUnauthorized = false;
 
 export function setToken(t) {
