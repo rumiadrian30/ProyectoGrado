@@ -1,12 +1,5 @@
 /**
  * scheduleUtils.js
- *
- * Utilidades compartidas entre admin y visor público para manejar horarios.
- *
- * Formato de almacenamiento en BD (schedule VARCHAR):
- *   JSON string → '{"days":["L","M","X","J","V"],"start":"07:00","end":"21:00"}'
- *
- * Compatibilidad: si el valor no es JSON válido se trata como texto libre.
  */
 
 const DAY_LABELS = { L:'Lun', M:'Mar', X:'Mié', J:'Jue', V:'Vie', S:'Sáb', D:'Dom' }

@@ -1,5 +1,5 @@
 /**
- * App.jsx — Punto de entrada principal del Admin Frontend
+ * App.jsx — Punto de entrada principal de Admin Frontend
  */
 
 import { useState, useEffect, useRef, useCallback } from 'react'

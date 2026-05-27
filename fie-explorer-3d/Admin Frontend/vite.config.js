@@ -1,5 +1,5 @@
 /**
- * vite.config.js - Configuración de Vite para el proyecto FIE Explorer 3D Admin Frontend
+ * vite.config.js - Configuración de Vite para Admin Frontend
  */
 
 import { defineConfig, loadEnv } from 'vite'
@@ -22,10 +22,9 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
   const isProd = mode === 'production'
 
-  // ── Configuración del plugin de ofuscación (solo producción) ───────────────
+  // ── Configuración del plugin de ofuscación ───────────────
   const obfuscatorConfig = isProd && obfuscatorPlugin
     ? obfuscatorPlugin({
-        // Incluye todos los chunks JS generados por Vite
         include: ['**/*.{js,jsx,ts,tsx}'],
         exclude: [/node_modules/],
         apply: 'build',
@@ -57,9 +56,7 @@ export default defineConfig(({ mode }) => {
 
     // ── Configuración del build de producción ───────────────────────────────
     build: {
-      // SOURCE MAPS: SIEMPRE false en producción.
       sourcemap: false,
-      // MINIFICADOR: Terser con configuración agresiva.
       minify: 'terser',
       terserOptions: {
         compress: {
@@ -88,10 +85,8 @@ export default defineConfig(({ mode }) => {
         },
       },
 
-      // Rollup: chunks y assets con nombres hasheados
       rollupOptions: {
         output: {
-          // Nombres de archivo basados en hash de contenido.
           chunkFileNames:  'assets/[hash].js',
           entryFileNames:  'assets/[hash].js',
           assetFileNames:  'assets/[hash][extname]',
