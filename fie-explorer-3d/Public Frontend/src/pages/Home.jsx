@@ -1,527 +1,637 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { buildingsService } from '../services/buildingsService';
 
-/* ─── Responsive styles inyectados globalmente ─────────────────────────────── */
-const STYLES = `
-  @keyframes fadeUp {
-    from { opacity: 0; transform: translateY(24px); }
-    to   { opacity: 1; transform: translateY(0); }
+/* ─── CSS global ──────────────────────────────────────────────────────────── */
+const CSS = `
+  @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap');
+
+  :root {
+    --red:      #BC0613;
+    --red-h:    #A3050F;
+    --red-10:   rgba(188,6,19,.10);
+    --red-18:   rgba(188,6,19,.18);
+    --red-06:   rgba(188,6,19,.06);
+    --cream:    #FDFAF9;
+    --ink:      rgba(80,4,10,.55);
+    --rule:     rgba(188,6,19,.14);
+    --white:    #FFFFFF;
+    --ease:     cubic-bezier(.16,1,.3,1);
   }
+
+  /* ─── Stagger load-in ─────────────────────────────────────────────────── */
+  @keyframes slide-up {
+    from { opacity:0; transform:translateY(24px); }
+    to   { opacity:1; transform:translateY(0); }
+  }
+  .s0{animation:slide-up .6s var(--ease) .04s both;}
+  .s1{animation:slide-up .6s var(--ease) .14s both;}
+  .s2{animation:slide-up .6s var(--ease) .24s both;}
+  .s3{animation:slide-up .6s var(--ease) .36s both;}
+  .s4{animation:slide-up .6s var(--ease) .50s both;}
+
+  /* ─── Stagger para grids ──────────────────────────────────────────────── */
+  @keyframes card-in {
+    from { opacity:0; transform:translateY(20px); }
+    to   { opacity:1; transform:translateY(0); }
+  }
+  .g-item { animation:card-in .55s var(--ease) both; }
+  .g-item:nth-child(1){animation-delay:.05s}
+  .g-item:nth-child(2){animation-delay:.12s}
+  .g-item:nth-child(3){animation-delay:.19s}
+  .g-item:nth-child(4){animation-delay:.26s}
+  .g-item:nth-child(5){animation-delay:.33s}
+  .g-item:nth-child(6){animation-delay:.40s}
+
+  /* ─── Ticker ─────────────────────────────────────────────────────────── */
+  @keyframes tick { from{transform:translateX(0)} to{transform:translateX(-50%)} }
+  .ticker-track { display:inline-flex; animation:tick 32s linear infinite; }
+  .ticker-track:hover { animation-play-state:paused; }
+
+  /* ─── Shimmer skeleton ────────────────────────────────────────────────── */
   @keyframes shimmer {
-    0%   { background-position: 200% 0; }
-    100% { background-position: -200% 0; }
-  }
-  @keyframes pulse-dot {
-    0%, 100% { opacity: 1; transform: scale(1); }
-    50%       { opacity: 0.5; transform: scale(1.4); }
+    0%,100%{background-position:200% 0}
+    50%    {background-position:-200% 0}
   }
 
-  .home-hero-title   { font-size: clamp(2.2rem, 8vw, 4.5rem); }
-  .home-hero-sub     { font-size: clamp(0.95rem, 3vw, 1.15rem); }
-  .home-cta-wrap     { flex-direction: row; }
-  .home-stats-wrap   { gap: 0 3rem; }
-  .home-stat-item    { position: relative; padding: 0 1.5rem; }
-  .home-stat-item + .home-stat-item::before {
-    content: '';
-    position: absolute; left: 0; top: 15%; bottom: 15%;
-    width: 1px;
-    background: rgba(255,255,255,0.2);
+  /* ─── Spotlight card ─────────────────────────────────────────────────── */
+  .sp-card {
+    position:relative; overflow:hidden;
+    border:1px solid var(--rule);
+    transition:border-color .28s var(--ease), box-shadow .28s var(--ease), transform .28s var(--ease);
   }
-  .home-steps-grid   { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
-  .home-buildings-grid { grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
-  .home-skeletons      { grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
+  .sp-card::before {
+    content:'';
+    position:absolute; inset:0;
+    background:radial-gradient(260px circle at var(--mx,50%) var(--my,50%), var(--red-10), transparent 80%);
+    opacity:0;
+    transition:opacity .3s;
+    pointer-events:none; z-index:0;
+  }
+  .sp-card:hover { border-color:rgba(188,6,19,.35); box-shadow:0 8px 28px rgba(188,6,19,.10); transform:translateY(-2px); }
+  .sp-card:hover::before { opacity:1; }
+  .sp-card:active { transform:translateY(-1px); }
+  .sp-card > * { position:relative; z-index:1; }
 
-  /* ── Mobile overrides ── */
-  @media (max-width: 600px) {
-    .home-hero-section  { padding: 5rem 1.2rem 3rem !important; }
-    .home-cta-wrap      { flex-direction: column; align-items: stretch !important; }
-    .home-cta-wrap a    { text-align: center; justify-content: center; }
-    .home-stats-wrap    { gap: 0; border-radius: 16px !important; padding: 1rem 1.2rem !important; }
-    .home-stat-item     { min-width: 70px; padding: 0 0.75rem !important; }
-    .home-steps-grid    { grid-template-columns: 1fr !important; gap: 1rem !important; }
-    .home-buildings-grid{ grid-template-columns: 1fr !important; }
-    .home-skeletons     { grid-template-columns: 1fr !important; }
-    .home-section-pad   { padding: 3.5rem 1.2rem !important; }
-    .building-card-inner{ padding: 1.25rem !important; }
-    .home-footer        { padding: 1.5rem 1.2rem !important; }
+  /* ─── Directional hover CTA ──────────────────────────────────────────── */
+  .dir-btn {
+    position:relative; overflow:hidden;
+    transition:color .25s var(--ease);
+  }
+  .dir-btn .fill {
+    position:absolute; inset:0;
+    background:var(--red-h);
+    transform:translateX(-101%);
+    transition:transform .32s var(--ease);
+    z-index:0;
+  }
+  .dir-btn.from-right .fill { transform:translateX(101%); }
+  .dir-btn:hover .fill,
+  .dir-btn.entering .fill  { transform:translateX(0); }
+  .dir-btn span { position:relative; z-index:1; display:inline-flex; align-items:center; gap:.5rem; }
+
+  /* ─── Step number decoration ─────────────────────────────────────────── */
+  .step-num {
+    font-size:7rem; font-weight:800; line-height:1;
+    color:var(--red-06);
+    font-family:'Outfit',sans-serif;
+    pointer-events:none; user-select:none;
+    letter-spacing:-.04em;
+    position:absolute; top:-.5rem; right:1.5rem;
   }
 
-  @media (max-width: 400px) {
-    .home-hero-title    { font-size: 2rem !important; }
-    .home-badge-text    { font-size: 0.7rem !important; }
+  /* ─── Pulse dot ──────────────────────────────────────────────────────── */
+  @keyframes pulse-ring {
+    0%   { transform:scale(1);   opacity:.8; }
+    100% { transform:scale(2.8); opacity:0; }
   }
 
-  @media (min-width: 601px) and (max-width: 900px) {
-    .home-buildings-grid{ grid-template-columns: repeat(2, 1fr) !important; }
-    .home-skeletons     { grid-template-columns: repeat(2, 1fr) !important; }
-    .home-steps-grid    { grid-template-columns: repeat(2, 1fr) !important; }
-    .home-hero-section  { padding: 5.5rem 2rem 3.5rem !important; }
-    .home-section-pad   { padding: 4rem 2rem !important; }
+  /* ─── Responsive ─────────────────────────────────────────────────────── */
+  @media (max-width:767px) {
+    .hero-grid   { grid-template-columns:1fr !important; }
+    .hero-img    { display:none !important; }
+    .hero-inner  { padding:6.5rem 1.25rem 4rem !important; }
+    .bento-grid  { grid-template-columns:1fr !important; }
+    .bento-grid .featured { grid-column:span 1 !important; }
+    .steps-grid  { grid-template-columns:1fr !important; }
+    .cta-row     { flex-direction:column; align-items:stretch !important; }
+    .cta-row .dir-btn { text-align:center; justify-content:center !important; }
+    .sec-pad     { padding:4.5rem 1.25rem !important; }
+    .step-num    { font-size:5rem !important; right:.75rem !important; }
+    .hero-stats  { flex-wrap:wrap; gap:1.5rem !important; }
+    .stat-sep    { display:none; }
   }
-
-  /* Card hover — solo desktop */
-  @media (hover: hover) {
-    .building-card-inner:hover {
-      transform: translateY(-4px);
-      box-shadow: 0 12px 40px rgba(0,48,135,0.13);
-      border-color: var(--color-primary-100, #bfcfee) !important;
-    }
-  }
-  .building-card-inner {
-    transition: transform 0.22s ease, box-shadow 0.22s ease, border-color 0.22s ease;
+  @media (min-width:768px) and (max-width:1023px) {
+    .bento-grid  { grid-template-columns:1fr 1fr !important; }
+    .bento-grid .featured { grid-column:span 2; }
+    .hero-inner  { padding:7rem 3rem 4.5rem !important; }
   }
 `;
 
-function InjectStyles() {
+function InjectCSS() {
   useEffect(() => {
-    if (document.getElementById('home-responsive-styles')) return;
-    const el = document.createElement('style');
-    el.id = 'home-responsive-styles';
-    el.textContent = STYLES;
+    const id = 'fie-v4';
+    if (document.getElementById(id)) return;
+    const el = Object.assign(document.createElement('style'), { id, textContent: CSS });
     document.head.appendChild(el);
     return () => el.remove();
   }, []);
   return null;
 }
 
-/* ─── Componente principal ──────────────────────────────────────────────────── */
+/* ─── Directional hover hook ─────────────────────────────────────────────── */
+function useDirHover(ref) {
+  const enter = useCallback(e => {
+    const el = ref.current; if (!el) return;
+    const r = el.getBoundingClientRect();
+    const fromRight = e.clientX > r.left + r.width / 2;
+    el.classList.toggle('from-right', fromRight);
+    el.classList.add('entering');
+  }, [ref]);
+  const leave = useCallback(() => {
+    ref.current?.classList.remove('entering');
+  }, [ref]);
+  return { onMouseEnter: enter, onMouseLeave: leave };
+}
+
+/* ─── Spotlight card ─────────────────────────────────────────────────────── */
+function SpotlightCard({ children, style, className = '' }) {
+  const handleMove = e => {
+    const r = e.currentTarget.getBoundingClientRect();
+    e.currentTarget.style.setProperty('--mx', `${e.clientX - r.left}px`);
+    e.currentTarget.style.setProperty('--my', `${e.clientY - r.top}px`);
+  };
+  return (
+    <div
+      className={`sp-card ${className}`}
+      onMouseMove={handleMove}
+      style={style}
+    >
+      {children}
+    </div>
+  );
+}
+
+/* ─── CountUp ─────────────────────────────────────────────────────────────── */
+function CountUp({ end, suffix = '' }) {
+  const [v, setV] = useState(0);
+  const ref = useRef();
+  useEffect(() => {
+    const obs = new IntersectionObserver(([e]) => {
+      if (!e.isIntersecting) return;
+      obs.disconnect();
+      const n = parseInt(end, 10);
+      if (isNaN(n)) { setV(end); return; }
+      let cur = 0;
+      const step = Math.max(1, Math.ceil(n / 30));
+      const id = setInterval(() => {
+        cur = Math.min(cur + step, n);
+        setV(cur);
+        if (cur >= n) clearInterval(id);
+      }, 38);
+    }, { threshold: .5 });
+    obs.observe(ref.current);
+    return () => obs.disconnect();
+  }, [end]);
+  return <span ref={ref}>{v}{suffix}</span>;
+}
+
+/* ─── Main ───────────────────────────────────────────────────────────────── */
 export default function Home() {
   const [buildings, setBuildings] = useState([]);
-  const [loading, setLoading]     = useState(true);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     buildingsService.getAll()
-      .then(res => {
-        if (Array.isArray(res))        setBuildings(res);
-        else if (Array.isArray(res?.data)) setBuildings(res.data);
-        else                           setBuildings([]);
-      })
+      .then(r => setBuildings(Array.isArray(r) ? r : (r?.data ?? [])))
       .catch(() => setBuildings([]))
       .finally(() => setLoading(false));
   }, []);
 
+  const TICKS = [
+    'Visualización 3D','Campus ESPOCH','Modelos GLB',
+    'Laboratorios interactivos','WebGL · Three.js','FIE Explorer',
+    'Visualización 3D','Campus ESPOCH','Modelos GLB',
+    'Laboratorios interactivos','WebGL · Three.js','FIE Explorer',
+  ];
+
   return (
-    <main style={{ paddingTop: 'var(--nav-h, 64px)' }}>
-      <InjectStyles />
+    <main style={{ paddingTop:'var(--nav-h,64px)', fontFamily:"'Outfit',sans-serif", background:'var(--cream)', color:'var(--red)' }}>
+      <InjectCSS />
 
-      {/* ══ HERO ══ */}
-      <section className="home-hero-section" style={{
-        minHeight: '100svh',
-        display: 'flex', flexDirection: 'column',
-        alignItems: 'center', justifyContent: 'center',
-        padding: '6rem 1.5rem 4rem',
-        position: 'relative', overflow: 'hidden',
-        backgroundImage: 'url(https://www.espoch.edu.ec/wp-content/uploads/2022/08/Fie-scaled.jpg)',
-        backgroundSize: 'cover',
-        backgroundPosition: 'center',
-        backgroundRepeat: 'no-repeat',
+      {/* ══════════════════════════════════════════════════════════════════
+          HERO — Split: texto izquierda / imagen derecha
+      ══════════════════════════════════════════════════════════════════ */}
+      <section style={{
+        position:'relative', minHeight:'100dvh', overflow:'hidden',
+        backgroundImage:'url(https://www.espoch.edu.ec/wp-content/uploads/2022/08/Fie-scaled.jpg)',
+        backgroundSize:'cover', backgroundPosition:'center',
       }}>
-        {/* Overlay oscuro para legibilidad */}
+        {/* Overlay blanco: opaco izquierda → translúcido derecha */}
         <div aria-hidden style={{
-          position: 'absolute', inset: 0, zIndex: 0,
-          background: 'linear-gradient(160deg, rgba(0,16,60,0.78) 0%, rgba(0,30,90,0.70) 50%, rgba(0,10,40,0.82) 100%)',
+          position:'absolute', inset:0, zIndex:0,
+          background:'linear-gradient(100deg, rgba(253,250,249,.97) 0%, rgba(253,250,249,.92) 42%, rgba(253,250,249,.52) 68%, rgba(253,250,249,.12) 100%)',
         }}/>
-        {/* Overlay de patrón sutil */}
+        {/* Línea vertical decorativa */}
         <div aria-hidden style={{
-          position: 'absolute', inset: 0, zIndex: 0, opacity: 0.06,
-          backgroundImage: `
-            linear-gradient(rgba(255,255,255,0.8) 1px, transparent 1px),
-            linear-gradient(90deg, rgba(255,255,255,0.8) 1px, transparent 1px)
-          `,
-          backgroundSize: '60px 60px',
+          position:'absolute', left:0, top:0, bottom:0, width:3, zIndex:1,
+          background:'linear-gradient(to bottom, transparent 0%, var(--red) 25%, var(--red) 75%, transparent 100%)',
         }}/>
 
-        <div style={{
-          position: 'relative', zIndex: 1,
-          textAlign: 'center', maxWidth: 780,
-          width: '100%',
+        {/* Contenido — solo lado izquierdo */}
+        <div className="hero-inner" style={{
+          position:'relative', zIndex:2,
+          maxWidth:1320, margin:'0 auto',
+          padding:'8rem 5vw 5rem',
+          display:'flex', flexDirection:'column',
+          alignItems:'flex-start',
+          minHeight:'100dvh', justifyContent:'center',
         }}>
-          {/* Badge */}
-          <div style={{
-            display: 'inline-flex', alignItems: 'center', gap: '0.5rem',
-            padding: '0.35rem 0.9rem',
-            background: 'rgba(255,255,255,0.12)',
-            border: '1px solid rgba(255,255,255,0.3)',
-            borderRadius: '999px',
-            marginBottom: '1.75rem',
-            animation: 'fadeUp .6s ease both',
-            maxWidth: '100%',
-            flexWrap: 'wrap',
-            justifyContent: 'center',
-            backdropFilter: 'blur(8px)',
-          }}>
-            <span style={{
-              width: 6, height: 6, borderRadius: '50%', flexShrink: 0,
-              background: 'var(--color-primary, #BC0613)',
-              animation: 'pulse-dot 2s ease infinite',
-            }}/>
-            <span className="home-badge-text" style={{
-              fontFamily: 'var(--font-body, sans-serif)',
-              fontSize: '0.78rem', fontWeight: 600,
-              color: '#fff',
-              letterSpacing: '0.06em',
-              textTransform: 'uppercase',
-            }}>ESPOCH · Facultad de Informática y Electrónica</span>
-          </div>
+          <div style={{ maxWidth:580 }}>
 
-          {/* Título */}
-          <h1 className="home-hero-title" style={{
-            fontFamily: 'var(--font-display, serif)',
-            fontWeight: 800,
-            lineHeight: 1.05,
-            color: '#fff',
-            marginBottom: '1.25rem',
-            animation: 'fadeUp .7s ease .1s both',
-            textShadow: '0 2px 20px rgba(0,0,0,0.4)',
-          }}>
-            Explora la{' '}
-            <span style={{
-              color: 'var(--color-primary, #BC0613)',
-              position: 'relative',
-              display: 'inline-block',
+            {/* Eyebrow */}
+            <div className="s0" style={{
+              display:'inline-flex', alignItems:'center', gap:'.55rem',
+              marginBottom:'1.75rem',
             }}>
-              FIE
-              <span aria-hidden style={{
-                position: 'absolute', bottom: '3px', left: 0, right: 0,
-                height: 4, background: 'rgba(188,6,19,0.30)',
-                borderRadius: 2,
-              }}/>
-            </span>
-            {' '}en{' '}
-            <br />
-            tres dimensiones
-          </h1>
+              <span style={{ position:'relative', display:'flex', alignItems:'center' }}>
+                <span style={{ width:7, height:7, borderRadius:'50%', background:'var(--red)', display:'block', flexShrink:0 }}/>
+                <span aria-hidden style={{ position:'absolute', inset:0, borderRadius:'50%', background:'var(--red)', animation:'pulse-ring 2.2s ease-out infinite' }}/>
+              </span>
+              <span style={{
+                fontFamily:"'Outfit',sans-serif",
+                fontSize:'.7rem', fontWeight:600, letterSpacing:'.15em', textTransform:'uppercase',
+                color:'var(--red)',
+              }}>ESPOCH · Facultad de Informática y Electrónica</span>
+            </div>
 
-          {/* Subtítulo */}
-          <p className="home-hero-sub" style={{
-            lineHeight: 1.7,
-            color: 'rgba(255,255,255,0.85)',
-            maxWidth: 520, margin: '0 auto 2.25rem',
-            animation: 'fadeUp .7s ease .2s both',
-            textShadow: '0 1px 8px rgba(0,0,0,0.3)',
-          }}>
-            Recorre los edificios, laboratorios y espacios de la facultad
-            de manera interactiva. Encuentra información detallada de cada
-            área sin necesidad de estar presencialmente.
-          </p>
+            {/* H1 — tracking tighter, no screaming scale */}
+            <h1 className="s1" style={{
+              fontFamily:"'Outfit',sans-serif",
+              fontWeight:800,
+              fontSize:'clamp(2.6rem,5.5vw,4.4rem)',
+              lineHeight:1.04, letterSpacing:'-.03em',
+              color:'var(--red)', margin:'0 0 .2em',
+            }}>
+              Recorre la&nbsp;FIE<br/>
+              <span style={{ color:'rgba(80,4,10,.75)', fontWeight:700 }}>sin estar ahí.</span>
+            </h1>
 
-          {/* CTAs */}
-          <div className="home-cta-wrap" style={{
-            display: 'flex', gap: '0.85rem',
-            justifyContent: 'center',
-            animation: 'fadeUp .7s ease .3s both',
-          }}>
-            <Link to="/explorar" style={{
-              display: 'inline-flex', alignItems: 'center', gap: '0.5rem',
-              padding: '0.85rem 1.75rem',
-              background: 'var(--color-primary, #BC0613)',
-              color: '#fff',
-              borderRadius: '999px',
-              fontWeight: 700, fontSize: '0.95rem',
-              textDecoration: 'none',
-              boxShadow: '0 4px 24px rgba(188,6,19,0.40)',
-              whiteSpace: 'nowrap',
+            {/* Body */}
+            <p className="s2" style={{
+              fontSize:'1.02rem', fontWeight:300, lineHeight:1.75,
+              color:'var(--ink)', maxWidth:'52ch',
+              margin:'1.4rem 0 2.25rem',
             }}>
-              <svg width="17" height="17" viewBox="0 0 24 24" fill="none"
-                stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                <path d="M21 10c0 7-9 13-9 13S3 17 3 10a9 9 0 1 1 18 0z"/>
-                <circle cx="12" cy="10" r="3"/>
-              </svg>
-              Iniciar exploración
-            </Link>
-            <a href="#edificios" style={{
-              display: 'inline-flex', alignItems: 'center', gap: '0.5rem',
-              padding: '0.85rem 1.75rem',
-              background: 'rgba(255,255,255,0.12)',
-              color: '#fff',
-              border: '1.5px solid rgba(255,255,255,0.4)',
-              borderRadius: '999px',
-              fontWeight: 600, fontSize: '0.95rem',
-              textDecoration: 'none',
-              whiteSpace: 'nowrap',
-              backdropFilter: 'blur(8px)',
+              Navega edificios, laboratorios y espacios en tres dimensiones.
+              Toca cualquier sala para ver horarios, docentes y equipamiento en tiempo real.
+            </p>
+
+            {/* CTAs — directional hover */}
+            <div className="s3 cta-row" style={{ display:'flex', gap:'.85rem', alignItems:'center' }}>
+              <PrimaryBtn to="/explorar">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                Iniciar exploración
+              </PrimaryBtn>
+              <a href="#edificios" style={{
+                display:'inline-flex', alignItems:'center', gap:'.4rem',
+                padding:'.8rem 1.5rem',
+                fontFamily:"'Outfit',sans-serif", fontWeight:600, fontSize:'.88rem',
+                color:'var(--red)', textDecoration:'none',
+                border:'1.5px solid var(--rule)',
+                background:'rgba(253,250,249,.7)',
+                backdropFilter:'blur(6px)',
+                transition:'border-color .25s var(--ease), background .25s var(--ease)',
+              }}
+              onMouseEnter={e=>{ e.currentTarget.style.borderColor='rgba(188,6,19,.45)'; e.currentTarget.style.background='var(--white)'; }}
+              onMouseLeave={e=>{ e.currentTarget.style.borderColor='var(--rule)'; e.currentTarget.style.background='rgba(253,250,249,.7)'; }}>
+                Ver edificios
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M12 5v14M5 12l7 7 7-7"/></svg>
+              </a>
+            </div>
+
+            {/* Stats — horizontal, no pill container */}
+            <div className="s4 hero-stats" style={{
+              display:'flex', gap:'0',
+              marginTop:'3.25rem',
+              paddingTop:'2rem',
+              borderTop:'1px solid var(--rule)',
             }}>
-              Ver edificios
-            </a>
+              {[
+                { n:'5',   sx:'',   l:'Edificios'     },
+                { n:'20',  sx:'+',  l:'Laboratorios'  },
+                { n:'360', sx:'°',  l:'Exploración'   },
+              ].map(({ n, sx, l }, i) => (
+                <div key={l} style={{ flex:1, textAlign:'left', position:'relative', paddingLeft: i > 0 ? '1.5rem' : 0 }}>
+                  {i > 0 && <span className="stat-sep" style={{ position:'absolute', left:0, top:'10%', bottom:'10%', width:1, background:'var(--rule)' }}/>}
+                  <div style={{ fontFamily:"'Outfit',sans-serif", fontWeight:800, fontSize:'1.9rem', color:'var(--red)', lineHeight:1 }}>
+                    <CountUp end={n} suffix={sx}/>
+                  </div>
+                  <div style={{ fontFamily:"'Outfit',sans-serif", fontSize:'.68rem', fontWeight:600, letterSpacing:'.1em', textTransform:'uppercase', color:'var(--ink)', marginTop:'.3rem' }}>{l}</div>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
+      </section>
 
-        {/* Stats */}
-        <div className="home-stats-wrap" style={{
-          position: 'relative', zIndex: 1,
-          marginTop: '4rem',
-          display: 'flex',
-          flexWrap: 'wrap', justifyContent: 'center',
-          animation: 'fadeUp .7s ease .5s both',
-          background: 'rgba(255,255,255,0.07)',
-          backdropFilter: 'blur(12px)',
-          border: '1px solid rgba(255,255,255,0.15)',
-          borderRadius: '999px',
-          padding: '1.25rem 2.5rem',
-        }}>
-          {[
-            { n: '5',    label: 'Edificios' },
-            { n: '20+',  label: 'Laboratorios' },
-            { n: '3D',   label: 'Visualización' },
-            { n: '360°', label: 'Exploración' },
-          ].map(({ n, label }) => (
-            <div key={label} className="home-stat-item" style={{ textAlign: 'center' }}>
-              <div style={{
-                fontFamily: 'var(--font-display, serif)',
-                fontWeight: 800, fontSize: 'clamp(1.6rem, 5vw, 2rem)',
-                color: '#fff',
-                textShadow: '0 2px 12px rgba(0,0,0,0.3)',
-              }}>{n}</div>
-              <div style={{
-                fontSize: '0.75rem', fontWeight: 500,
-                color: 'rgba(255,255,255,0.75)',
-                textTransform: 'uppercase', letterSpacing: '0.08em',
-                marginTop: '0.2rem',
-              }}>{label}</div>
-            </div>
+      {/* ══ TICKER ═════════════════════════════════════════════════════════ */}
+      <div style={{
+        overflow:'hidden', whiteSpace:'nowrap', userSelect:'none',
+        borderTop:'2px solid var(--red)',
+        borderBottom:'1px solid var(--rule)',
+        background:'var(--white)', padding:'.8rem 0',
+      }}>
+        <div className="ticker-track">
+          {TICKS.map((t, i) => (
+            <span key={i} style={{
+              display:'inline-flex', alignItems:'center', gap:'.9rem',
+              padding:'0 2rem',
+              fontFamily:"'Outfit',sans-serif", fontSize:'.7rem', fontWeight:700,
+              letterSpacing:'.14em', textTransform:'uppercase', color:'var(--ink)',
+            }}>
+              <span style={{ width:4, height:4, borderRadius:'50%', background:'var(--red)', flexShrink:0 }}/>
+              {t}
+            </span>
           ))}
         </div>
-      </section>
+      </div>
 
-      {/* ══ EDIFICIOS ══ */}
-      <section id="edificios" className="home-section-pad" style={{
-        padding: '5rem 1.5rem',
-        background: 'var(--color-bg-soft, #f8fafc)',
-      }}>
-        <div style={{ maxWidth: 1200, margin: '0 auto' }}>
-          {/* Encabezado */}
-          <div style={{ textAlign: 'center', marginBottom: '2.5rem' }}>
-            <span style={{
-              display: 'inline-block',
-              padding: '0.25rem 0.75rem',
-              background: 'var(--color-primary-50, #eef2fb)',
-              color: 'var(--color-primary, #003087)',
-              borderRadius: '999px',
-              fontSize: '0.72rem', fontWeight: 700,
-              letterSpacing: '0.08em', textTransform: 'uppercase',
-              marginBottom: '0.75rem',
-            }}>Instalaciones</span>
-            <h2 style={{
-              fontFamily: 'var(--font-display, serif)',
-              fontSize: 'clamp(1.6rem, 4vw, 2.5rem)',
-              color: 'var(--color-text, #0f172a)',
-              margin: '0 0 0.75rem',
-            }}>Edificios de la FIE</h2>
-            <p style={{
-              color: 'var(--color-text-3, #64748b)',
-              maxWidth: 480, margin: '0 auto',
-              fontSize: '0.95rem', lineHeight: 1.6,
-            }}>
-              Selecciona un edificio para comenzar a explorarlo en 3D
-            </p>
+      {/* ══ EDIFICIOS — bento asimétrico ═══════════════════════════════════ */}
+      <section id="edificios" className="sec-pad" style={{ padding:'5.5rem 5vw', background:'var(--cream)' }}>
+        <div style={{ maxWidth:1280, margin:'0 auto' }}>
+
+          {/* Header: left title / right link */}
+          <div style={{
+            display:'flex', alignItems:'flex-end', justifyContent:'space-between',
+            flexWrap:'wrap', gap:'1rem', marginBottom:'2.75rem',
+            paddingBottom:'1.25rem', borderBottom:'1.5px solid var(--red)',
+          }}>
+            <div>
+              <p style={{ fontFamily:"'Outfit',sans-serif", fontSize:'.68rem', fontWeight:700, letterSpacing:'.15em', textTransform:'uppercase', color:'var(--ink)', marginBottom:'.45rem' }}>Instalaciones</p>
+              <h2 style={{ fontFamily:"'Outfit',sans-serif", fontWeight:800, fontSize:'clamp(1.7rem,3.2vw,2.5rem)', letterSpacing:'-.025em', color:'var(--red)', margin:0 }}>Edificios de la FIE</h2>
+            </div>
+            <Link to="/explorar" style={{
+              fontFamily:"'Outfit',sans-serif", fontSize:'.76rem', fontWeight:700,
+              letterSpacing:'.08em', textTransform:'uppercase',
+              color:'var(--ink)', textDecoration:'none',
+              display:'flex', alignItems:'center', gap:'.35rem',
+              transition:'color .2s var(--ease)',
+            }}
+            onMouseEnter={e=>e.currentTarget.style.color='var(--red)'}
+            onMouseLeave={e=>e.currentTarget.style.color='var(--ink)'}>
+              Mapa completo
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+            </Link>
           </div>
 
-          {loading
-            ? <BuildingsSkeletons />
-            : (
-              <div className="home-buildings-grid" style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
-                gap: '1.25rem',
-              }}>
-                {buildings.map(b => <BuildingCard key={b.id} building={b} />)}
-              </div>
-            )
-          }
+          {loading ? <BentoSkeleton /> : <BentoGrid buildings={buildings} />}
         </div>
       </section>
 
-      {/* ══ CÓMO FUNCIONA ══ */}
-      <section className="home-section-pad" style={{
-        padding: '5rem 1.5rem',
-        background: '#fff',
-      }}>
-        <div style={{ maxWidth: 1100, margin: '0 auto' }}>
-          <h2 style={{
-            textAlign: 'center',
-            fontFamily: 'var(--font-display, serif)',
-            fontSize: 'clamp(1.5rem, 4vw, 2.25rem)',
-            marginBottom: '2.5rem',
-            color: 'var(--color-text, #0f172a)',
-          }}>¿Cómo funciona?</h2>
+      {/* ══ zig-zag con número decorativo ══════════════════ */}
+      <section className="sec-pad" style={{ padding:'5.5rem 5vw', background:'var(--white)', borderTop:'1px solid var(--rule)' }}>
+        <div style={{ maxWidth:1280, margin:'0 auto' }}>
+          <div style={{ marginBottom:'3.5rem' }}>
+            <p style={{ fontFamily:"'Outfit',sans-serif", fontSize:'.68rem', fontWeight:700, letterSpacing:'.15em', textTransform:'uppercase', color:'var(--ink)', marginBottom:'.45rem' }}>Proceso</p>
+            <h2 style={{ fontFamily:"'Outfit',sans-serif", fontWeight:800, fontSize:'clamp(1.7rem,3.2vw,2.5rem)', letterSpacing:'-.025em', color:'var(--red)', margin:0 }}>¿Cómo funciona?</h2>
+          </div>
 
-          <div className="home-steps-grid" style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
-            gap: '1.5rem',
-          }}>
+          <div className="steps-grid" style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'1px', background:'var(--rule)' }}>
             {[
-              { icon: '🏛️', title: 'Selecciona un edificio',
-                desc: 'Elige entre los distintos edificios y bloques de la FIE desde el mapa o la lista.' },
-              { icon: '🔍', title: 'Explora en 3D',
-                desc: 'Navega alrededor del modelo fotogramétrico con zoom, rotación y paneo completos.' },
-              { icon: '📍', title: 'Toca los hotspots',
-                desc: 'Descubre puntos de interés marcados: laboratorios, oficinas, servicios y accesos.' },
-              { icon: '📋', title: 'Obtén información',
-                desc: 'Consulta detalles de cada espacio: descripción, horarios, equipamiento e imágenes.' },
-            ].map(({ icon, title, desc }) => (
-              <div key={title} style={{
-                padding: '1.5rem',
-                background: 'var(--color-bg-soft, #f8fafc)',
-                borderRadius: 'var(--radius-lg, 12px)',
-                border: '1px solid var(--color-border-soft, #e2e8f0)',
-              }}>
-                <div style={{ fontSize: '1.75rem', marginBottom: '0.85rem' }}>{icon}</div>
-                <h3 style={{
-                  fontFamily: 'var(--font-display, serif)',
-                  fontSize: '1rem', marginBottom: '0.45rem',
-                  color: 'var(--color-text, #0f172a)',
-                }}>{title}</h3>
-                <p style={{
-                  fontSize: '0.875rem',
-                  color: 'var(--color-text-3, #64748b)',
-                  lineHeight: 1.6, margin: 0,
-                }}>{desc}</p>
+              { n:'01', title:'Selecciona un edificio', body:'Elige entre los distintos edificios y bloques desde el mapa 3D o la lista de instalaciones del campus.' },
+              { n:'02', title:'Navega en 3D',           body:'Rota, acerca y desplaza el modelo fotogramétrico con libertad total. Three.js y WebGL procesan cada frame.' },
+              { n:'03', title:'Activa los hotspots',    body:'Cada sala, laboratorio u oficina tiene una malla nombrada. Haz clic para revelar su ficha completa.' },
+              { n:'04', title:'Consulta la información', body:'Horarios, equipamiento, docentes e imágenes del espacio, sin necesidad de estar presencialmente.' },
+            ].map(({ n, title, body }) => (
+              <div key={n} style={{ position:'relative', background:'var(--white)', padding:'2.25rem 2rem', overflow:'hidden',
+                borderTop:'2px solid transparent', transition:'border-top-color .25s var(--ease)',
+              }}
+              onMouseEnter={e=>e.currentTarget.style.borderTopColor='var(--red)'}
+              onMouseLeave={e=>e.currentTarget.style.borderTopColor='transparent'}>
+                <span className="step-num">{n}</span>
+                <div style={{ fontFamily:"'Outfit',sans-serif", fontSize:'.62rem', fontWeight:700, letterSpacing:'.14em', textTransform:'uppercase', color:'var(--red)', marginBottom:'1.1rem' }}>{n}</div>
+                <h3 style={{ fontFamily:"'Outfit',sans-serif", fontWeight:700, fontSize:'1.05rem', color:'var(--red)', marginBottom:'.6rem', lineHeight:1.3 }}>{title}</h3>
+                <p style={{ fontSize:'.85rem', color:'var(--ink)', lineHeight:1.7, margin:0, fontWeight:300 }}>{body}</p>
               </div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* ══ FOOTER ══ */}
-      <footer className="home-footer" style={{
-        padding: '2rem 1.5rem',
-        background: 'var(--color-primary, #003087)',
-        color: 'rgba(255,255,255,0.7)',
-        textAlign: 'center',
-        fontSize: '0.82rem',
+      {/* ══ CTA BANNER — full-bleed, left-aligned ══════════════════════════ */}
+      <section style={{ padding:'5rem 5vw', background:'var(--white)', borderTop:'1px solid var(--rule)' }}>
+        <div style={{ maxWidth:1280, margin:'0 auto', display:'flex', alignItems:'center', justifyContent:'space-between', flexWrap:'wrap', gap:'2rem' }}>
+          <div>
+            <p style={{ fontFamily:"'Outfit',sans-serif", fontSize:'.7rem', fontWeight:700, letterSpacing:'.15em', textTransform:'uppercase', color:'rgba(0,0,0,.55)', marginBottom:'.75rem' }}>Comienza ahora</p>
+            <h2 style={{ fontFamily:"'Outfit',sans-serif", fontWeight:800, fontSize:'clamp(1.9rem,4vw,3rem)', lineHeight:1.05, letterSpacing:'-.025em', color:'var(--red)', margin:0 }}>
+              Tu campus,<br/>en tres dimensiones.
+            </h2>
+          </div>
+          <PrimaryBtn 
+            to="/explorar"
+            style={{display: 'inline-flex', alignItems: 'center', gap: '.5rem', flexDirection: 'row-reverse'}}
+          >
+            Iniciar exploración
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+            >
+              <polygon points="5 3 19 12 5 21 5 3" />
+            </svg>
+          </PrimaryBtn> 
+        </div>
+      </section>
+
+      {/* ══ FOOTER ════════════════════════════════════════════════════════ */}
+      <footer style={{
+        padding:'1.5rem 5vw', background:'var(--red)', color:'#fff', fontSize:'.75rem',
+        borderTop:'2px solid var(--red)',
+        display:'flex', alignItems:'center', justifyContent:'space-between', flexWrap:'wrap', gap:'.75rem',
       }}>
-        <p style={{
-          fontFamily: 'var(--font-display, serif)',
-          color: '#fff', marginBottom: '0.25rem', fontWeight: 600,
-          fontSize: '0.95rem',
-        }}>
-          FIE Explorer 3D · ESPOCH
-        </p>
-        <p style={{ margin: 0 }}>
+        <span style={{ fontFamily:"'Outfit',sans-serif", fontWeight:800, fontSize:'.9rem', color:'var(--white)' }}>FIE Explorer 3D · ESPOCH</span>
+        <span style={{ fontFamily:"'Outfit',sans-serif", fontSize:'.78rem', fontWeight:300, color:'var(--white)' }}>
           Grefa Rivadeneyra Rumi Adrian · Código 7333 · {new Date().getFullYear()}
-        </p>
+        </span>
       </footer>
     </main>
   );
 }
 
-/* ─── BuildingCard ──────────────────────────────────────────────────────────── */
-function BuildingCard({ building }) {
-  const typeLabel = { main: 'Principal', secondary: 'Secundario', lab: 'Laboratorio' };
-  const typeColor = { main: '#BC0613', secondary: '#374151', lab: '#d41a2b' };
-  const color = typeColor[building.type] || '#374151';
-
+/* ─── Botón primario (directional hover-aware) ──────────────────────────── */
+function PrimaryBtn({ to, children }) {
+  const ref = useRef();
+  const { onMouseEnter, onMouseLeave } = useDirHover(ref);
   return (
-    <Link to={`/explorar/${building.id}`} style={{ textDecoration: 'none', display: 'block', height: '100%' }}>
-      <div className="building-card-inner" style={{
-        background: '#fff',
-        borderRadius: 'var(--radius-lg, 12px)',
-        border: '1px solid var(--color-border, #e2e8f0)',
-        padding: '1.5rem',
-        height: '100%',
-        boxSizing: 'border-box',
-        cursor: 'pointer',
-      }}>
-        {/* Ícono */}
-        <div style={{
-          width: 46, height: 46,
-          background: 'var(--color-primary-50, #eef2fb)',
-          borderRadius: 'var(--radius-md, 8px)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          marginBottom: '0.9rem', flexShrink: 0,
-        }}>
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none"
-            stroke="var(--color-primary, #003087)" strokeWidth="1.8" strokeLinecap="round">
-            <path d="M3 21h18M3 7l9-4 9 4M4 7v14M20 7v14M9 21V12h6v9"/>
-          </svg>
-        </div>
-
-        {/* Badge tipo */}
-        <span style={{
-          display: 'inline-block',
-          padding: '0.18rem 0.55rem',
-          background: `${color}15`,
-          color,
-          borderRadius: '999px',
-          fontSize: '0.68rem', fontWeight: 700,
-          letterSpacing: '0.06em', textTransform: 'uppercase',
-          marginBottom: '0.55rem',
-        }}>
-          {typeLabel[building.type] || building.type}
-        </span>
-
-        <h3 style={{
-          fontFamily: 'var(--font-display, serif)',
-          fontSize: '1rem', fontWeight: 700,
-          color: 'var(--color-text, #0f172a)',
-          marginBottom: '0.4rem',
-          lineHeight: 1.3,
-        }}>{building.name}</h3>
-
-        <p style={{
-          fontSize: '0.82rem',
-          color: 'var(--color-text-3, #64748b)',
-          lineHeight: 1.55,
-          display: '-webkit-box',
-          WebkitLineClamp: 2,
-          WebkitBoxOrient: 'vertical',
-          overflow: 'hidden',
-          marginBottom: '1rem',
-        }}>{building.description}</p>
-
-        {/* Footer card */}
-        <div style={{
-          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-          paddingTop: '0.75rem',
-          borderTop: '1px solid var(--color-border-soft, #f1f5f9)',
-          marginTop: 'auto',
-        }}>
-          <span style={{
-            fontSize: '0.78rem', color: 'var(--color-text-3, #64748b)',
-            display: 'flex', alignItems: 'center', gap: '0.3rem',
-          }}>
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
-              stroke="currentColor" strokeWidth="2">
-              <path d="M3 21h18M3 7l9-4 9 4M4 7v14M20 7v14"/>
-            </svg>
-            {building.floor_count} {building.floor_count === 1 ? 'planta' : 'plantas'}
-          </span>
-          <span style={{
-            fontSize: '0.78rem', fontWeight: 600,
-            color: 'var(--color-primary, #003087)',
-            display: 'flex', alignItems: 'center', gap: '0.25rem',
-          }}>
-            Explorar
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
-              stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-              <path d="M5 12h14M12 5l7 7-7 7"/>
-            </svg>
-          </span>
-        </div>
-      </div>
+    <Link to={to} ref={ref} className="dir-btn" onMouseEnter={onMouseEnter} onMouseLeave={onMouseLeave}
+      style={{ display:'inline-flex', padding:'.85rem 1.9rem', background:'var(--red)', color:'#fff', textDecoration:'none', fontFamily:"'Outfit',sans-serif", fontWeight:700, fontSize:'.9rem', letterSpacing:'.03em', border:'none' }}>
+      <div className="fill"/>
+      <span>{children}</span>
     </Link>
   );
 }
 
-/* ─── Skeleton loader ───────────────────────────────────────────────────────── */
-function BuildingsSkeletons() {
+function PrimaryBtnWhite({ to, children }) {
+  const ref = useRef();
   return (
-    <div className="home-skeletons" style={{
-      display: 'grid',
-      gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
-      gap: '1.25rem',
+    <Link to={to} ref={ref} style={{
+      display:'inline-flex', alignItems:'center', gap:'.5rem',
+      padding:'.9rem 2rem',
+      background:'var(--white)', color:'var(--red)',
+      textDecoration:'none',
+      fontFamily:"'Outfit',sans-serif", fontWeight:700, fontSize:'.9rem',
+      letterSpacing:'.03em',
+      flexShrink:0,
+      transition:'background .22s var(--ease)',
+    }}
+    onMouseEnter={e=>e.currentTarget.style.background='rgba(255,255,255,.88)'}
+    onMouseLeave={e=>e.currentTarget.style.background='var(--white)'}>
+      {children}
+    </Link>
+  );
+}
+
+/* ─── Bento grid — featured card + 2-col resto ───────────────────────────── */
+function BentoGrid({ buildings }) {
+  if (!buildings.length) return <EmptyBuildings />;
+  const [featured, ...rest] = buildings;
+
+  return (
+    <div className="bento-grid" style={{
+      display:'grid',
+      gridTemplateColumns:'repeat(2,1fr)',
+      gap:'1rem',
     }}>
-      {[1,2,3,4,5].map(i => (
+      {/* Featured — ocupa columna completa superior */}
+      <div className="featured g-item" style={{ gridColumn:'span 2' }}>
+        <BuildingCard building={featured} featured />
+      </div>
+
+      {rest.map(b => (
+        <div key={b.id} className="g-item">
+          <BuildingCard building={b} />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/* ─── BuildingCard ──────────────────────────────────────────────────────── */
+function BuildingCard({ building, featured = false }) {
+  const typeLabel = { main:'Principal', secondary:'Secundario', lab:'Laboratorio' };
+
+  return (
+    <Link to={`/explorar/${building.id}`} style={{ textDecoration:'none', display:'block', height:'100%' }}>
+      <SpotlightCard style={{
+        background:'var(--white)',
+        padding: featured ? '2.25rem 2.5rem' : '1.75rem',
+        height:'100%', boxSizing:'border-box',
+        display:'flex',
+        flexDirection: featured ? 'row' : 'column',
+        alignItems: featured ? 'flex-end' : 'flex-start',
+        gap: featured ? '3rem' : 0,
+      }}>
+        {/* ── Featured: layout horizontal ── */}
+        {featured ? (
+          <>
+            <div style={{ flex:1 }}>
+              <Header building={building} typeLabel={typeLabel} />
+              <p style={{ fontSize:'.9rem', fontWeight:300, color:'var(--ink)', lineHeight:1.7, maxWidth:'55ch', marginTop:'.75rem' }}>
+                {building.description}
+              </p>
+            </div>
+            <div style={{ display:'flex', flexDirection:'column', alignItems:'flex-end', gap:'.75rem', flexShrink:0 }}>
+              <FloorBadge building={building} />
+              <ExploreArrow />
+            </div>
+          </>
+        ) : (
+          /* ── Normal: layout vertical ── */
+          <>
+            <Header building={building} typeLabel={typeLabel} />
+            <p style={{ fontSize:'.82rem', fontWeight:300, color:'var(--ink)', lineHeight:1.65, flex:1, marginTop:'.5rem', marginBottom:'1.25rem',
+              display:'-webkit-box', WebkitLineClamp:2, WebkitBoxOrient:'vertical', overflow:'hidden' }}>
+              {building.description}
+            </p>
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', width:'100%', paddingTop:'.85rem', borderTop:'1px solid var(--rule)' }}>
+              <FloorBadge building={building} />
+              <ExploreArrow />
+            </div>
+          </>
+        )}
+      </SpotlightCard>
+    </Link>
+  );
+}
+
+function Header({ building, typeLabel }) {
+  return (
+    <div>
+      <div style={{ display:'flex', alignItems:'center', gap:'.6rem', marginBottom:'.9rem' }}>
+        <span style={{ fontFamily:"'Outfit',sans-serif", fontSize:'.6rem', fontWeight:700, letterSpacing:'.12em', textTransform:'uppercase', color:'var(--red)', padding:'.18rem .55rem', border:'1px solid var(--red-10)', background:'var(--red-06)' }}>
+          {typeLabel[building.type] || building.type}
+        </span>
+      </div>
+      <h3 style={{ fontFamily:"'Outfit',sans-serif", fontWeight:700, fontSize:'1.05rem', color:'var(--red)', lineHeight:1.25, margin:0 }}>
+        {building.name}
+      </h3>
+    </div>
+  );
+}
+
+function FloorBadge({ building }) {
+  return (
+    <span style={{ fontFamily:"'Outfit',sans-serif", fontSize:'.7rem', fontWeight:500, color:'var(--ink)', display:'flex', alignItems:'center', gap:'.3rem' }}>
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M3 21h18M3 7l9-4 9 4M4 7v14M20 7v14"/></svg>
+      {building.floor_count} {building.floor_count === 1 ? 'planta' : 'plantas'}
+    </span>
+  );
+}
+
+function ExploreArrow() {
+  return (
+    <span style={{ fontFamily:"'Outfit',sans-serif", fontSize:'.74rem', fontWeight:700, color:'var(--red)', display:'flex', alignItems:'center', gap:'.3rem', letterSpacing:'.05em' }}>
+      Explorar
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+    </span>
+  );
+}
+
+/* ─── Skeleton ──────────────────────────────────────────────────────────── */
+function BentoSkeleton() {
+  return (
+    <div className="bento-grid" style={{ display:'grid', gridTemplateColumns:'repeat(2,1fr)', gap:'1rem' }}>
+      <div className="featured" style={{
+        gridColumn:'span 2', height:160,
+        backgroundImage:'linear-gradient(90deg,var(--cream) 25%,var(--white) 50%,var(--cream) 75%)',
+        backgroundSize:'200% 100%', animation:'shimmer 1.6s ease infinite',
+        border:'1px solid var(--rule)',
+      }}/>
+      {[1,2,3,4].map(i => (
         <div key={i} style={{
-          height: 190,
-          borderRadius: 'var(--radius-lg, 12px)',
-          background: 'linear-gradient(90deg, #f0f0f0 25%, #e8e8e8 50%, #f0f0f0 75%)',
-          backgroundSize: '200% 100%',
-          animation: 'shimmer 1.5s infinite',
+          height:180,
+          backgroundImage:'linear-gradient(90deg,var(--cream) 25%,var(--white) 50%,var(--cream) 75%)',
+          backgroundSize:'200% 100%', animation:'shimmer 1.6s ease infinite',
+          border:'1px solid var(--rule)',
         }}/>
       ))}
+    </div>
+  );
+}
+
+/* ─── Empty state ─────────────────────────────────────────────────────── */
+function EmptyBuildings() {
+  return (
+    <div style={{ textAlign:'center', padding:'5rem 2rem', border:'1px dashed var(--rule)' }}>
+      <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="var(--red-18)" strokeWidth="1.5" strokeLinecap="round" style={{ marginBottom:'1rem' }}>
+        <path d="M3 21h18M3 7l9-4 9 4M4 7v14M20 7v14M9 21V12h6v9"/>
+      </svg>
+      <p style={{ fontFamily:"'Outfit',sans-serif", fontWeight:500, color:'var(--ink)', fontSize:'.9rem', margin:0 }}>No hay edificios registrados aún</p>
     </div>
   );
 }

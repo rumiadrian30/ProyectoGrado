@@ -249,17 +249,6 @@ export default function Explorer() {
               Campus ESPOCH · Riobamba
             </p>
           </div>
-          <button onClick={() => setSidebarOpen(false)} style={{
-            width: 30, height: 30, borderRadius: 'var(--radius-sm)',
-            background: 'rgba(255,255,255,0.15)', border: 'none',
-            color: '#fff', cursor: 'pointer', display: 'flex',
-            alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-          }}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
-              stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-              <path d="M18 6 6 18M6 6l12 12"/>
-            </svg>
-          </button>
         </div>
 
         {/* Edificio activo */}
@@ -611,7 +600,9 @@ export default function Explorer() {
         title={sidebarOpen ? 'Ocultar panel' : 'Mostrar panel'}
         style={{
           position: 'absolute',
-          left: sidebarOpen && !isMobile ? SIDEBAR_W + 8 : 12,
+          left: sidebarOpen
+            ? (isMobile ? SIDEBAR_W - 44 : SIDEBAR_W + 8)
+            : 12,
           top: 12, zIndex: 31,
           width: 36, height: 36,
           background: 'var(--color-bg)',
@@ -633,7 +624,6 @@ export default function Explorer() {
       </button>
 
       <HotspotPanel />
-
       {showSelector && (
         <BuildingSelector
           buildings={buildings}
