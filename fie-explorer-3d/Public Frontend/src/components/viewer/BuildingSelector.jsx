@@ -17,7 +17,7 @@ export default function BuildingSelector({ buildings, onSelect, onClose }) {
 
   return (
     <div style={{
-      position: 'fixed', inset: 0, zIndex: 100,
+      position: 'absolute', inset: 0, zIndex: 100,
       background: 'rgba(0,0,0,0.5)',
       backdropFilter: 'blur(4px)',
       display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -36,10 +36,24 @@ export default function BuildingSelector({ buildings, onSelect, onClose }) {
 
         {/* Header */}
         <div style={{
-          padding: '1.5rem 1.75rem 1rem',
-          borderBottom: '1px solid var(--color-border)',
-          background: 'var(--color-primary)',
+          padding:'0.5rem 1.75rem 1.25rem',
+          background:'#BC0613',
+          flexShrink:0,
+          position:'relative', overflow:'hidden',
         }}>
+          {/* Círculo decorativo */}
+          <div aria-hidden style={{
+            position:'absolute', top:'-50px', right:'-40px',
+            width:180, height:180, borderRadius:'50%',
+            background:'rgba(255,255,255,.05)', pointerEvents:'none',
+          }}/>
+
+          <div className="bs-header-inner" style={{
+            display:'flex', alignItems:'flex-start',
+            justifyContent:'space-between', gap:'1rem', marginBottom:'1rem',
+          }}>
+
+          </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
             <div>
               <h2 style={{

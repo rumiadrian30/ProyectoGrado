@@ -1,6 +1,46 @@
+/**
+ * Home.jsx — FIE Explorer 3D
+ */
+
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { buildingsService } from '../services/buildingsService';
+
+/* ─── Paleta por tipo de edificio ─────────────────────────────────────────── */
+// Misma lógica que TYPE_PALETTE en Directorio.jsx
+const BUILDING_PALETTE = {
+  main: {
+    iconBg:     'var(--red-06)',
+    iconBorder: 'var(--red-10)',
+    iconColor:  'var(--red)',
+    accentBar:  'var(--red)',
+    badgeBg:    'var(--red-06)',
+    badgeBorder:'var(--red-10)',
+    badgeColor: 'var(--red)',
+  },
+  secondary: {
+    iconBg:     'rgba(120,53,15,.06)',
+    iconBorder: 'rgba(120,53,15,.14)',
+    iconColor:  '#92400e',
+    accentBar:  '#92400e',
+    badgeBg:    'rgba(120,53,15,.06)',
+    badgeBorder:'rgba(120,53,15,.14)',
+    badgeColor: '#92400e',
+  },
+  lab: {
+    iconBg:     'rgba(14,116,144,.07)',
+    iconBorder: 'rgba(14,116,144,.15)',
+    iconColor:  '#0e7490',
+    accentBar:  '#0e7490',
+    badgeBg:    'rgba(14,116,144,.07)',
+    badgeBorder:'rgba(14,116,144,.15)',
+    badgeColor: '#0e7490',
+  },
+};
+
+function getPalette(type) {
+  return BUILDING_PALETTE[type] || BUILDING_PALETTE.main;
+}
 
 /* ─── CSS global ──────────────────────────────────────────────────────────── */
 const CSS = `
@@ -12,11 +52,17 @@ const CSS = `
     --red-10:   rgba(188,6,19,.10);
     --red-18:   rgba(188,6,19,.18);
     --red-06:   rgba(188,6,19,.06);
+    --red-03:   rgba(188,6,19,.03);
     --cream:    #FDFAF9;
     --ink:      rgba(80,4,10,.55);
     --rule:     rgba(188,6,19,.14);
     --white:    #FFFFFF;
     --ease:     cubic-bezier(.16,1,.3,1);
+    --r-sm:     10px;
+    --r-md:     16px;
+    --r-lg:     22px;
+    --r-xl:     32px;
+    --r-full:   999px;
   }
 
   /* ─── Stagger load-in ─────────────────────────────────────────────────── */
@@ -58,24 +104,26 @@ const CSS = `
   .sp-card {
     position:relative; overflow:hidden;
     border:1px solid var(--rule);
-    transition:border-color .28s var(--ease), box-shadow .28s var(--ease), transform .28s var(--ease);
+    border-radius:var(--r-lg);
+    transition:border-color .28s var(--ease), box-shadow .28s var(--ease), transform .28s var(--ease), opacity .28s var(--ease);
   }
   .sp-card::before {
     content:'';
-    position:absolute; inset:0;
+    position:absolute; inset:0; border-radius:inherit;
     background:radial-gradient(260px circle at var(--mx,50%) var(--my,50%), var(--red-10), transparent 80%);
     opacity:0;
     transition:opacity .3s;
     pointer-events:none; z-index:0;
   }
-  .sp-card:hover { border-color:rgba(188,6,19,.35); box-shadow:0 8px 28px rgba(188,6,19,.10); transform:translateY(-2px); }
+  .sp-card:hover { border-color:rgba(188,6,19,.35); box-shadow:0 10px 36px rgba(188,6,19,.10), 0 2px 8px rgba(188,6,19,.05); transform:translateY(-3px); }
   .sp-card:hover::before { opacity:1; }
-  .sp-card:active { transform:translateY(-1px); }
+  .sp-card:active { transform:translateY(-1px) scale(.997); }
   .sp-card > * { position:relative; z-index:1; }
 
   /* ─── Directional hover CTA ──────────────────────────────────────────── */
   .dir-btn {
     position:relative; overflow:hidden;
+    border-radius:var(--r-full);
     transition:color .25s var(--ease);
   }
   .dir-btn .fill {
@@ -130,7 +178,7 @@ const CSS = `
 
 function InjectCSS() {
   useEffect(() => {
-    const id = 'fie-v4';
+    const id = 'fie-v5';
     if (document.getElementById(id)) return;
     const el = Object.assign(document.createElement('style'), { id, textContent: CSS });
     document.head.appendChild(el);
@@ -162,11 +210,7 @@ function SpotlightCard({ children, style, className = '' }) {
     e.currentTarget.style.setProperty('--my', `${e.clientY - r.top}px`);
   };
   return (
-    <div
-      className={`sp-card ${className}`}
-      onMouseMove={handleMove}
-      style={style}
-    >
+    <div className={`sp-card ${className}`} onMouseMove={handleMove} style={style}>
       {children}
     </div>
   );
@@ -219,26 +263,21 @@ export default function Home() {
     <main style={{ paddingTop:'var(--nav-h,64px)', fontFamily:"'Outfit',sans-serif", background:'var(--cream)', color:'var(--red)' }}>
       <InjectCSS />
 
-      {/* ══════════════════════════════════════════════════════════════════
-          HERO — Split: texto izquierda / imagen derecha
-      ══════════════════════════════════════════════════════════════════ */}
+      {/* ══ HERO ══════════════════════════════════════════════════════════ */}
       <section style={{
         position:'relative', minHeight:'100dvh', overflow:'hidden',
         backgroundImage:'url(https://www.espoch.edu.ec/wp-content/uploads/2022/08/Fie-scaled.jpg)',
         backgroundSize:'cover', backgroundPosition:'center',
       }}>
-        {/* Overlay blanco: opaco izquierda → translúcido derecha */}
         <div aria-hidden style={{
           position:'absolute', inset:0, zIndex:0,
           background:'linear-gradient(100deg, rgba(253,250,249,.97) 0%, rgba(253,250,249,.92) 42%, rgba(253,250,249,.52) 68%, rgba(253,250,249,.12) 100%)',
         }}/>
-        {/* Línea vertical decorativa */}
         <div aria-hidden style={{
           position:'absolute', left:0, top:0, bottom:0, width:3, zIndex:1,
           background:'linear-gradient(to bottom, transparent 0%, var(--red) 25%, var(--red) 75%, transparent 100%)',
         }}/>
 
-        {/* Contenido — solo lado izquierdo */}
         <div className="hero-inner" style={{
           position:'relative', zIndex:2,
           maxWidth:1320, margin:'0 auto',
@@ -248,27 +287,18 @@ export default function Home() {
           minHeight:'100dvh', justifyContent:'center',
         }}>
           <div style={{ maxWidth:580 }}>
-
-            {/* Eyebrow */}
-            <div className="s0" style={{
-              display:'inline-flex', alignItems:'center', gap:'.55rem',
-              marginBottom:'1.75rem',
-            }}>
+            <div className="s0" style={{ display:'inline-flex', alignItems:'center', gap:'.55rem', marginBottom:'1.75rem' }}>
               <span style={{ position:'relative', display:'flex', alignItems:'center' }}>
                 <span style={{ width:7, height:7, borderRadius:'50%', background:'var(--red)', display:'block', flexShrink:0 }}/>
                 <span aria-hidden style={{ position:'absolute', inset:0, borderRadius:'50%', background:'var(--red)', animation:'pulse-ring 2.2s ease-out infinite' }}/>
               </span>
-              <span style={{
-                fontFamily:"'Outfit',sans-serif",
-                fontSize:'.7rem', fontWeight:600, letterSpacing:'.15em', textTransform:'uppercase',
-                color:'var(--red)',
-              }}>ESPOCH · Facultad de Informática y Electrónica</span>
+              <span style={{ fontFamily:"'Outfit',sans-serif", fontSize:'.7rem', fontWeight:600, letterSpacing:'.15em', textTransform:'uppercase', color:'var(--red)' }}>
+                ESPOCH · Facultad de Informática y Electrónica
+              </span>
             </div>
 
-            {/* H1 — tracking tighter, no screaming scale */}
             <h1 className="s1" style={{
-              fontFamily:"'Outfit',sans-serif",
-              fontWeight:800,
+              fontFamily:"'Outfit',sans-serif", fontWeight:800,
               fontSize:'clamp(2.6rem,5.5vw,4.4rem)',
               lineHeight:1.04, letterSpacing:'-.03em',
               color:'var(--red)', margin:'0 0 .2em',
@@ -277,17 +307,14 @@ export default function Home() {
               <span style={{ color:'rgba(80,4,10,.75)', fontWeight:700 }}>sin estar ahí.</span>
             </h1>
 
-            {/* Body */}
             <p className="s2" style={{
               fontSize:'1.02rem', fontWeight:300, lineHeight:1.75,
-              color:'var(--ink)', maxWidth:'52ch',
-              margin:'1.4rem 0 2.25rem',
+              color:'var(--ink)', maxWidth:'52ch', margin:'1.4rem 0 2.25rem',
             }}>
               Navega edificios, laboratorios y espacios en tres dimensiones.
               Toca cualquier sala para ver horarios, docentes y equipamiento en tiempo real.
             </p>
 
-            {/* CTAs — directional hover */}
             <div className="s3 cta-row" style={{ display:'flex', gap:'.85rem', alignItems:'center' }}>
               <PrimaryBtn to="/explorar">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
@@ -298,9 +325,8 @@ export default function Home() {
                 padding:'.8rem 1.5rem',
                 fontFamily:"'Outfit',sans-serif", fontWeight:600, fontSize:'.88rem',
                 color:'var(--red)', textDecoration:'none',
-                border:'1.5px solid var(--rule)',
-                background:'rgba(253,250,249,.7)',
-                backdropFilter:'blur(6px)',
+                border:'1.5px solid var(--rule)', borderRadius:'var(--r-full)',
+                background:'rgba(253,250,249,.7)', backdropFilter:'blur(6px)',
                 transition:'border-color .25s var(--ease), background .25s var(--ease)',
               }}
               onMouseEnter={e=>{ e.currentTarget.style.borderColor='rgba(188,6,19,.45)'; e.currentTarget.style.background='var(--white)'; }}
@@ -310,17 +336,14 @@ export default function Home() {
               </a>
             </div>
 
-            {/* Stats — horizontal, no pill container */}
             <div className="s4 hero-stats" style={{
-              display:'flex', gap:'0',
-              marginTop:'3.25rem',
-              paddingTop:'2rem',
-              borderTop:'1px solid var(--rule)',
+              display:'flex', gap:'0', marginTop:'3.25rem',
+              paddingTop:'2rem', borderTop:'1px solid var(--rule)',
             }}>
               {[
-                { n:'5',   sx:'',   l:'Edificios'     },
-                { n:'20',  sx:'+',  l:'Laboratorios'  },
-                { n:'360', sx:'°',  l:'Exploración'   },
+                { n:'5',   sx:'',   l:'Edificios'    },
+                { n:'20',  sx:'+',  l:'Laboratorios' },
+                { n:'360', sx:'°',  l:'Exploración'  },
               ].map(({ n, sx, l }, i) => (
                 <div key={l} style={{ flex:1, textAlign:'left', position:'relative', paddingLeft: i > 0 ? '1.5rem' : 0 }}>
                   {i > 0 && <span className="stat-sep" style={{ position:'absolute', left:0, top:'10%', bottom:'10%', width:1, background:'var(--rule)' }}/>}
@@ -335,11 +358,10 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ══ TICKER ═════════════════════════════════════════════════════════ */}
+      {/* ══ TICKER ════════════════════════════════════════════════════════ */}
       <div style={{
         overflow:'hidden', whiteSpace:'nowrap', userSelect:'none',
-        borderTop:'2px solid var(--red)',
-        borderBottom:'1px solid var(--rule)',
+        borderTop:'2px solid var(--red)', borderBottom:'1px solid var(--rule)',
         background:'var(--white)', padding:'.8rem 0',
       }}>
         <div className="ticker-track">
@@ -357,11 +379,9 @@ export default function Home() {
         </div>
       </div>
 
-      {/* ══ EDIFICIOS — bento asimétrico ═══════════════════════════════════ */}
+      {/* ══ EDIFICIOS — bento asimétrico ══════════════════════════════════ */}
       <section id="edificios" className="sec-pad" style={{ padding:'5.5rem 5vw', background:'var(--cream)' }}>
         <div style={{ maxWidth:1280, margin:'0 auto' }}>
-
-          {/* Header: left title / right link */}
           <div style={{
             display:'flex', alignItems:'flex-end', justifyContent:'space-between',
             flexWrap:'wrap', gap:'1rem', marginBottom:'2.75rem',
@@ -389,7 +409,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ══ zig-zag con número decorativo ══════════════════ */}
+      {/* ══ CÓMO FUNCIONA ═════════════════════════════════════════════════ */}
       <section className="sec-pad" style={{ padding:'5.5rem 5vw', background:'var(--white)', borderTop:'1px solid var(--rule)' }}>
         <div style={{ maxWidth:1280, margin:'0 auto' }}>
           <div style={{ marginBottom:'3.5rem' }}>
@@ -397,14 +417,15 @@ export default function Home() {
             <h2 style={{ fontFamily:"'Outfit',sans-serif", fontWeight:800, fontSize:'clamp(1.7rem,3.2vw,2.5rem)', letterSpacing:'-.025em', color:'var(--red)', margin:0 }}>¿Cómo funciona?</h2>
           </div>
 
-          <div className="steps-grid" style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'1px', background:'var(--rule)' }}>
+          <div className="steps-grid" style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'1px', background:'var(--rule)', borderRadius:'var(--r-lg)', overflow:'hidden' }}>
             {[
-              { n:'01', title:'Selecciona un edificio', body:'Elige entre los distintos edificios y bloques desde el mapa 3D o la lista de instalaciones del campus.' },
-              { n:'02', title:'Navega en 3D',           body:'Rota, acerca y desplaza el modelo fotogramétrico con libertad total. Three.js y WebGL procesan cada frame.' },
-              { n:'03', title:'Activa los hotspots',    body:'Cada sala, laboratorio u oficina tiene una malla nombrada. Haz clic para revelar su ficha completa.' },
+              { n:'01', title:'Selecciona un edificio',  body:'Elige entre los distintos edificios y bloques desde el mapa 3D o la lista de instalaciones del campus.' },
+              { n:'02', title:'Navega en 3D',            body:'Rota, acerca y desplaza el modelo fotogramétrico con libertad total. Three.js y WebGL procesan cada frame.' },
+              { n:'03', title:'Activa los hotspots',     body:'Cada sala, laboratorio u oficina tiene una malla nombrada. Haz clic para revelar su ficha completa.' },
               { n:'04', title:'Consulta la información', body:'Horarios, equipamiento, docentes e imágenes del espacio, sin necesidad de estar presencialmente.' },
             ].map(({ n, title, body }) => (
-              <div key={n} style={{ position:'relative', background:'var(--white)', padding:'2.25rem 2rem', overflow:'hidden',
+              <div key={n} style={{
+                position:'relative', background:'var(--white)', padding:'2.25rem 2rem', overflow:'hidden',
                 borderTop:'2px solid transparent', transition:'border-top-color .25s var(--ease)',
               }}
               onMouseEnter={e=>e.currentTarget.style.borderTopColor='var(--red)'}
@@ -419,57 +440,37 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ══ CTA BANNER — full-bleed, left-aligned ══════════════════════════ */}
-      <section style={{ padding:'5rem 5vw', background:'var(--white)', borderTop:'1px solid var(--rule)' }}>
+      {/* ══ CTA BANNER ════════════════════════════════════════════════════ */}
+      <section style={{ padding:'5rem 5vw', background:'var(--red)', borderRadius:0 }}>
         <div style={{ maxWidth:1280, margin:'0 auto', display:'flex', alignItems:'center', justifyContent:'space-between', flexWrap:'wrap', gap:'2rem' }}>
           <div>
-            <p style={{ fontFamily:"'Outfit',sans-serif", fontSize:'.7rem', fontWeight:700, letterSpacing:'.15em', textTransform:'uppercase', color:'rgba(0,0,0,.55)', marginBottom:'.75rem' }}>Comienza ahora</p>
-            <h2 style={{ fontFamily:"'Outfit',sans-serif", fontWeight:800, fontSize:'clamp(1.9rem,4vw,3rem)', lineHeight:1.05, letterSpacing:'-.025em', color:'var(--red)', margin:0 }}>
+            <p style={{ fontFamily:"'Outfit',sans-serif", fontSize:'.7rem', fontWeight:700, letterSpacing:'.15em', textTransform:'uppercase', color:'rgba(255,255,255,.55)', marginBottom:'.75rem' }}>Comienza ahora</p>
+            <h2 style={{ fontFamily:"'Outfit',sans-serif", fontWeight:800, fontSize:'clamp(1.9rem,4vw,3rem)', lineHeight:1.05, letterSpacing:'-.025em', color:'#fff', margin:0 }}>
               Tu campus,<br/>en tres dimensiones.
             </h2>
           </div>
-          <PrimaryBtn 
-            to="/explorar"
-            style={{display: 'inline-flex', alignItems: 'center', gap: '.5rem', flexDirection: 'row-reverse'}}
-          >
-            Iniciar exploración
-            <svg
-              width="14"
-              height="14"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.5"
-              strokeLinecap="round"
-            >
-              <polygon points="5 3 19 12 5 21 5 3" />
-            </svg>
-          </PrimaryBtn> 
+          <PrimaryBtnWhite to="/explorar">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+            Explorar campus
+          </PrimaryBtnWhite>
         </div>
       </section>
-
-      {/* ══ FOOTER ════════════════════════════════════════════════════════ */}
-      <footer style={{
-        padding:'1.5rem 5vw', background:'var(--red)', color:'#fff', fontSize:'.75rem',
-        borderTop:'2px solid var(--red)',
-        display:'flex', alignItems:'center', justifyContent:'space-between', flexWrap:'wrap', gap:'.75rem',
-      }}>
-        <span style={{ fontFamily:"'Outfit',sans-serif", fontWeight:800, fontSize:'.9rem', color:'var(--white)' }}>FIE Explorer 3D · ESPOCH</span>
-        <span style={{ fontFamily:"'Outfit',sans-serif", fontSize:'.78rem', fontWeight:300, color:'var(--white)' }}>
-          Grefa Rivadeneyra Rumi Adrian · Código 7333 · {new Date().getFullYear()}
-        </span>
-      </footer>
     </main>
   );
 }
 
-/* ─── Botón primario (directional hover-aware) ──────────────────────────── */
+/* ─── Botón primario (directional hover-aware) ────────────────────────────── */
 function PrimaryBtn({ to, children }) {
   const ref = useRef();
   const { onMouseEnter, onMouseLeave } = useDirHover(ref);
   return (
     <Link to={to} ref={ref} className="dir-btn" onMouseEnter={onMouseEnter} onMouseLeave={onMouseLeave}
-      style={{ display:'inline-flex', padding:'.85rem 1.9rem', background:'var(--red)', color:'#fff', textDecoration:'none', fontFamily:"'Outfit',sans-serif", fontWeight:700, fontSize:'.9rem', letterSpacing:'.03em', border:'none' }}>
+      style={{
+        display:'inline-flex', padding:'.85rem 1.9rem',
+        background:'var(--red)', color:'#fff', textDecoration:'none',
+        fontFamily:"'Outfit',sans-serif", fontWeight:700, fontSize:'.9rem',
+        letterSpacing:'.03em', border:'none',
+      }}>
       <div className="fill"/>
       <span>{children}</span>
     </Link>
@@ -477,16 +478,14 @@ function PrimaryBtn({ to, children }) {
 }
 
 function PrimaryBtnWhite({ to, children }) {
-  const ref = useRef();
   return (
-    <Link to={to} ref={ref} style={{
+    <Link to={to} style={{
       display:'inline-flex', alignItems:'center', gap:'.5rem',
-      padding:'.9rem 2rem',
+      padding:'.9rem 2rem', borderRadius:'var(--r-full)',
       background:'var(--white)', color:'var(--red)',
       textDecoration:'none',
       fontFamily:"'Outfit',sans-serif", fontWeight:700, fontSize:'.9rem',
-      letterSpacing:'.03em',
-      flexShrink:0,
+      letterSpacing:'.03em', flexShrink:0,
       transition:'background .22s var(--ease)',
     }}
     onMouseEnter={e=>e.currentTarget.style.background='rgba(255,255,255,.88)'}
@@ -496,22 +495,16 @@ function PrimaryBtnWhite({ to, children }) {
   );
 }
 
-/* ─── Bento grid — featured card + 2-col resto ───────────────────────────── */
+/* ─── Bento grid ─────────────────────────────────────────────────────────── */
 function BentoGrid({ buildings }) {
   if (!buildings.length) return <EmptyBuildings />;
   const [featured, ...rest] = buildings;
 
   return (
-    <div className="bento-grid" style={{
-      display:'grid',
-      gridTemplateColumns:'repeat(2,1fr)',
-      gap:'1rem',
-    }}>
-      {/* Featured — ocupa columna completa superior */}
+    <div className="bento-grid" style={{ display:'grid', gridTemplateColumns:'repeat(2,1fr)', gap:'1rem' }}>
       <div className="featured g-item" style={{ gridColumn:'span 2' }}>
         <BuildingCard building={featured} featured />
       </div>
-
       {rest.map(b => (
         <div key={b.id} className="g-item">
           <BuildingCard building={b} />
@@ -521,9 +514,10 @@ function BentoGrid({ buildings }) {
   );
 }
 
-/* ─── BuildingCard ──────────────────────────────────────────────────────── */
+/* ─── BuildingCard — con paleta por tipo ─────────────────────────────────── */
 function BuildingCard({ building, featured = false }) {
-  const typeLabel = { main:'Principal', secondary:'Secundario', lab:'Laboratorio' };
+  const TYPE_LABEL = { main:'Principal', secondary:'Secundario', lab:'Laboratorio' };
+  const palette = getPalette(building.type);
 
   return (
     <Link to={`/explorar/${building.id}`} style={{ textDecoration:'none', display:'block', height:'100%' }}>
@@ -536,31 +530,44 @@ function BuildingCard({ building, featured = false }) {
         alignItems: featured ? 'flex-end' : 'flex-start',
         gap: featured ? '3rem' : 0,
       }}>
-        {/* ── Featured: layout horizontal ── */}
         {featured ? (
+          /* ── Featured: horizontal ── */
           <>
             <div style={{ flex:1 }}>
-              <Header building={building} typeLabel={typeLabel} />
+              <BuildingHeader building={building} typeLabel={TYPE_LABEL} palette={palette} />
               <p style={{ fontSize:'.9rem', fontWeight:300, color:'var(--ink)', lineHeight:1.7, maxWidth:'55ch', marginTop:'.75rem' }}>
                 {building.description}
               </p>
             </div>
             <div style={{ display:'flex', flexDirection:'column', alignItems:'flex-end', gap:'.75rem', flexShrink:0 }}>
               <FloorBadge building={building} />
-              <ExploreArrow />
+              <ExploreArrow palette={palette} />
             </div>
           </>
         ) : (
-          /* ── Normal: layout vertical ── */
+          /* ── Normal: vertical ── */
           <>
-            <Header building={building} typeLabel={typeLabel} />
-            <p style={{ fontSize:'.82rem', fontWeight:300, color:'var(--ink)', lineHeight:1.65, flex:1, marginTop:'.5rem', marginBottom:'1.25rem',
-              display:'-webkit-box', WebkitLineClamp:2, WebkitBoxOrient:'vertical', overflow:'hidden' }}>
+            {/* Barra de acento superior (color por tipo) */}
+            <div style={{
+              position:'absolute', top:0, left:'1.5rem', right:'1.5rem', height:3,
+              background: palette.accentBar,
+              borderRadius:'0 0 var(--r-sm) var(--r-sm)',
+              opacity:.35,
+            }}/>
+            <BuildingHeader building={building} typeLabel={TYPE_LABEL} palette={palette} />
+            <p style={{
+              fontSize:'.82rem', fontWeight:300, color:'var(--ink)', lineHeight:1.65,
+              flex:1, marginTop:'.5rem', marginBottom:'1.25rem',
+              display:'-webkit-box', WebkitLineClamp:2, WebkitBoxOrient:'vertical', overflow:'hidden',
+            }}>
               {building.description}
             </p>
-            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', width:'100%', paddingTop:'.85rem', borderTop:'1px solid var(--rule)' }}>
+            <div style={{
+              display:'flex', alignItems:'center', justifyContent:'space-between',
+              width:'100%', paddingTop:'.85rem', borderTop:'1px solid var(--rule)',
+            }}>
               <FloorBadge building={building} />
-              <ExploreArrow />
+              <ExploreArrow palette={palette} />
             </div>
           </>
         )}
@@ -569,18 +576,50 @@ function BuildingCard({ building, featured = false }) {
   );
 }
 
-function Header({ building, typeLabel }) {
+/* ── Sub-componentes de BuildingCard ── */
+
+function BuildingHeader({ building, typeLabel, palette }) {
   return (
     <div>
       <div style={{ display:'flex', alignItems:'center', gap:'.6rem', marginBottom:'.9rem' }}>
-        <span style={{ fontFamily:"'Outfit',sans-serif", fontSize:'.6rem', fontWeight:700, letterSpacing:'.12em', textTransform:'uppercase', color:'var(--red)', padding:'.18rem .55rem', border:'1px solid var(--red-10)', background:'var(--red-06)' }}>
+        {/* Ícono circular con color por tipo */}
+        <div style={{
+          width:34, height:34, borderRadius:'50%',
+          background: palette.iconBg,
+          border:     `1px solid ${palette.iconBorder}`,
+          display:'flex', alignItems:'center', justifyContent:'center',
+          color: palette.iconColor, flexShrink:0,
+        }}>
+          <BuildingIcon />
+        </div>
+        {/* Badge de tipo */}
+        <span style={{
+          fontFamily:"'Outfit',sans-serif", fontSize:'.6rem', fontWeight:700,
+          letterSpacing:'.12em', textTransform:'uppercase',
+          color:       palette.badgeColor,
+          padding:'.18rem .6rem',
+          border:     `1px solid ${palette.badgeBorder}`,
+          background:  palette.badgeBg,
+          borderRadius:'var(--r-full)',
+        }}>
           {typeLabel[building.type] || building.type}
+        </span>
+        <span style={{ fontFamily:"'Outfit',sans-serif", fontSize:'.6rem', fontWeight:600, color:'var(--ink)', letterSpacing:'.1em' }}>
+          #{String(building.id).padStart(2,'0')}
         </span>
       </div>
       <h3 style={{ fontFamily:"'Outfit',sans-serif", fontWeight:700, fontSize:'1.05rem', color:'var(--red)', lineHeight:1.25, margin:0 }}>
         {building.name}
       </h3>
     </div>
+  );
+}
+
+function BuildingIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+      <path d="M3 21h18M3 7l9-4 9 4M4 7v14M20 7v14M9 21V12h6v9"/>
+    </svg>
   );
 }
 
@@ -593,9 +632,13 @@ function FloorBadge({ building }) {
   );
 }
 
-function ExploreArrow() {
+function ExploreArrow({ palette }) {
   return (
-    <span style={{ fontFamily:"'Outfit',sans-serif", fontSize:'.74rem', fontWeight:700, color:'var(--red)', display:'flex', alignItems:'center', gap:'.3rem', letterSpacing:'.05em' }}>
+    <span style={{
+      fontFamily:"'Outfit',sans-serif", fontSize:'.74rem', fontWeight:700,
+      color: palette.iconColor,
+      display:'flex', alignItems:'center', gap:'.3rem', letterSpacing:'.05em',
+    }}>
       Explorar
       <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
     </span>
@@ -607,14 +650,14 @@ function BentoSkeleton() {
   return (
     <div className="bento-grid" style={{ display:'grid', gridTemplateColumns:'repeat(2,1fr)', gap:'1rem' }}>
       <div className="featured" style={{
-        gridColumn:'span 2', height:160,
+        gridColumn:'span 2', height:160, borderRadius:'var(--r-lg)',
         backgroundImage:'linear-gradient(90deg,var(--cream) 25%,var(--white) 50%,var(--cream) 75%)',
         backgroundSize:'200% 100%', animation:'shimmer 1.6s ease infinite',
         border:'1px solid var(--rule)',
       }}/>
       {[1,2,3,4].map(i => (
         <div key={i} style={{
-          height:180,
+          height:180, borderRadius:'var(--r-lg)',
           backgroundImage:'linear-gradient(90deg,var(--cream) 25%,var(--white) 50%,var(--cream) 75%)',
           backgroundSize:'200% 100%', animation:'shimmer 1.6s ease infinite',
           border:'1px solid var(--rule)',
@@ -627,7 +670,7 @@ function BentoSkeleton() {
 /* ─── Empty state ─────────────────────────────────────────────────────── */
 function EmptyBuildings() {
   return (
-    <div style={{ textAlign:'center', padding:'5rem 2rem', border:'1px dashed var(--rule)' }}>
+    <div style={{ textAlign:'center', padding:'5rem 2rem', border:'1px dashed var(--rule)', borderRadius:'var(--r-xl)' }}>
       <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="var(--red-18)" strokeWidth="1.5" strokeLinecap="round" style={{ marginBottom:'1rem' }}>
         <path d="M3 21h18M3 7l9-4 9 4M4 7v14M20 7v14M9 21V12h6v9"/>
       </svg>

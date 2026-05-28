@@ -1,31 +1,39 @@
 import React, { Suspense } from 'react';
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import Navbar from './components/ui/Navbar';
 import LoadingScreen from './components/ui/LoadingScreen';
+import Footer from './components/ui/Footer'; 
 
 const Home      = React.lazy(() => import('./pages/Home'));
 const Explorer  = React.lazy(() => import('./pages/Explorer'));
 const Directorio = React.lazy(() => import('./pages/Directorio'));
 const AcercaDe  = React.lazy(() => import('./pages/AcercaDe'));
 const Ayuda     = React.lazy(() => import('./pages/Ayuda'));
-const DemoPrivacidad = React.lazy(() => import('./pages/DemoPrivacidad'));
 
 export default function App() {
+  const location = useLocation();
+  const hideFooterRoutes = ['/explorar', '/admin', '/dashboard'];
+  const shouldHideFooter = hideFooterRoutes.some(route => 
+    location.pathname.startsWith(route)
+  );
   return (
-    <>
+    
+    <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
       <Navbar />
-      <Suspense fallback={<LoadingScreen />}>
-        <Routes>
-          <Route path="/"                     element={<Home />} />
-          <Route path="/explorar"             element={<Explorer />} />
-          <Route path="/explorar/:buildingId" element={<Explorer />} />
-          <Route path="/directorio"           element={<Directorio />} />
-          <Route path="/acerca-de"            element={<AcercaDe />} />
-          <Route path="/ayuda"                element={<Ayuda />} />
-          <Route path="/demo-privacidad"      element={<DemoPrivacidad />} />
-          <Route path="*"                     element={<Navigate to="/" replace />} />
-        </Routes>
-      </Suspense>
-    </>
+      <main style={{ flex: 1 }}>
+        <Suspense fallback={<LoadingScreen />}>
+          <Routes>
+            <Route path="/"                     element={<Home />} />
+            <Route path="/explorar"             element={<Explorer />} />
+            <Route path="/explorar/:buildingId" element={<Explorer />} />
+            <Route path="/directorio"           element={<Directorio />} />
+            <Route path="/acerca-de"            element={<AcercaDe />} />
+            <Route path="/ayuda"                element={<Ayuda />} />
+            <Route path="*"                     element={<Navigate to="/" replace />} />
+          </Routes>
+        </Suspense>
+      </main>
+      {!shouldHideFooter && <Footer />}
+    </div>
   );
 }
