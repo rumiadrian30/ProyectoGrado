@@ -1,3 +1,10 @@
+/**
+ * Explorer.jsx — FIE Explorer 3D
+ * Rediseño con consistencia total al sistema de diseño:
+ * Outfit, var(--red), mismo lenguaje visual de AcercaDe / Ayuda.
+ * Estructura y lógica 100% intactas — solo reskin visual.
+ */
+
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import MapboxViewer from '../components/viewer/MapboxViewer';
@@ -10,9 +17,167 @@ import { modelsService } from '../services/modelsService';
 import { isOpenNow } from '../utils/scheduleUtils';
 import { buildingOffsetToGPS } from '../utils/buildingCoords';
 
-const SIDEBAR_W = 280;
+/* ─── Constantes ─────────────────────────────────────────────────────────── */
+const SIDEBAR_W = 288;
 
-// Iconos SVG inline por tipo — sin emojis, paleta corporativa
+/* ─── CSS del sistema ────────────────────────────────────────────────────── */
+const EXPLORER_CSS = `
+  @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap');
+
+  /* Tokens locales — sobreescriben solo dentro del explorador */
+  .fie-explorer {
+    --red:        #BC0613;
+    --red-06:     rgba(188,6,19,.06);
+    --red-10:     rgba(188,6,19,.10);
+    --red-20:     rgba(188,6,19,.20);
+    --rule:       rgba(188,6,19,.12);
+    --ink:        rgba(40,2,5,.62);
+    --ink-dark:   rgba(40,2,5,.88);
+    --cream:      #FDFAF9;
+    font-family: 'Outfit', sans-serif;
+  }
+
+  /* Sidebar slide-in */
+  @keyframes ex-slide {
+    from { opacity:0; transform:translateX(-12px); }
+    to   { opacity:1; transform:translateX(0); }
+  }
+  .ex-sidebar-item {
+    animation: ex-slide .35s cubic-bezier(.16,1,.3,1) both;
+  }
+  .ex-sidebar-item:nth-child(1)  { animation-delay:.04s }
+  .ex-sidebar-item:nth-child(2)  { animation-delay:.08s }
+  .ex-sidebar-item:nth-child(3)  { animation-delay:.12s }
+  .ex-sidebar-item:nth-child(4)  { animation-delay:.16s }
+  .ex-sidebar-item:nth-child(5)  { animation-delay:.20s }
+  .ex-sidebar-item:nth-child(6)  { animation-delay:.24s }
+  .ex-sidebar-item:nth-child(7)  { animation-delay:.28s }
+  .ex-sidebar-item:nth-child(8)  { animation-delay:.32s }
+  .ex-sidebar-item:nth-child(9)  { animation-delay:.36s }
+  .ex-sidebar-item:nth-child(10) { animation-delay:.40s }
+
+  /* Hotspot row */
+  .ex-hs-row {
+    width:100%; text-align:left;
+    display:flex; align-items:center; gap:.6rem;
+    padding:.55rem .7rem;
+    background:transparent;
+    border:1px solid transparent;
+    border-radius:12px;
+    cursor:pointer; margin-bottom:2px;
+    transition: background .2s cubic-bezier(.16,1,.3,1),
+                border-color .2s cubic-bezier(.16,1,.3,1),
+                transform    .15s cubic-bezier(.16,1,.3,1);
+    font-family:'Outfit', sans-serif;
+  }
+  .ex-hs-row:hover { background:var(--red-06); border-color:var(--red-10); transform:translateX(2px); }
+  .ex-hs-row.active {
+    background:var(--red-06); border-color:var(--red-20);
+    transform:translateX(2px);
+  }
+
+  /* Chip de filtro */
+  .ex-chip {
+    padding:.22rem .65rem;
+    font-size:.68rem; font-weight:700; font-family:'Outfit', sans-serif;
+    border-radius:999px; cursor:pointer; white-space:nowrap;
+    display:inline-flex; align-items:center; gap:4px;
+    transition: background .18s cubic-bezier(.16,1,.3,1),
+                color       .18s cubic-bezier(.16,1,.3,1),
+                border-color .18s cubic-bezier(.16,1,.3,1),
+                transform    .15s cubic-bezier(.16,1,.3,1);
+    border:1px solid var(--rule);
+    background:#fff; color:var(--ink);
+  }
+  .ex-chip:hover { border-color:var(--red-20); color:var(--red); transform:translateY(-1px); }
+  .ex-chip.active {
+    background:var(--red); color:#fff; border-color:var(--red);
+  }
+  .ex-chip.active-green {
+    background:#15803d; color:#fff; border-color:#15803d;
+  }
+
+  /* Toggle btn */
+  .ex-toggle {
+    width:34px; height:34px;
+    background:#fff;
+    border:1px solid var(--rule);
+    border-radius:10px; cursor:pointer;
+    display:flex; align-items:center; justify-content:center;
+    box-shadow:0 2px 8px rgba(188,6,19,.08);
+    color:var(--red);
+    transition: background .2s cubic-bezier(.16,1,.3,1),
+                box-shadow  .2s cubic-bezier(.16,1,.3,1),
+                transform   .15s cubic-bezier(.16,1,.3,1);
+  }
+  .ex-toggle:hover {
+    background:var(--red-06);
+    box-shadow:0 4px 16px rgba(188,6,19,.14);
+    transform:translateY(-1px);
+  }
+
+  /* Search input */
+  .ex-search {
+    display:flex; align-items:center; gap:6px;
+    background:#fff; border:1px solid var(--rule);
+    border-radius:10px; padding:.4rem .65rem;
+    transition: border-color .2s cubic-bezier(.16,1,.3,1),
+                box-shadow   .2s cubic-bezier(.16,1,.3,1);
+  }
+  .ex-search:focus-within {
+    border-color:var(--red-20);
+    box-shadow:0 0 0 3px rgba(188,6,19,.06);
+  }
+  .ex-search input {
+    flex:1; border:none; background:transparent;
+    font-size:.78rem; font-family:'Outfit', sans-serif;
+    color:var(--ink-dark); outline:none; min-width:0;
+  }
+  .ex-search input::placeholder { color:rgba(188,6,19,.3); }
+
+  /* Progress bar */
+  @keyframes ex-progress-pulse {
+    0%,100% { opacity:1 }
+    50%      { opacity:.6 }
+  }
+  .ex-progress-bar { animation: ex-progress-pulse 1.4s ease-in-out infinite; }
+
+  /* Bottom change-btn */
+  .ex-change-btn {
+    width:100%; padding:.55rem;
+    background:#fff; color:var(--ink);
+    border:1px solid var(--rule); border-radius:12px;
+    font-family:'Outfit', sans-serif; font-size:.8rem; font-weight:600;
+    cursor:pointer;
+    display:flex; align-items:center; justify-content:center; gap:.4rem;
+    transition: background .2s cubic-bezier(.16,1,.3,1),
+                border-color .2s cubic-bezier(.16,1,.3,1),
+                transform    .15s cubic-bezier(.16,1,.3,1);
+  }
+  .ex-change-btn:hover {
+    background:var(--red-06); border-color:var(--red-20);
+    color:var(--red); transform:translateY(-1px);
+  }
+
+  /* Scrollbar minimal */
+  .ex-scroll::-webkit-scrollbar { width:4px; }
+  .ex-scroll::-webkit-scrollbar-track { background:transparent; }
+  .ex-scroll::-webkit-scrollbar-thumb { background:var(--red-10); border-radius:4px; }
+  .ex-scroll::-webkit-scrollbar-thumb:hover { background:var(--red-20); }
+`;
+
+function InjectCSS() {
+  useEffect(() => {
+    const id = 'fie-explorer-v2';
+    if (document.getElementById(id)) return;
+    const el = Object.assign(document.createElement('style'), { id, textContent: EXPLORER_CSS });
+    document.head.appendChild(el);
+    return () => el.remove();
+  }, []);
+  return null;
+}
+
+/* ─── SVG Icons inline ───────────────────────────────────────────────────── */
 const TYPE_ICONS_SVG = {
   classroom: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18M3 7l9-4 9 4M4 7v14M20 7v14M9 21V12h6v9"/></svg>',
   lab:       '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3h6m-3 0v5.5L16.5 17H7.5L12 8.5V3"/><path d="M6.5 17.5h11"/></svg>',
@@ -29,6 +194,7 @@ const TYPE_LABELS = {
   access:    'Accesos',
 };
 
+/* ─── Hook mobile ────────────────────────────────────────────────────────── */
 function useIsMobile(breakpoint = 768) {
   const [isMobile, setIsMobile] = useState(() => window.innerWidth < breakpoint);
   useEffect(() => {
@@ -40,6 +206,27 @@ function useIsMobile(breakpoint = 768) {
   return isMobile;
 }
 
+/* ─── Chip de filtro ─────────────────────────────────────────────────────── */
+function FilterChip({ active, onClick, label, accent = false, iconSvg, showDot }) {
+  const cls = `ex-chip${active ? (accent ? ' active-green' : ' active') : ''}`;
+  return (
+    <button className={cls} onClick={onClick}>
+      {showDot && (
+        <span style={{
+          width:6, height:6, borderRadius:'50%', flexShrink:0,
+          background: active ? '#fff' : '#16a34a', display:'inline-block',
+        }}/>
+      )}
+      {iconSvg && (
+        <span style={{ lineHeight:0, flexShrink:0 }}
+          dangerouslySetInnerHTML={{ __html: iconSvg }}/>
+      )}
+      {label}
+    </button>
+  );
+}
+
+/* ─── Main ───────────────────────────────────────────────────────────────── */
 export default function Explorer() {
   const { buildingId } = useParams();
   const navigate       = useNavigate();
@@ -64,104 +251,68 @@ export default function Explorer() {
 
   useEffect(() => { if (isMobile) setSidebarOpen(false); }, [isMobile]);
 
-  // ── Cargar edificios ──────────────────────────────────────
   useEffect(() => {
     buildingsService.getAll()
       .then(res => setBuildings(Array.isArray(res) ? res : (res?.data ?? [])))
       .catch(console.error);
   }, []);
 
-  // ── HU-09: validar edificio restaurado desde localStorage ─
   useEffect(() => {
     if (!buildings.length) return;
-
     if (buildingId) {
       const found = buildings.find(b => String(b.id) === String(buildingId) && b.is_active !== false);
-      if (found) {
-        setSelectedBuilding(found);
-        setShowSelector(false);
-      } else {
-        setSelectedBuilding(null);
-        navigate('/explorar', { replace: true });
-        setShowSelector(true);
-      }
+      if (found) { setSelectedBuilding(found); setShowSelector(false); }
+      else { setSelectedBuilding(null); navigate('/explorar', { replace: true }); setShowSelector(true); }
       return;
     }
-
     if (selectedBuilding) {
-      const stillExists = buildings.find(
-        b => String(b.id) === String(selectedBuilding.id) && b.is_active !== false
-      );
-      if (stillExists) {
-        setSelectedBuilding(stillExists);
-        setShowSelector(false);
-        navigate(`/explorar/${stillExists.id}`, { replace: true });
-      } else {
-        setSelectedBuilding(null);
-        setShowSelector(true);
-      }
-    } else {
-      setShowSelector(true);
-    }
+      const stillExists = buildings.find(b => String(b.id) === String(selectedBuilding.id) && b.is_active !== false);
+      if (stillExists) { setSelectedBuilding(stillExists); setShowSelector(false); navigate(`/explorar/${stillExists.id}`, { replace: true }); }
+      else { setSelectedBuilding(null); setShowSelector(true); }
+    } else { setShowSelector(true); }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [buildings]);
 
-  // ── Cargar modelos exteriores con polling cada 10 s ─────
   useEffect(() => {
     let cancelled = false;
-
     function fetchModels() {
       modelsService.getAllActive('exterior')
         .then(data => { if (!cancelled) setAllExteriorModels(data); })
         .catch(console.error);
     }
-
-    fetchModels(); // carga inicial inmediata
-    const interval = setInterval(fetchModels, 10_000); // re-fetch cada 10 s
-
-    return () => {
-      cancelled = true;
-      clearInterval(interval);
-    };
+    fetchModels();
+    const interval = setInterval(fetchModels, 10_000);
+    return () => { cancelled = true; clearInterval(interval); };
   }, []);
 
-  // ── Modelos a renderizar (exteriores — INTERIOR_VIEW_ENABLED = false)
   const modelsToShow = allExteriorModels;
 
   const modelInfo = selectedBuilding
     ? modelsToShow.find(m => m.building_id === selectedBuilding.id) ?? null
     : null;
 
-  // ── Hotspots del edificio seleccionado ────────────────────
   useEffect(() => {
     if (!selectedBuilding) return;
-    setTypeFilter('all');  // resetear filtros al cambiar edificio
+    setTypeFilter('all');
     setOpenNowOnly(false);
-    setSearchQuery('');       // limpiar búsqueda al cambiar de edificio
+    setSearchQuery('');
     const params = { building_id: selectedBuilding.id };
-    // Cuando INTERIOR_VIEW_ENABLED = true: añadir params.floor = currentFloor si viewMode === 'interior'
     hotspotsService.getAll(params)
       .then(res => setHotspots(Array.isArray(res) ? res : (res?.data ?? [])))
       .catch(() => setHotspots([]));
   }, [selectedBuilding, currentFloor, setHotspots]);
 
-  // ── Hotspots filtrados + tipos presentes ─────────────────
   const filteredHotspots = hotspots
     .filter(h => typeFilter === 'all' || h.type === typeFilter)
     .filter(h => !openNowOnly || isOpenNow(h.schedule) === true)
     .filter(h => {
       if (!searchQuery.trim()) return true;
       const q = searchQuery.toLowerCase();
-      return (
-        h.name?.toLowerCase().includes(q) ||
-        h.description?.toLowerCase().includes(q) ||
-        h.teacher?.toLowerCase().includes(q)
-      );
+      return h.name?.toLowerCase().includes(q) || h.description?.toLowerCase().includes(q) || h.teacher?.toLowerCase().includes(q);
     });
 
   const presentTypes = [...new Set(hotspots.map(h => h.type))];
 
-  // ── Selección de edificio ─────────────────────────────────
   const handleSelectBuilding = useCallback((b) => {
     setSelectedBuilding(b);
     setShowSelector(false);
@@ -172,28 +323,24 @@ export default function Explorer() {
 
   const handleHotspotClick = useCallback((hs) => setActiveHotspot(hs), [setActiveHotspot]);
 
-  // ── Posición GPS de cada edificio para los building pins ────────────────
-  // Combina buildings y allExteriorModels en el mismo lugar donde ambos están
-  // disponibles, evitando problemas de timing y matching de IDs en MapboxViewer.
-  //
-  // Prioridad: model.building_offset_x/z → building.offset_x/z → 0
-  // (La tabla buildings puede tener offset vacío mientras models sí lo tiene)
   const buildingsWithGPS = useMemo(() => {
     return buildings.map(b => {
-      const model = allExteriorModels.find(
-        m => String(m.building_id) === String(b.id)
-      );
+      const model = allExteriorModels.find(m => String(m.building_id) === String(b.id));
       const ox = parseFloat(model?.building_offset_x ?? b.offset_x) || 0;
       const oz = parseFloat(model?.building_offset_z ?? b.offset_z) || 0;
       return { ...b, _lngLat: buildingOffsetToGPS(ox, oz) };
     });
   }, [buildings, allExteriorModels]);
 
+  /* ── hasActiveFilters ── */
+  const hasActiveFilters = typeFilter !== 'all' || openNowOnly || !!searchQuery;
+
   return (
-    <div style={{
-      position: 'fixed', inset: 0, top: 'var(--nav-h)',
-      overflow: 'hidden',
+    <div className="fie-explorer" style={{
+      position:'fixed', inset:0, top:'var(--nav-h)',
+      overflow:'hidden',
     }}>
+      <InjectCSS />
 
       {/* ── MAPA ─────────────────────────────────────────────────────── */}
       <MapboxViewer
@@ -211,9 +358,9 @@ export default function Explorer() {
         <div
           onClick={() => setSidebarOpen(false)}
           style={{
-            position: 'absolute', inset: 0,
-            background: isMobile ? 'rgba(0,0,0,0.35)' : 'transparent',
-            zIndex: 29,
+            position:'absolute', inset:0,
+            background: isMobile ? 'rgba(20,1,3,0.45)' : 'transparent',
+            zIndex:29,
             pointerEvents: isMobile ? 'auto' : 'none',
           }}
         />
@@ -221,125 +368,166 @@ export default function Explorer() {
 
       {/* ── SIDEBAR ──────────────────────────────────────────────────── */}
       <aside style={{
-        position: 'absolute', top: 0,
+        position:'absolute', top:0,
         left: sidebarOpen ? 0 : -(SIDEBAR_W + 2),
-        height: '100%', width: SIDEBAR_W,
-        zIndex: 30,
-        transition: 'left 300ms cubic-bezier(.4,0,.2,1)',
-        background: 'var(--color-bg)',
-        borderRight: '1px solid var(--color-border)',
-        display: 'flex', flexDirection: 'column',
-        boxShadow: sidebarOpen ? 'var(--shadow-xl)' : 'none',
+        height:'100%', width:SIDEBAR_W,
+        zIndex:30,
+        transition:'left 300ms cubic-bezier(.4,0,.2,1)',
+        background:'var(--cream, #FDFAF9)',
+        borderRight:'1px solid var(--rule)',
+        display:'flex', flexDirection:'column',
+        boxShadow: sidebarOpen ? '4px 0 32px rgba(188,6,19,.08)' : 'none',
+        fontFamily:"'Outfit', sans-serif",
       }}>
 
-        {/* Header */}
+        {/* ── Header ─────────────────────────────────────────────────── */}
         <div style={{
-          padding: '1rem 1.25rem',
-          borderBottom: '1px solid var(--color-border)',
-          background: 'var(--color-primary)',
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          flexShrink: 0,
+          padding:'1rem 1.25rem',
+          background:'var(--red, #BC0613)',
+          display:'flex', alignItems:'center', justifyContent:'space-between',
+          flexShrink:0,
         }}>
           <div>
+            {/* Eyebrow */}
+            <div style={{
+              display:'inline-flex', alignItems:'center', gap:'.35rem',
+              marginBottom:'.35rem',
+            }}>
+              <span style={{ width:5, height:5, borderRadius:'50%', background:'rgba(255,255,255,.7)', display:'block' }}/>
+              <span style={{ fontSize:'.6rem', fontWeight:700, letterSpacing:'.14em', textTransform:'uppercase', color:'rgba(255,255,255,.65)' }}>
+                FIE Explorer 3D
+              </span>
+            </div>
             <h2 style={{
-              fontFamily: 'var(--font-display)', fontSize: '0.95rem',
-              fontWeight: 700, color: '#fff', letterSpacing: '-0.01em', margin: 0,
-            }}>FIE Explorer 3D</h2>
-            <p style={{ fontSize: '0.72rem', color: 'rgba(255,255,255,0.65)', margin: '2px 0 0' }}>
-              Campus ESPOCH · Riobamba
+              fontWeight:800, fontSize:'.95rem', letterSpacing:'-.02em',
+              color:'#fff', margin:0, lineHeight:1.2,
+            }}>Campus ESPOCH</h2>
+            <p style={{ fontSize:'.68rem', fontWeight:300, color:'rgba(255,255,255,.55)', margin:'2px 0 0' }}>
+              Riobamba · Ecuador
             </p>
           </div>
         </div>
 
-        {/* Edificio activo */}
+        {/* ── Edificio activo ─────────────────────────────────────────── */}
         {selectedBuilding ? (
           <div style={{
-            padding: '0.85rem 1.25rem',
-            borderBottom: '1px solid var(--color-border)',
-            background: 'var(--color-primary-50)',
-            flexShrink: 0,
+            padding:'.85rem 1.25rem',
+            borderBottom:'1px solid var(--rule)',
+            background:'#fff',
+            flexShrink:0,
           }}>
             <p style={{
-              fontSize: '0.65rem', fontWeight: 700, color: 'var(--color-primary)',
-              textTransform: 'uppercase', letterSpacing: '0.08em', margin: '0 0 0.3rem',
+              fontSize:'.6rem', fontWeight:700,
+              color:'var(--red)', textTransform:'uppercase', letterSpacing:'.12em',
+              margin:'0 0 .3rem',
             }}>Edificio activo</p>
             <p style={{
-              fontFamily: 'var(--font-display)', fontWeight: 700,
-              fontSize: '0.9rem', color: 'var(--color-text)', margin: 0,
+              fontWeight:800, fontSize:'.95rem', color:'var(--ink-dark)',
+              margin:0, lineHeight:1.25, letterSpacing:'-.01em',
             }}>{selectedBuilding.name}</p>
-            <p style={{ fontSize: '0.72rem', color: 'var(--color-text-3)', margin: '2px 0 0' }}>
+            <p style={{ fontSize:'.7rem', fontWeight:400, color:'var(--ink)', margin:'2px 0 0' }}>
               {selectedBuilding.code}
               {selectedBuilding.floor_count
                 ? ` · ${selectedBuilding.floor_count} ${selectedBuilding.floor_count === 1 ? 'planta' : 'plantas'}`
                 : ''}
             </p>
+
+            {/* Estado modelo */}
             <div style={{
-              marginTop: '0.5rem', fontSize: '0.68rem',
-              display: 'flex', alignItems: 'center', gap: 5, color: 'var(--color-text-3)',
+              marginTop:'.55rem', fontSize:'.68rem', fontWeight:500,
+              display:'flex', alignItems:'center', gap:5,
             }}>
               {modelLoading ? (
-                <><span style={{ color: 'var(--color-warning)' }}>●</span> Cargando… {modelProgress}%</>
+                <>
+                  <span style={{
+                    width:6, height:6, borderRadius:'50%', background:'#d97706',
+                    display:'block', flexShrink:0,
+                  }}/>
+                  <span style={{ color:'var(--ink)' }}>Cargando… {modelProgress}%</span>
+                </>
               ) : modelInfo ? (
-                <><span style={{ color: 'var(--color-success)' }}>●</span>
-                  Modelo {modelInfo.model_type} · LOD {modelInfo.lod_level}
-                  {modelInfo.file_size_mb ? ` · ${modelInfo.file_size_mb} MB` : ''}</>
+                <>
+                  <span style={{
+                    width:6, height:6, borderRadius:'50%', background:'#16a34a',
+                    display:'block', flexShrink:0,
+                  }}/>
+                  <span style={{ color:'var(--ink)' }}>
+                    Modelo {modelInfo.model_type} · LOD {modelInfo.lod_level}
+                    {modelInfo.file_size_mb ? ` · ${modelInfo.file_size_mb} MB` : ''}
+                  </span>
+                </>
               ) : (
-                <><span style={{ color: 'var(--color-warning)' }}>●</span> Sin modelo — placeholder 3D</>
+                <>
+                  <span style={{
+                    width:6, height:6, borderRadius:'50%', background:'#d97706',
+                    display:'block', flexShrink:0,
+                  }}/>
+                  <span style={{ color:'var(--ink)' }}>Sin modelo — placeholder 3D</span>
+                </>
               )}
             </div>
+
+            {/* Barra de progreso */}
             {modelLoading && (
               <div style={{
-                marginTop: '0.4rem', height: 3,
-                background: 'var(--color-primary-100)',
-                borderRadius: 'var(--radius-full)', overflow: 'hidden',
+                marginTop:'.45rem', height:3,
+                background:'var(--red-06)',
+                borderRadius:'999px', overflow:'hidden',
               }}>
-                <div style={{
-                  height: '100%', width: `${modelProgress}%`,
-                  background: 'var(--color-primary)', borderRadius: 'var(--radius-full)',
-                  transition: 'width 300ms ease',
+                <div className="ex-progress-bar" style={{
+                  height:'100%', width:`${modelProgress}%`,
+                  background:'var(--red)', borderRadius:'999px',
+                  transition:'width 300ms ease',
                 }}/>
               </div>
             )}
           </div>
         ) : (
           <div style={{
-            padding: '1.5rem 1.25rem', textAlign: 'center',
-            borderBottom: '1px solid var(--color-border)', flexShrink: 0,
+            padding:'1.5rem 1.25rem', textAlign:'center',
+            borderBottom:'1px solid var(--rule)', flexShrink:0,
+            background:'#fff',
           }}>
-            <div style={{ marginBottom: '0.5rem', color: 'var(--color-text-4)' }}>
-              <svg width="32" height="32" viewBox="0 0 24 24" fill="none"
-                stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <div style={{
+              width:40, height:40, borderRadius:'50%',
+              background:'var(--red-06)', border:'1px solid var(--red-10)',
+              display:'flex', alignItems:'center', justifyContent:'center',
+              color:'var(--red)', margin:'0 auto .65rem',
+            }}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
+                stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M3 21h18M3 7l9-4 9 4M4 7v14M20 7v14M9 21V12h6v9"/>
               </svg>
             </div>
-            <p style={{ fontSize: '0.8rem', color: 'var(--color-text-3)', lineHeight: 1.5, margin: 0 }}>
+            <p style={{
+              fontSize:'.8rem', fontWeight:400, color:'var(--ink)',
+              lineHeight:1.6, margin:0,
+            }}>
               Selecciona un edificio para explorarlo en el mapa 3D.
             </p>
           </div>
         )}
 
-        {/* Toggle exterior / interior — oculto hasta implementar vista interior */}
+        {/* ── Toggle exterior / interior (oculto hasta implementar) ─── */}
         {false && selectedBuilding && (
-          <div style={{
-            padding: '0.75rem 1.25rem',
-            borderBottom: '1px solid var(--color-border)', flexShrink: 0,
-          }}>
+          <div style={{ padding:'.75rem 1.25rem', borderBottom:'1px solid var(--rule)', flexShrink:0 }}>
             <p style={{
-              fontSize: '0.65rem', fontWeight: 700, color: 'var(--color-text-3)',
-              textTransform: 'uppercase', letterSpacing: '0.08em', margin: '0 0 0.5rem',
+              fontSize:'.6rem', fontWeight:700, color:'var(--ink)',
+              textTransform:'uppercase', letterSpacing:'.12em', margin:'0 0 .5rem',
             }}>Vista</p>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:6 }}>
               {['exterior', 'interior'].map(m => (
                 <button key={m} onClick={() => setViewMode(m)} style={{
-                  padding: '0.45rem',
-                  background: viewMode === m ? 'var(--color-primary)' : 'var(--color-bg-soft)',
-                  color: viewMode === m ? '#fff' : 'var(--color-text-2)',
-                  border: `1px solid ${viewMode === m ? 'var(--color-primary)' : 'var(--color-border)'}`,
-                  borderRadius: 'var(--radius-md)',
-                  fontFamily: 'var(--font-body)', fontSize: '0.78rem', fontWeight: 600,
-                  cursor: 'pointer', transition: 'all var(--transition)',
+                  padding:'.45rem',
+                  background: viewMode === m ? 'var(--red)' : '#fff',
+                  color: viewMode === m ? '#fff' : 'var(--ink)',
+                  border:`1px solid ${viewMode === m ? 'var(--red)' : 'var(--rule)'}`,
+                  borderRadius:10,
+                  fontFamily:"'Outfit', sans-serif", fontSize:'.78rem', fontWeight:700,
+                  cursor:'pointer',
+                  transition:'all .2s cubic-bezier(.16,1,.3,1)',
                 }}>
-                  {m === 'exterior' ? '' : ''} {m.charAt(0).toUpperCase() + m.slice(1)}
+                  {m.charAt(0).toUpperCase() + m.slice(1)}
                 </button>
               ))}
             </div>
@@ -347,44 +535,37 @@ export default function Explorer() {
         )}
 
         {/* ── Lista hotspots ─────────────────────────────────────────── */}
-        <div style={{ flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column' }}>
+        <div className="ex-scroll" style={{ flex:1, overflow:'auto', display:'flex', flexDirection:'column' }}>
           {hotspots.length > 0 && (
             <>
               {/* Barra de búsqueda */}
-              <div style={{ padding: '0.5rem 0.75rem 0', flexShrink: 0 }}>
-                <div style={{
-                  display: 'flex', alignItems: 'center', gap: 6,
-                  background: 'var(--color-bg-soft)',
-                  border: '1px solid var(--color-border)',
-                  borderRadius: 'var(--radius-md)',
-                  padding: '0.4rem 0.65rem',
-                }}>
+              <div style={{ padding:'.65rem .75rem .35rem', flexShrink:0 }}>
+                <div className="ex-search">
                   <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
-                    stroke="var(--color-text-3)" strokeWidth="2.5" strokeLinecap="round">
+                    stroke="var(--red)" strokeWidth="2.5" strokeLinecap="round"
+                    style={{ opacity:.5, flexShrink:0 }}>
                     <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
                   </svg>
                   <input
                     type="text"
-                    placeholder="Buscar por nombre, docente…"
+                    placeholder="Nombre, docente…"
                     value={searchQuery}
                     onChange={e => setSearchQuery(e.target.value)}
-                    style={{
-                      flex: 1, border: 'none', background: 'transparent',
-                      fontSize: '0.78rem', color: 'var(--color-text)',
-                      fontFamily: 'var(--font-body)', outline: 'none', minWidth: 0,
-                    }}
                   />
                   {searchQuery && (
                     <button
                       onClick={() => setSearchQuery('')}
-                      aria-label="Limpiar búsqueda"
+                      aria-label="Limpiar"
                       style={{
-                        background: 'none', border: 'none', cursor: 'pointer',
-                        color: 'var(--color-text-3)', padding: 0, lineHeight: 1,
-                        display: 'flex', alignItems: 'center',
+                        background:'none', border:'none', cursor:'pointer',
+                        color:'var(--red)', padding:0, lineHeight:1,
+                        display:'flex', alignItems:'center', opacity:.6,
+                        transition:'opacity .15s',
                       }}
+                      onMouseEnter={e => e.currentTarget.style.opacity = 1}
+                      onMouseLeave={e => e.currentTarget.style.opacity = .6}
                     >
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none"
                         stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
                         <path d="M18 6 6 18M6 6l12 12"/>
                       </svg>
@@ -393,36 +574,34 @@ export default function Explorer() {
                 </div>
               </div>
 
-              {/* ── Sistema de filtros ─────────────────────────────── */}
+              {/* ── Filtros ────────────────────────────────────────── */}
               {(presentTypes.length > 1 || hotspots.some(h => h.schedule)) && (
                 <div style={{
-                  padding: '0.5rem 0.75rem 0',
-                  borderBottom: '1px solid var(--color-border)',
-                  flexShrink: 0,
+                  padding:'.35rem .75rem .6rem',
+                  borderBottom:'1px solid var(--rule)',
+                  flexShrink:0,
                 }}>
-                  {/* Fila: label + contador activo */}
+                  {/* Label + limpiar */}
                   <div style={{
-                    display: 'flex', alignItems: 'center',
-                    justifyContent: 'space-between', marginBottom: '0.4rem',
+                    display:'flex', alignItems:'center',
+                    justifyContent:'space-between', marginBottom:'.4rem',
                   }}>
                     <span style={{
-                      fontSize: '0.62rem', fontWeight: 700,
-                      color: 'var(--color-text-3)',
-                      textTransform: 'uppercase', letterSpacing: '0.08em',
+                      fontSize:'.6rem', fontWeight:700, letterSpacing:'.12em',
+                      textTransform:'uppercase', color:'var(--ink)',
                     }}>Filtros</span>
-                    {(typeFilter !== 'all' || openNowOnly || searchQuery) && (
+                    {hasActiveFilters && (
                       <button
-                        onClick={() => {
-                          setTypeFilter('all');
-                          setOpenNowOnly(false);
-                          setSearchQuery('');
-                        }}
+                        onClick={() => { setTypeFilter('all'); setOpenNowOnly(false); setSearchQuery(''); }}
                         style={{
-                          fontSize: '0.62rem', fontWeight: 600,
-                          color: 'var(--color-primary)', background: 'none',
-                          border: 'none', cursor: 'pointer', padding: 0,
-                          fontFamily: 'var(--font-body)',
+                          fontSize:'.62rem', fontWeight:700,
+                          color:'var(--red)', background:'none',
+                          border:'none', cursor:'pointer', padding:0,
+                          fontFamily:"'Outfit', sans-serif",
+                          opacity:.75, transition:'opacity .15s',
                         }}
+                        onMouseEnter={e => e.currentTarget.style.opacity = 1}
+                        onMouseLeave={e => e.currentTarget.style.opacity = .75}
                       >
                         Limpiar
                       </button>
@@ -431,15 +610,8 @@ export default function Explorer() {
 
                   {/* Chips de tipo */}
                   {presentTypes.length > 1 && (
-                    <div style={{
-                      display: 'flex', flexWrap: 'wrap', gap: 4,
-                      marginBottom: hotspots.some(h => h.schedule) ? '0.4rem' : '0.5rem',
-                    }}>
-                      <FilterChip
-                        active={typeFilter === 'all'}
-                        onClick={() => setTypeFilter('all')}
-                        label="Todos"
-                      />
+                    <div style={{ display:'flex', flexWrap:'wrap', gap:4, marginBottom: hotspots.some(h => h.schedule) ? '.4rem' : 0 }}>
+                      <FilterChip active={typeFilter === 'all'} onClick={() => setTypeFilter('all')} label="Todos"/>
                       {presentTypes.map(t => (
                         <FilterChip
                           key={t}
@@ -452,37 +624,33 @@ export default function Explorer() {
                     </div>
                   )}
 
-                  {/* Chip: abierto ahora */}
+                  {/* Abierto ahora */}
                   {hotspots.some(h => h.schedule) && (
-                    <div style={{ marginBottom: '0.5rem' }}>
-                      <FilterChip
-                        active={openNowOnly}
-                        onClick={() => setOpenNowOnly(o => !o)}
-                        label="Abierto ahora"
-                        showDot
-                        accent
-                      />
-                    </div>
+                    <FilterChip
+                      active={openNowOnly}
+                      onClick={() => setOpenNowOnly(o => !o)}
+                      label="Abierto ahora"
+                      showDot accent
+                    />
                   )}
                 </div>
               )}
 
               {/* Encabezado + contador */}
               <div style={{
-                padding: '0.55rem 1.25rem 0.3rem',
-                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                flexShrink: 0,
+                padding:'.5rem 1.1rem .3rem',
+                display:'flex', alignItems:'center', justifyContent:'space-between',
+                flexShrink:0,
               }}>
-                <p style={{
-                  fontSize: '0.65rem', fontWeight: 700, color: 'var(--color-text-3)',
-                  textTransform: 'uppercase', letterSpacing: '0.08em', margin: 0,
-                }}>Puntos de interés</p>
                 <span style={{
-                  fontSize: '0.65rem', color: 'var(--color-text-4)',
-                  background: 'var(--color-bg-soft)',
-                  padding: '0.1rem 0.45rem',
-                  borderRadius: 'var(--radius-full)',
-                  border: '1px solid var(--color-border)',
+                  fontSize:'.6rem', fontWeight:700, letterSpacing:'.12em',
+                  textTransform:'uppercase', color:'var(--ink)',
+                }}>Puntos de interés</span>
+                <span style={{
+                  fontSize:'.62rem', fontWeight:700,
+                  color:'var(--red)', background:'var(--red-06)',
+                  padding:'.1rem .45rem', borderRadius:'999px',
+                  border:'1px solid var(--red-10)',
                 }}>
                   {filteredHotspots.length}/{hotspots.length}
                 </span>
@@ -491,100 +659,86 @@ export default function Explorer() {
           )}
 
           {/* Items */}
-          <div style={{ padding: '0 0.75rem 0.75rem', flex: 1 }}>
+          <div style={{ padding:'0 .6rem .75rem', flex:1 }}>
             {filteredHotspots.length === 0 && hotspots.length > 0 && (
-              <div style={{ textAlign: 'center', padding: '1.25rem 1rem', color: 'var(--color-text-3)' }}>
-                <div style={{ marginBottom: '0.4rem', color: 'var(--color-text-4)' }}>
-                  <svg width="26" height="26" viewBox="0 0 24 24" fill="none"
-                    stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+              <div style={{ textAlign:'center', padding:'1.5rem 1rem' }}>
+                <div style={{
+                  width:36, height:36, borderRadius:'50%',
+                  background:'var(--red-06)', border:'1px solid var(--red-10)',
+                  display:'flex', alignItems:'center', justifyContent:'center',
+                  color:'var(--red)', margin:'0 auto .6rem',
+                }}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+                    stroke="currentColor" strokeWidth="2" strokeLinecap="round">
                     <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
                   </svg>
                 </div>
-                <p style={{ fontSize: '0.78rem', margin: 0 }}>
+                <p style={{ fontSize:'.78rem', fontWeight:400, color:'var(--ink)', margin:0, lineHeight:1.5 }}>
                   Sin {TYPE_LABELS[typeFilter]?.toLowerCase() || 'resultados'} en este edificio.
                 </p>
               </div>
             )}
 
-            {filteredHotspots.map(h => (
+            {filteredHotspots.map((h, i) => (
               <button
                 key={h.id}
+                className={`ex-hs-row ex-sidebar-item${activeHotspot?.id === h.id ? ' active' : ''}`}
+                style={{ '--i': i }}
                 onClick={() => handleHotspotClick(h)}
-                style={{
-                  width: '100%', textAlign: 'left',
-                  display: 'flex', alignItems: 'center', gap: '0.6rem',
-                  padding: '0.6rem 0.75rem',
-                  background: activeHotspot?.id === h.id ? 'var(--color-primary-50)' : 'transparent',
-                  border: '1px solid',
-                  borderColor: activeHotspot?.id === h.id ? 'var(--color-primary-100)' : 'transparent',
-                  borderRadius: 'var(--radius-md)',
-                  cursor: 'pointer', marginBottom: 2,
-                  transition: 'all var(--transition)', fontFamily: 'inherit',
-                }}
-                onMouseEnter={e => {
-                  if (activeHotspot?.id !== h.id)
-                    e.currentTarget.style.background = 'var(--color-bg-soft)';
-                }}
-                onMouseLeave={e => {
-                  if (activeHotspot?.id !== h.id)
-                    e.currentTarget.style.background = 'transparent';
-                }}
               >
+                {/* Ícono tipo */}
                 <span
                   style={{
-                    flexShrink: 0, width: 26, height: 26, borderRadius: '50%',
-                    background: activeHotspot?.id === h.id
-                      ? 'var(--color-primary-100)' : 'var(--color-bg-soft)',
-                    border: '1px solid var(--color-border)',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    color: activeHotspot?.id === h.id
-                      ? 'var(--color-primary)' : 'var(--color-text-3)',
-                    transition: 'all var(--transition)',
+                    flexShrink:0, width:26, height:26, borderRadius:'50%',
+                    background: activeHotspot?.id === h.id ? 'var(--red-10)' : 'var(--red-06)',
+                    border:`1px solid ${activeHotspot?.id === h.id ? 'var(--red-20)' : 'var(--red-10)'}`,
+                    display:'flex', alignItems:'center', justifyContent:'center',
+                    color:'var(--red)',
+                    transition:'all .2s cubic-bezier(.16,1,.3,1)',
                   }}
                   dangerouslySetInnerHTML={{ __html: TYPE_ICONS_SVG[h.type] || TYPE_ICONS_SVG.service }}
                 />
-                <div style={{ minWidth: 0, flex: 1 }}>
+
+                {/* Texto */}
+                <div style={{ minWidth:0, flex:1 }}>
                   <p style={{
-                    fontWeight: 600, fontSize: '0.8rem',
-                    color: activeHotspot?.id === h.id ? 'var(--color-primary)' : 'var(--color-text)',
-                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', margin: 0,
+                    fontWeight:700, fontSize:'.8rem',
+                    color: activeHotspot?.id === h.id ? 'var(--red)' : 'var(--ink-dark)',
+                    overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap',
+                    margin:0, letterSpacing:'-.01em',
+                    transition:'color .2s',
                   }}>{h.name}</p>
-                  <p style={{ fontSize: '0.68rem', color: 'var(--color-text-3)', margin: 0 }}>
+                  <p style={{
+                    fontSize:'.67rem', fontWeight:400,
+                    color:'var(--ink)', margin:0, lineHeight:1.4,
+                  }}>
                     Piso {h.floor}
                     {h.teacher ? ` · ${h.teacher.split(' ').slice(-1)[0]}` : ''}
                   </p>
                 </div>
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
-                  stroke="var(--color-text-4)" strokeWidth="2" strokeLinecap="round"
-                  style={{ flexShrink: 0 }}>
+
+                {/* Flecha */}
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none"
+                  stroke="var(--red)" strokeWidth="2.5" strokeLinecap="round"
+                  style={{ flexShrink:0, opacity:.4 }}>
                   <path d="M9 18l6-6-6-6"/>
                 </svg>
               </button>
             ))}
 
             {selectedBuilding && hotspots.length === 0 && !modelLoading && (
-              <div style={{ textAlign: 'center', padding: '1.5rem 1rem', color: 'var(--color-text-3)' }}>
-                <p style={{ fontSize: '0.78rem', margin: 0 }}>Sin hotspots registrados.</p>
+              <div style={{ textAlign:'center', padding:'1.5rem 1rem' }}>
+                <p style={{ fontSize:'.78rem', fontWeight:400, color:'var(--ink)', margin:0 }}>
+                  Sin hotspots registrados.
+                </p>
               </div>
             )}
           </div>
         </div>
 
-        {/* Cambiar edificio */}
-        <div style={{ padding: '0.75rem', borderTop: '1px solid var(--color-border)', flexShrink: 0 }}>
-          <button
-            onClick={() => setShowSelector(true)}
-            style={{
-              width: '100%', padding: '0.55rem',
-              background: 'var(--color-bg-soft)', color: 'var(--color-text-2)',
-              border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)',
-              fontFamily: 'var(--font-body)', fontSize: '0.8rem', fontWeight: 500,
-              cursor: 'pointer', transition: 'all var(--transition)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem',
-            }}
-            onMouseEnter={e => { e.currentTarget.style.background = 'var(--color-border-soft)'; }}
-            onMouseLeave={e => { e.currentTarget.style.background = 'var(--color-bg-soft)'; }}
-          >
+        {/* ── Cambiar edificio ────────────────────────────────────────── */}
+        <div style={{ padding:'.65rem .75rem', borderTop:'1px solid var(--rule)', flexShrink:0, background:'#fff' }}>
+          <button className="ex-change-btn" onClick={() => setShowSelector(true)}>
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
               stroke="currentColor" strokeWidth="2" strokeLinecap="round">
               <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
@@ -596,24 +750,17 @@ export default function Explorer() {
 
       {/* ── BOTÓN TOGGLE ─────────────────────────────────────────────── */}
       <button
+        className="ex-toggle"
         onClick={() => setSidebarOpen(p => !p)}
         title={sidebarOpen ? 'Ocultar panel' : 'Mostrar panel'}
         style={{
-          position: 'absolute',
+          position:'absolute',
           left: sidebarOpen
             ? (isMobile ? SIDEBAR_W - 44 : SIDEBAR_W + 8)
             : 12,
-          top: 12, zIndex: 31,
-          width: 36, height: 36,
-          background: 'var(--color-bg)',
-          border: '1px solid var(--color-border)',
-          borderRadius: 'var(--radius-md)', cursor: 'pointer',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          boxShadow: 'var(--shadow-sm)', color: 'var(--color-text-2)',
-          transition: 'left 300ms cubic-bezier(.4,0,.2,1), background var(--transition)',
+          top:12, zIndex:31,
+          transition:'left 300ms cubic-bezier(.4,0,.2,1)',
         }}
-        onMouseEnter={e => { e.currentTarget.style.background = 'var(--color-bg-soft)'; }}
-        onMouseLeave={e => { e.currentTarget.style.background = 'var(--color-bg)'; }}
       >
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none"
           stroke="currentColor" strokeWidth="2" strokeLinecap="round">
@@ -632,45 +779,5 @@ export default function Explorer() {
         />
       )}
     </div>
-  );
-}
-
-// ── Chip de filtro ────────────────────────────────────────────
-function FilterChip({ active, onClick, label, accent = false, iconSvg, showDot }) {
-  const activeColor = accent ? '#15803d' : 'var(--color-primary)';
-  const activeBg    = accent ? '#dcfce7' : 'var(--color-primary)';
-  const activeText  = accent ? '#15803d' : '#fff';
-  return (
-    <button
-      onClick={onClick}
-      style={{
-        padding: '0.25rem 0.6rem',
-        fontSize: '0.7rem', fontWeight: 600,
-        background: active ? activeBg   : 'var(--color-bg-soft)',
-        color:      active ? activeText : 'var(--color-text-3)',
-        border: `1px solid ${active ? activeColor : 'var(--color-border)'}`,
-        borderRadius: 'var(--radius-full)',
-        cursor: 'pointer',
-        transition: 'all var(--transition)',
-        fontFamily: 'var(--font-body)',
-        whiteSpace: 'nowrap',
-        display: 'flex', alignItems: 'center', gap: 4,
-      }}
-    >
-      {showDot && (
-        <span style={{
-          width: 6, height: 6, borderRadius: '50%', flexShrink: 0,
-          background: active ? activeText : '#16a34a',
-          display: 'inline-block',
-        }} />
-      )}
-      {iconSvg && (
-        <span
-          style={{ lineHeight: 0, flexShrink: 0 }}
-          dangerouslySetInnerHTML={{ __html: iconSvg }}
-        />
-      )}
-      {label}
-    </button>
   );
 }
