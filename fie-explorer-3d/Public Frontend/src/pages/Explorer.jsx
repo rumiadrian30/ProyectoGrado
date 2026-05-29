@@ -1,8 +1,5 @@
 /**
- * Explorer.jsx — FIE Explorer 3D
- * Rediseño con consistencia total al sistema de diseño:
- * var(--red), mismo lenguaje visual de AcercaDe / Ayuda. Syne + DM Sans.
- * Estructura y lógica 100% intactas — solo reskin visual.
+ * Explorer.jsx — GeoESPOCH 3D
  */
 
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
@@ -239,7 +236,7 @@ export default function Explorer() {
             }}>
               <span style={{ width:5, height:5, borderRadius:'50%', background:'rgba(255,255,255,.7)', display:'block' }}/>
               <span style={{ fontSize:'.6rem', fontWeight:700, letterSpacing:'.14em', textTransform:'uppercase', color:'rgba(255,255,255,.65)' }}>
-                FIE Explorer 3D
+                GeoESPOCH 3D
               </span>
             </div>
             <h2 style={{

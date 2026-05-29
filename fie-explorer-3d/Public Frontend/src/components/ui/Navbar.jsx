@@ -1,4 +1,4 @@
-import logoLight from '../../assets/logo-light.svg';
+import logoLight from '../../assets/fie_navbar_claro.svg';
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 
@@ -48,7 +48,7 @@ export default function Navbar() {
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
       }}>
         <Link to="/" style={{ display: 'flex', alignItems: 'center', textDecoration: 'none' }}>
-          <img src={logoLight} alt="FIE Explorer 3D" style={{ height: '42px', width: 'auto' }} />
+          <img src={logoLight} alt="GeoESPOCH 3D" style={{ height: '54px', width: 'auto' }} />
         </Link>
 
         {/* Desktop */}

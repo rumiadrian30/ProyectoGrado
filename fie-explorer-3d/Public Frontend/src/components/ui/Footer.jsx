@@ -202,7 +202,7 @@ export default function Footer() {
           <div className="footer-brand-col">
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginBottom: '1.75rem' }}>
               <span style={{ fontWeight: 800, fontSize: '1.35rem', letterSpacing: '-.025em', lineHeight: 1 }}>
-                FIE Explorer 3D
+                GeoESPOCH 3D
               </span>
 
               <div style={{ display: 'flex', gap: '.5rem', flexWrap: 'wrap' }}>

@@ -1,5 +1,5 @@
 /**
- * HotspotPanel.jsx — FIE Explorer 3D
+ * HotspotPanel.jsx — GeoESPOCH 3D
  */
 
 import React, { useState } from 'react';

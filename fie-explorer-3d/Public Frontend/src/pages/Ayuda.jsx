@@ -1,5 +1,5 @@
 /**
- * Ayuda.jsx — FIE Explorer 3D
+ * Ayuda.jsx — GeoESPOCH 3D
  */
 
 import { useState } from 'react';
@@ -64,7 +64,7 @@ const POINTER_CONTROLS = [
 ];
 
 const FAQ = [
-  { q:'¿Necesito instalar algo para usar el visor 3D?',           a:'No. FIE Explorer 3D funciona completamente en el navegador. Solo necesitas Chrome, Firefox, Edge o Safari actualizados con soporte para WebGL.' },
+  { q:'¿Necesito instalar algo para usar el visor 3D?',           a:'No. GeoESPOCH 3D funciona completamente en el navegador. Solo necesitas Chrome, Firefox, Edge o Safari actualizados con soporte para WebGL.' },
   { q:'¿Por qué no aparece el modelo 3D de un edificio?',         a:'Puede que ese edificio aún no tenga un modelo 3D registrado o que sus coordenadas GPS no estén configuradas. En ese caso el visor muestra un cubo rojo de demostración.' },
   { q:'¿Cómo funciona la vista Exterior e Interior?',             a:'Con los botones del panel izquierdo puedes alternar entre la vista exterior del edificio y la vista interior por planta. Cada vista puede tener su propio modelo GLB registrado.' },
   { q:'¿Puedo usar el visor en el móvil?',                        a:'Sí. El visor es completamente responsivo. En pantallas pequeñas el panel lateral se oculta automáticamente y puedes abrirlo con el botón ≡ de la esquina superior izquierda.' },
@@ -74,9 +74,9 @@ const FAQ = [
 
 const TICKS = [
   'Centro de ayuda','Primeros pasos','Controles 3D','Preguntas frecuentes',
-  'FIE Explorer','Guía de uso',
+  'GeoESPOCH 3D','Guía de uso',
   'Centro de ayuda','Primeros pasos','Controles 3D','Preguntas frecuentes',
-  'FIE Explorer','Guía de uso',
+  'GeoESPOCH 3D','Guía de uso',
 ];
 
 /* ─── Sub-components ────────────────────────────────────────────────────── */
@@ -180,10 +180,7 @@ export default function Ayuda() {
                 lineHeight:1.04, letterSpacing:'-.03em',
                 color:'#fff', margin:'0 0 .2em',
               }}>
-                ¿Cómo usar{' '}
-                <span style={{ color:'rgba(255,255,255,.65)', fontWeight:300, fontSize:'.68em' }}>
-                  FIE Explorer 3D?
-                </span>
+                GeoESPOCH 3D
               </h1>
 
               <p className="hy-s2" style={{

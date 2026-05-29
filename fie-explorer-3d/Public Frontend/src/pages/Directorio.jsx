@@ -274,7 +274,7 @@ export default function Directorio() {
               >
                 <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'rgba(255,255,255,.85)', display: 'block' }} />
                 <span style={{ fontSize: '.65rem', fontWeight: 700, letterSpacing: '.14em', textTransform: 'uppercase', color: 'rgba(255,255,255,.8)' }}>
-                  Directorio FIE
+                  Directorio
                 </span>
               </div>
 
@@ -289,7 +289,7 @@ export default function Directorio() {
                   margin: '0 0 .2em',
                 }}
               >
-                Directorio<br />
+                GeoESPOCH 3D<br />
                 <span style={{ color: 'rgba(255,255,255,.65)', fontWeight: 300, fontSize: '.68em' }}>
                   Encuentra cualquier espacio
                 </span>

@@ -128,7 +128,7 @@ export default function AuditLogs() {
 <html lang="es">
 <head>
 <meta charset="UTF-8"/>
-<title>Logs de Auditoría — FIE Explorer 3D</title>
+<title>Logs de Auditoría — GeoESPOCH 3D</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: Arial, sans-serif; font-size: 11px; color: #111; }
@@ -149,7 +149,7 @@ export default function AuditLogs() {
 </head>
 <body>
 <div class="header">
-  <h1>Registros de Auditoría — FIE Explorer 3D</h1>
+  <h1>Registros de Auditoría — GeoESPOCH 3D</h1>
   <p>Facultad de Informática y Electrónica · ESPOCH · Generado el ${new Date().toLocaleString('es-EC')}</p>
 </div>
 <div class="meta">
@@ -166,7 +166,7 @@ export default function AuditLogs() {
   <tbody>${rows}</tbody>
 </table>
 <div class="footer">
-  FIE Explorer 3D · Panel Administrativo · Documento generado automáticamente · Solo lectura
+  GeoESPOCH 3D · Panel Administrativo · Documento generado automáticamente · Solo lectura
 </div>
 </body>
 </html>`
