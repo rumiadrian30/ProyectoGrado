@@ -1,5 +1,5 @@
 /**
- * AcercaDe.jsx — FIE Explorer 3D
+ * AcercaDe.jsx — GeoESPOCH 3D
  */
 
 import { Link } from 'react-router-dom';
@@ -100,9 +100,9 @@ const STEPS = [
 
 const TICKS = [
   'Visualización 3D', 'Campus ESPOCH', 'Modelos GLB', 'Laboratorios interactivos',
-  'WebGL · Three.js', 'FIE Explorer',
+  'WebGL · Three.js', 'GeoESPOCH 3D',
   'Visualización 3D', 'Campus ESPOCH', 'Modelos GLB', 'Laboratorios interactivos',
-  'WebGL · Three.js', 'FIE Explorer',
+  'WebGL · Three.js', 'GeoESPOCH 3D',
 ];
 
 export default function AcercaDe() {
@@ -142,7 +142,7 @@ export default function AcercaDe() {
                   margin: '0 0 .2em',
                 }}
               >
-                FIE Explorer 3D<br />
+                GeoESPOCH 3D<br />
                 <span style={{ color: 'rgba(255,255,255,.65)', fontWeight: 300, fontSize: '.68em' }}>
                   El campus, en tu pantalla
                 </span>
@@ -260,11 +260,11 @@ export default function AcercaDe() {
           <div>
             <p style={{ fontSize: '.68rem', fontWeight: 700, letterSpacing: '.15em', textTransform: 'uppercase', color: 'var(--ink)', marginBottom: '.5rem' }}>¿Qué es?</p>
             <h2 style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 'clamp(1.6rem, 3vw, 2.4rem)', letterSpacing: '-.025em', lineHeight: 1.1, color: 'var(--red)', margin: '0 0 1.5rem' }}>
-              Una nueva forma de conocer la&nbsp;FIE.
+              Una nueva forma de conocer la&nbsp;FIE
             </h2>
 
             <p style={{ fontSize: '.95rem', fontWeight: 300, color: 'var(--ink)', lineHeight: 1.8, marginBottom: '1rem' }}>
-              FIE Explorer 3D es una aplicación web que permite explorar de forma interactiva
+              GeoESPOCH 3D es una aplicación web que permite explorar de forma interactiva
               los edificios, laboratorios, oficinas y espacios de servicio de la Facultad mediante
               modelos 3D navegables directamente en el navegador.
             </p>
@@ -299,7 +299,7 @@ export default function AcercaDe() {
             <div>
               <p style={{ fontSize: '.68rem', fontWeight: 700, letterSpacing: '.15em', textTransform: 'uppercase', color: 'var(--ink)', marginBottom: '.45rem' }}>Tecnología</p>
               <h2 style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 'clamp(1.5rem,3vw,2.2rem)', letterSpacing: '-.025em', color: 'var(--red)', margin: 0 }}>
-                Construido con tecnología web moderna.
+                Construido con tecnología web moderna
               </h2>
             </div>
           </div>

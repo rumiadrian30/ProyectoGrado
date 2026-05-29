@@ -1,7 +1,7 @@
 {
   "name": "fie-explorer-3d-backend",
   "version": "1.0.0",
-  "description": "API REST para FIE Explorer 3D - ESPOCH",
+  "description": "API REST para GeoESPOCH 3D - ESPOCH",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",

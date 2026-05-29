@@ -116,9 +116,9 @@ export default function Home() {
 
   const TICKS = [
     'Visualización 3D', 'Campus ESPOCH', 'Modelos GLB',
-    'Laboratorios interactivos', 'WebGL · Three.js', 'FIE Explorer',
+    'Laboratorios interactivos', 'WebGL · Three.js', 'GeoESPOCH 3D',
     'Visualización 3D', 'Campus ESPOCH', 'Modelos GLB',
-    'Laboratorios interactivos', 'WebGL · Three.js', 'FIE Explorer',
+    'Laboratorios interactivos', 'WebGL · Three.js', 'GeoESPOCH 3D',
   ];
 
   return (
@@ -196,7 +196,7 @@ export default function Home() {
                   color: 'var(--red)',
                 }}
               >
-                ESPOCH · Facultad de Informática y Electrónica
+                ESPOCH
               </span>
             </div>
 
