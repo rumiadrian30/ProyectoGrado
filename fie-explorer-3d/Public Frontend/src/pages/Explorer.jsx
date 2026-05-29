@@ -1,7 +1,7 @@
 /**
  * Explorer.jsx — FIE Explorer 3D
  * Rediseño con consistencia total al sistema de diseño:
- * Outfit, var(--red), mismo lenguaje visual de AcercaDe / Ayuda.
+ * var(--red), mismo lenguaje visual de AcercaDe / Ayuda. Syne + DM Sans.
  * Estructura y lógica 100% intactas — solo reskin visual.
  */
 
@@ -20,162 +20,7 @@ import { buildingOffsetToGPS } from '../utils/buildingCoords';
 /* ─── Constantes ─────────────────────────────────────────────────────────── */
 const SIDEBAR_W = 288;
 
-/* ─── CSS del sistema ────────────────────────────────────────────────────── */
-const EXPLORER_CSS = `
-  @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap');
 
-  /* Tokens locales — sobreescriben solo dentro del explorador */
-  .fie-explorer {
-    --red:        #BC0613;
-    --red-06:     rgba(188,6,19,.06);
-    --red-10:     rgba(188,6,19,.10);
-    --red-20:     rgba(188,6,19,.20);
-    --rule:       rgba(188,6,19,.12);
-    --ink:        rgba(40,2,5,.62);
-    --ink-dark:   rgba(40,2,5,.88);
-    --cream:      #FDFAF9;
-    font-family: 'Outfit', sans-serif;
-  }
-
-  /* Sidebar slide-in */
-  @keyframes ex-slide {
-    from { opacity:0; transform:translateX(-12px); }
-    to   { opacity:1; transform:translateX(0); }
-  }
-  .ex-sidebar-item {
-    animation: ex-slide .35s cubic-bezier(.16,1,.3,1) both;
-  }
-  .ex-sidebar-item:nth-child(1)  { animation-delay:.04s }
-  .ex-sidebar-item:nth-child(2)  { animation-delay:.08s }
-  .ex-sidebar-item:nth-child(3)  { animation-delay:.12s }
-  .ex-sidebar-item:nth-child(4)  { animation-delay:.16s }
-  .ex-sidebar-item:nth-child(5)  { animation-delay:.20s }
-  .ex-sidebar-item:nth-child(6)  { animation-delay:.24s }
-  .ex-sidebar-item:nth-child(7)  { animation-delay:.28s }
-  .ex-sidebar-item:nth-child(8)  { animation-delay:.32s }
-  .ex-sidebar-item:nth-child(9)  { animation-delay:.36s }
-  .ex-sidebar-item:nth-child(10) { animation-delay:.40s }
-
-  /* Hotspot row */
-  .ex-hs-row {
-    width:100%; text-align:left;
-    display:flex; align-items:center; gap:.6rem;
-    padding:.55rem .7rem;
-    background:transparent;
-    border:1px solid transparent;
-    border-radius:12px;
-    cursor:pointer; margin-bottom:2px;
-    transition: background .2s cubic-bezier(.16,1,.3,1),
-                border-color .2s cubic-bezier(.16,1,.3,1),
-                transform    .15s cubic-bezier(.16,1,.3,1);
-    font-family:'Outfit', sans-serif;
-  }
-  .ex-hs-row:hover { background:var(--red-06); border-color:var(--red-10); transform:translateX(2px); }
-  .ex-hs-row.active {
-    background:var(--red-06); border-color:var(--red-20);
-    transform:translateX(2px);
-  }
-
-  /* Chip de filtro */
-  .ex-chip {
-    padding:.22rem .65rem;
-    font-size:.68rem; font-weight:700; font-family:'Outfit', sans-serif;
-    border-radius:999px; cursor:pointer; white-space:nowrap;
-    display:inline-flex; align-items:center; gap:4px;
-    transition: background .18s cubic-bezier(.16,1,.3,1),
-                color       .18s cubic-bezier(.16,1,.3,1),
-                border-color .18s cubic-bezier(.16,1,.3,1),
-                transform    .15s cubic-bezier(.16,1,.3,1);
-    border:1px solid var(--rule);
-    background:#fff; color:var(--ink);
-  }
-  .ex-chip:hover { border-color:var(--red-20); color:var(--red); transform:translateY(-1px); }
-  .ex-chip.active {
-    background:var(--red); color:#fff; border-color:var(--red);
-  }
-  .ex-chip.active-green {
-    background:#15803d; color:#fff; border-color:#15803d;
-  }
-
-  /* Toggle btn */
-  .ex-toggle {
-    width:34px; height:34px;
-    background:#fff;
-    border:1px solid var(--rule);
-    border-radius:10px; cursor:pointer;
-    display:flex; align-items:center; justify-content:center;
-    box-shadow:0 2px 8px rgba(188,6,19,.08);
-    color:var(--red);
-    transition: background .2s cubic-bezier(.16,1,.3,1),
-                box-shadow  .2s cubic-bezier(.16,1,.3,1),
-                transform   .15s cubic-bezier(.16,1,.3,1);
-  }
-  .ex-toggle:hover {
-    background:var(--red-06);
-    box-shadow:0 4px 16px rgba(188,6,19,.14);
-    transform:translateY(-1px);
-  }
-
-  /* Search input */
-  .ex-search {
-    display:flex; align-items:center; gap:6px;
-    background:#fff; border:1px solid var(--rule);
-    border-radius:10px; padding:.4rem .65rem;
-    transition: border-color .2s cubic-bezier(.16,1,.3,1),
-                box-shadow   .2s cubic-bezier(.16,1,.3,1);
-  }
-  .ex-search:focus-within {
-    border-color:var(--red-20);
-    box-shadow:0 0 0 3px rgba(188,6,19,.06);
-  }
-  .ex-search input {
-    flex:1; border:none; background:transparent;
-    font-size:.78rem; font-family:'Outfit', sans-serif;
-    color:var(--ink-dark); outline:none; min-width:0;
-  }
-  .ex-search input::placeholder { color:rgba(188,6,19,.3); }
-
-  /* Progress bar */
-  @keyframes ex-progress-pulse {
-    0%,100% { opacity:1 }
-    50%      { opacity:.6 }
-  }
-  .ex-progress-bar { animation: ex-progress-pulse 1.4s ease-in-out infinite; }
-
-  /* Bottom change-btn */
-  .ex-change-btn {
-    width:100%; padding:.55rem;
-    background:#fff; color:var(--ink);
-    border:1px solid var(--rule); border-radius:12px;
-    font-family:'Outfit', sans-serif; font-size:.8rem; font-weight:600;
-    cursor:pointer;
-    display:flex; align-items:center; justify-content:center; gap:.4rem;
-    transition: background .2s cubic-bezier(.16,1,.3,1),
-                border-color .2s cubic-bezier(.16,1,.3,1),
-                transform    .15s cubic-bezier(.16,1,.3,1);
-  }
-  .ex-change-btn:hover {
-    background:var(--red-06); border-color:var(--red-20);
-    color:var(--red); transform:translateY(-1px);
-  }
-
-  /* Scrollbar minimal */
-  .ex-scroll::-webkit-scrollbar { width:4px; }
-  .ex-scroll::-webkit-scrollbar-track { background:transparent; }
-  .ex-scroll::-webkit-scrollbar-thumb { background:var(--red-10); border-radius:4px; }
-  .ex-scroll::-webkit-scrollbar-thumb:hover { background:var(--red-20); }
-`;
-
-function InjectCSS() {
-  useEffect(() => {
-    const id = 'fie-explorer-v2';
-    if (document.getElementById(id)) return;
-    const el = Object.assign(document.createElement('style'), { id, textContent: EXPLORER_CSS });
-    document.head.appendChild(el);
-    return () => el.remove();
-  }, []);
-  return null;
-}
 
 /* ─── SVG Icons inline ───────────────────────────────────────────────────── */
 const TYPE_ICONS_SVG = {
@@ -340,7 +185,6 @@ export default function Explorer() {
       position:'fixed', inset:0, top:'var(--nav-h)',
       overflow:'hidden',
     }}>
-      <InjectCSS />
 
       {/* ── MAPA ─────────────────────────────────────────────────────── */}
       <MapboxViewer
@@ -377,7 +221,7 @@ export default function Explorer() {
         borderRight:'1px solid var(--rule)',
         display:'flex', flexDirection:'column',
         boxShadow: sidebarOpen ? '4px 0 32px rgba(188,6,19,.08)' : 'none',
-        fontFamily:"'Outfit', sans-serif",
+        fontFamily: 'var(--font-body)',
       }}>
 
         {/* ── Header ─────────────────────────────────────────────────── */}
@@ -523,7 +367,7 @@ export default function Explorer() {
                   color: viewMode === m ? '#fff' : 'var(--ink)',
                   border:`1px solid ${viewMode === m ? 'var(--red)' : 'var(--rule)'}`,
                   borderRadius:10,
-                  fontFamily:"'Outfit', sans-serif", fontSize:'.78rem', fontWeight:700,
+                  fontFamily: 'var(--font-body)', fontSize:'.78rem', fontWeight:700,
                   cursor:'pointer',
                   transition:'all .2s cubic-bezier(.16,1,.3,1)',
                 }}>
@@ -597,7 +441,7 @@ export default function Explorer() {
                           fontSize:'.62rem', fontWeight:700,
                           color:'var(--red)', background:'none',
                           border:'none', cursor:'pointer', padding:0,
-                          fontFamily:"'Outfit', sans-serif",
+                          fontFamily: 'var(--font-body)',
                           opacity:.75, transition:'opacity .15s',
                         }}
                         onMouseEnter={e => e.currentTarget.style.opacity = 1}
