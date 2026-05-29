@@ -289,7 +289,7 @@ export default function Directorio() {
                   margin: '0 0 .2em',
                 }}
               >
-                GeoESPOCH 3D<br />
+                Explorador 3D FIE<br />
                 <span style={{ color: 'rgba(255,255,255,.65)', fontWeight: 300, fontSize: '.68em' }}>
                   Encuentra cualquier espacio
                 </span>

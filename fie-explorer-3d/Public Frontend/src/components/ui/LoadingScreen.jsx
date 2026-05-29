@@ -21,7 +21,7 @@ export default function LoadingScreen({ message = 'Cargando...' }) {
       </div>
 
       {/* Logo */}
-      <img src={logoLight} alt="GeoESPOCH 3D" style={{ height: '48px', width: 'auto', marginTop: '4px' }} />
+      <img src={logoLight} alt="Explorador 3D FIE" style={{ height: '48px', width: 'auto', marginTop: '4px' }} />
 
       <p style={{
         fontFamily: "'DM Sans', sans-serif",

@@ -48,7 +48,7 @@ export default function Navbar() {
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
       }}>
         <Link to="/" style={{ display: 'flex', alignItems: 'center', textDecoration: 'none' }}>
-          <img src={logoLight} alt="GeoESPOCH 3D" style={{ height: '54px', width: 'auto' }} />
+          <img src={logoLight} alt="Explorador 3D FIE" style={{ height: '54px', width: 'auto' }} />
         </Link>
 
         {/* Desktop */}

@@ -148,12 +148,12 @@ app.use('/api/admin-users', adminUserRoutes);
 app.use('/api/settings',    settingsRoutes);
 
 app.get('/api/health', (_, res) => {
-  res.json({ status: 'ok', project: 'GeoESPOCH 3D', timestamp: new Date().toISOString() });
+  res.json({ status: 'ok', project: 'Explorador 3D FIE', timestamp: new Date().toISOString() });
 });
 
 app.get('/', (_, res) => {
   res.json({
-    project: 'GeoESPOCH 3D — API REST',
+    project: 'Explorador 3D FIE — API REST',
     version: '1.0.0',
     docs: '/api/docs',
     health: '/api/health',
@@ -170,7 +170,7 @@ app.use(errorMiddleware);
 app.listen(PORT, async () => {
   console.log('');
   console.log(`${B}\x1b[34m╔════════════════════════════════════════╗${R}`);
-  console.log(`${B}\x1b[34m║   GeoESPOCH 3D — API REST · ESPOCH  ║${R}`);
+  console.log(`${B}\x1b[34m║   Explorador 3D FIE — API REST · ESPOCH  ║${R}`);
   console.log(`${B}\x1b[34m║   http://localhost:${PORT}               ║${R}`);
   console.log(`${B}\x1b[34m║   Docs → http://localhost:${PORT}/api/docs ║${R}`);
   console.log(`${B}\x1b[34m╚════════════════════════════════════════╝${R}`);

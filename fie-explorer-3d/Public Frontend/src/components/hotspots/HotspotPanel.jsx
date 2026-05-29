@@ -1,5 +1,5 @@
 /**
- * HotspotPanel.jsx — GeoESPOCH 3D
+ * HotspotPanel.jsx — Explorador 3D FIE
  */
 
 import React, { useState } from 'react';
@@ -321,7 +321,6 @@ function InfoCard({ icon, label, value, href, className = '' }) {
     <div className={`hp-card ${className}`}>
       <p style={{
         fontSize:'.62rem', fontWeight:700,
-        color:'rgba(40,2,5,.38)',
         textTransform:'uppercase', letterSpacing:'.12em',
         marginBottom:'.3rem',
         display:'flex', alignItems:'center', gap:'.35rem',

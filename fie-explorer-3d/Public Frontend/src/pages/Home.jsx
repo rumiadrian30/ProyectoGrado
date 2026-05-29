@@ -116,9 +116,9 @@ export default function Home() {
 
   const TICKS = [
     'Visualización 3D', 'Campus ESPOCH', 'Modelos GLB',
-    'Laboratorios interactivos', 'WebGL · Three.js', 'GeoESPOCH 3D',
+    'Laboratorios interactivos', 'WebGL · Three.js', 'Explorador 3D FIE',
     'Visualización 3D', 'Campus ESPOCH', 'Modelos GLB',
-    'Laboratorios interactivos', 'WebGL · Three.js', 'GeoESPOCH 3D',
+    'Laboratorios interactivos', 'WebGL · Three.js', 'Explorador 3D FIE',
   ];
 
   return (

@@ -17,8 +17,8 @@
   <!-- separador vertical -->
   <line x1="62" y1="12" x2="62" y2="48" stroke="#BC0613" stroke-width="0.6" opacity="0.25"/>
 
-  <!-- logotipo: GeoEspoch 3D + ESPOCH -->
-  <text x="72" y="35" font-family="'Trebuchet MS', Arial, sans-serif" font-size="19" font-weight="700" fill="#BC0613" letter-spacing="-0.3">GeoEspoch 3D</text>
+  <!-- logotipo: Explorador 3D FIE + ESPOCH -->
+  <text x="72" y="35" font-family="'Trebuchet MS', Arial, sans-serif" font-size="19" font-weight="700" fill="#BC0613" letter-spacing="-0.3">Explorador 3D FIE</text>
 
 
 </svg>

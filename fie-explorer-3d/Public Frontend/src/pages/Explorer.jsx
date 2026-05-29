@@ -118,7 +118,7 @@ export default function Explorer() {
   useEffect(() => {
     let cancelled = false;
     function fetchModels() {
-      modelsService.getAllActive('exterior')
+      modelsService.getAllActive()
         .then(data => { if (!cancelled) setAllExteriorModels(data); })
         .catch(console.error);
     }
@@ -293,7 +293,7 @@ export default function Explorer() {
                     display:'block', flexShrink:0,
                   }}/>
                   <span style={{ color:'var(--ink)' }}>
-                    Modelo {modelInfo.model_type} · LOD {modelInfo.lod_level}
+                    LOD {modelInfo.lod_level}
                     {modelInfo.file_size_mb ? ` · ${modelInfo.file_size_mb} MB` : ''}
                   </span>
                 </>

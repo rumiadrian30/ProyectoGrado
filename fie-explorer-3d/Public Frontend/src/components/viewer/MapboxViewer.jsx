@@ -490,7 +490,7 @@ export default function MapboxViewer({
         bearing: CAMPUS_VIEW.bearing ?? -15,
         center:  CAMPUS_VIEW.center,
         projection: 'mercator',
-        style:   'mapbox://styles/mapbox/standard',
+        style:   'mapbox://styles/mapbox/outdoors-v12',
         config:  { basemap: { show3dObjects: false } },
         antialias: true,
       });

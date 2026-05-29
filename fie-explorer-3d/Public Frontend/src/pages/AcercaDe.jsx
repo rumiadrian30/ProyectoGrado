@@ -1,5 +1,5 @@
 /**
- * AcercaDe.jsx — GeoESPOCH 3D
+ * AcercaDe.jsx — Explorador 3D FIE
  */
 
 import { Link } from 'react-router-dom';
@@ -100,9 +100,9 @@ const STEPS = [
 
 const TICKS = [
   'Visualización 3D', 'Campus ESPOCH', 'Modelos GLB', 'Laboratorios interactivos',
-  'WebGL · Three.js', 'GeoESPOCH 3D',
+  'WebGL · Three.js', 'Explorador 3D FIE',
   'Visualización 3D', 'Campus ESPOCH', 'Modelos GLB', 'Laboratorios interactivos',
-  'WebGL · Three.js', 'GeoESPOCH 3D',
+  'WebGL · Three.js', 'Explorador 3D FIE',
 ];
 
 export default function AcercaDe() {
@@ -142,7 +142,7 @@ export default function AcercaDe() {
                   margin: '0 0 .2em',
                 }}
               >
-                GeoESPOCH 3D<br />
+                Explorador 3D FIE<br />
                 <span style={{ color: 'rgba(255,255,255,.65)', fontWeight: 300, fontSize: '.68em' }}>
                   El campus, en tu pantalla
                 </span>
@@ -264,7 +264,7 @@ export default function AcercaDe() {
             </h2>
 
             <p style={{ fontSize: '.95rem', fontWeight: 300, color: 'var(--ink)', lineHeight: 1.8, marginBottom: '1rem' }}>
-              GeoESPOCH 3D es una aplicación web que permite explorar de forma interactiva
+              Explorador 3D FIE es una aplicación web que permite explorar de forma interactiva
               los edificios, laboratorios, oficinas y espacios de servicio de la Facultad mediante
               modelos 3D navegables directamente en el navegador.
             </p>

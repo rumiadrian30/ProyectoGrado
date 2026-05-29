@@ -1,4 +1,4 @@
-# GeoESPOCH 3D — ESPOCH
+# Explorador 3D FIE — ESPOCH
 
 > Explorador tridimensional interactivo de la Facultad de Informática y Electrónica.
 > Grefa Rivadeneyra Rumi Adrian · Código: 7333

@@ -37,7 +37,7 @@
   <text x="172" y="172"
     font-family="'Trebuchet MS', Arial, sans-serif"
     font-size="22" font-weight="700"
-    fill="white" text-anchor="middle" letter-spacing="-0.5">GeoESPOCH 3D</text>
+    fill="white" text-anchor="middle" letter-spacing="-0.5">Explorador 3D FIE</text>
   <line x1="88" y1="180" x2="256" y2="180" stroke="white" stroke-width="0.5" opacity="0.25"/>
   <text x="172" y="194"
     font-family="'Trebuchet MS', Arial, sans-serif"

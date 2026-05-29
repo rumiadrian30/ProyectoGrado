@@ -380,7 +380,6 @@ function BuildingModels({ building, onToast, onReloadBuildings }) {
             }}>
               <div style={{ minWidth: 0 }}>
                 <div style={{ fontSize: '11px', fontWeight: 500, display: 'flex', gap: '5px', alignItems: 'center' }}>
-                  <span className="badge b-blue" style={{ fontSize: '10px' }}>{m.model_type}</span>
                   <span className={`badge ${LOD_BADGE[m.lod_level] || 'b-gray'}`} style={{ fontSize: '10px' }}>{LOD_LABELS[m.lod_level]}</span>
                 </div>
                 <div style={{ fontSize: '11px', color: 'var(--faint)', marginTop: '2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '180px' }} title={m.file_path}>{m.file_path}</div>
@@ -397,7 +396,7 @@ function BuildingModels({ building, onToast, onReloadBuildings }) {
           ))}
           <button className="btn btn-sm" style={{ marginTop: '6px', width: '100%', fontSize: '12px' }}
             onClick={() => {
-              setForm({ building_id: building.id, model_type: 'exterior', lod_level: 0, format: 'GLB', ...TRANSFORM_DEFAULTS })
+              setForm({ building_id: building.id, lod_level: 0, format: 'GLB', ...TRANSFORM_DEFAULTS })
               setShowPreview(false)
               setModal({ type: 'new' })
             }}>
@@ -414,22 +413,13 @@ function BuildingModels({ building, onToast, onReloadBuildings }) {
           disabled={!form.file_path || uploading || saving}
           onClose={() => { setModal(null); setShowPreview(false) }}>
 
-          <div className="form-grid-2">
-            <div className="form-group">
-              <label className="form-label">Tipo *</label>
-              <select className="form-select" value={form.model_type} onChange={e => set('model_type', e.target.value)}>
-                <option value="exterior">Exterior</option>
-                <option value="interior">Interior</option>
-              </select>
-            </div>
-            <div className="form-group">
-              <label className="form-label">Nivel LOD *</label>
-              <select className="form-select" value={form.lod_level} onChange={e => set('lod_level', parseInt(e.target.value))}>
-                <option value={0}>0 — Alta resolución</option>
-                <option value={1}>1 — Media resolución</option>
-                <option value={2}>2 — Baja resolución</option>
-              </select>
-            </div>
+          <div className="form-group">
+            <label className="form-label">Nivel LOD *</label>
+            <select className="form-select" value={form.lod_level} onChange={e => set('lod_level', parseInt(e.target.value))}>
+              <option value={0}>0 — Alta resolución</option>
+              <option value={1}>1 — Media resolución</option>
+              <option value={2}>2 — Baja resolución</option>
+            </select>
           </div>
 
           <div className="form-group">
@@ -542,7 +532,6 @@ function BuildingModels({ building, onToast, onReloadBuildings }) {
                   <tbody>
                     {[
                       { label: 'Archivo',    value: <code style={{ fontSize: '10px', fontFamily: 'monospace', color: 'var(--muted)', wordBreak: 'break-all' }}>{m.file_path}</code> },
-                      { label: 'Tipo',       value: <span className="badge b-blue" style={{ fontSize: '10px', textTransform: 'capitalize' }}>{m.model_type}</span> },
                       { label: 'Resolución', value: <span className={`badge ${LOD_BADGE[m.lod_level] || 'b-gray'}`} style={{ fontSize: '10px' }}>{LOD_LABELS[m.lod_level] ?? `LOD ${m.lod_level}`}</span> },
                       { label: 'Tamaño',     value: m.file_size_mb ? `${m.file_size_mb} MB` : '—' },
                     ].map(row => (

@@ -38,7 +38,7 @@ export function BuildingModels({ building, onToast }) {
   }
 
   function openNew() {
-    setForm({ building_id: building.id, model_type: 'exterior', lod_level: 0, format: 'GLB' })
+    setForm({ building_id: building.id, lod_level: 0, format: 'GLB' })
     setModal({ type: 'new' })
   }
 
@@ -165,7 +165,6 @@ export function BuildingModels({ building, onToast }) {
             }}>
               <div style={{ minWidth: 0 }}>
                 <div style={{ fontSize: '11px', fontWeight: 500, display: 'flex', gap: '5px', alignItems: 'center' }}>
-                  <span className="badge b-blue" style={{ fontSize: '10px' }}>{m.model_type}</span>
                   <span style={{ color: 'var(--muted)' }}>{LOD_LABELS[m.lod_level]}</span>
                 </div>
                 <div style={{
@@ -199,24 +198,14 @@ export function BuildingModels({ building, onToast }) {
           <div className="modal">
             <h3>Nuevo modelo — {building.name}</h3>
 
-            <div className="form-grid-2">
-              <div className="form-group">
-                <label className="form-label">Tipo *</label>
-                <select className="form-select" value={form.model_type}
-                  onChange={e => set('model_type', e.target.value)}>
-                  <option value="exterior">Exterior</option>
-                  <option value="interior">Interior</option>
-                </select>
-              </div>
-              <div className="form-group">
-                <label className="form-label">Nivel LOD *</label>
-                <select className="form-select" value={form.lod_level}
-                  onChange={e => set('lod_level', parseInt(e.target.value))}>
-                  <option value={0}>0 — Alta resolución</option>
-                  <option value={1}>1 — Media resolución</option>
-                  <option value={2}>2 — Baja resolución</option>
-                </select>
-              </div>
+            <div className="form-group">
+              <label className="form-label">Nivel LOD *</label>
+              <select className="form-select" value={form.lod_level}
+                onChange={e => set('lod_level', parseInt(e.target.value))}>
+                <option value={0}>0 — Alta resolución</option>
+                <option value={1}>1 — Media resolución</option>
+                <option value={2}>2 — Baja resolución</option>
+              </select>
             </div>
 
             {/* ── Selector de archivo ── */}
