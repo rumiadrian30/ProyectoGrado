@@ -5,9 +5,7 @@ import App from './App';
 import './assets/global.css';
 import { detectWebGL } from './utils/webgl.detect';
 
-// ─── Feature Detection WebGL antes de montar la app ──────────────────────────
-// Si el dispositivo no soporta WebGL se muestra un mensaje descriptivo con
-// enlaces al navegador compatible en lugar de romper silenciosamente más tarde.
+// ─── Feature Detection WebGL ──────────────────────────
 const { supported } = detectWebGL();
 
 if (!supported) {
