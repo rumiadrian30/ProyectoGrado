@@ -1,143 +1,9 @@
 /**
  * Ayuda.jsx — FIE Explorer 3D
- * Rediseño con consistencia total al sistema de diseño de AcercaDe:
- * Outfit, var(--red), spotlight cards, bordes redondeados,
- * animaciones stagger, sin emojis, misma gramática visual.
  */
 
-import React, { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
-
-/* ─── CSS ────────────────────────────────────────────────────────────────── */
-const HELP_CSS = `
-  @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap');
-
-  @keyframes hy-up {
-    from { opacity:0; transform:translateY(22px); }
-    to   { opacity:1; transform:translateY(0); }
-  }
-  .hy-s0 { animation: hy-up .6s cubic-bezier(.16,1,.3,1) .04s both; }
-  .hy-s1 { animation: hy-up .6s cubic-bezier(.16,1,.3,1) .14s both; }
-  .hy-s2 { animation: hy-up .6s cubic-bezier(.16,1,.3,1) .24s both; }
-  .hy-s3 { animation: hy-up .6s cubic-bezier(.16,1,.3,1) .36s both; }
-  .hy-s4 { animation: hy-up .6s cubic-bezier(.16,1,.3,1) .48s both; }
-
-  @keyframes hy-card {
-    from { opacity:0; transform:translateY(18px); }
-    to   { opacity:1; transform:translateY(0); }
-  }
-  .hy-card { animation: hy-card .5s cubic-bezier(.16,1,.3,1) both; }
-  .hy-card:nth-child(1) { animation-delay:.06s }
-  .hy-card:nth-child(2) { animation-delay:.13s }
-  .hy-card:nth-child(3) { animation-delay:.20s }
-  .hy-card:nth-child(4) { animation-delay:.27s }
-  .hy-card:nth-child(5) { animation-delay:.34s }
-  .hy-card:nth-child(6) { animation-delay:.41s }
-
-  /* Spotlight card */
-  .hy-sp {
-    position: relative; overflow: hidden;
-    border: 1px solid var(--rule, rgba(188,6,19,.14));
-    border-radius: var(--r-lg, 22px);
-    background: var(--white, #fff);
-    transition: border-color .25s cubic-bezier(.16,1,.3,1),
-                box-shadow   .25s cubic-bezier(.16,1,.3,1),
-                transform    .25s cubic-bezier(.16,1,.3,1);
-  }
-  .hy-sp::before {
-    content: ''; position: absolute; inset: 0; border-radius: inherit;
-    background: radial-gradient(220px circle at var(--mx,50%) var(--my,50%),
-                  rgba(188,6,19,.08), transparent 75%);
-    opacity: 0; transition: opacity .3s; pointer-events: none; z-index: 0;
-  }
-  .hy-sp:hover {
-    border-color: rgba(188,6,19,.30);
-    box-shadow: 0 8px 32px rgba(188,6,19,.09), 0 2px 8px rgba(188,6,19,.05);
-    transform: translateY(-3px);
-  }
-  .hy-sp:hover::before { opacity: 1; }
-  .hy-sp > * { position: relative; z-index: 1; }
-
-  /* Ticker */
-  @keyframes hy-tick { from{transform:translateX(0)} to{transform:translateX(-50%)} }
-  .hy-ticker { display:inline-flex; animation: hy-tick 28s linear infinite; }
-  .hy-ticker:hover { animation-play-state: paused; }
-
-  /* Step hover top-border */
-  .hy-step {
-    border-top: 2px solid transparent;
-    transition: border-top-color .22s cubic-bezier(.16,1,.3,1);
-  }
-  .hy-step:hover { border-top-color: var(--red, #BC0613); }
-
-  /* FAQ accordion */
-  .hy-faq-btn {
-    width:100%; text-align:left;
-    display:flex; align-items:center; justify-content:space-between;
-    border:none; cursor:pointer; gap:1rem;
-    font-family: 'Outfit', sans-serif;
-    transition: background .18s;
-  }
-  .hy-faq-btn:hover { background: rgba(188,6,19,.03) !important; }
-
-  /* CTA btn */
-  .hy-cta-btn {
-    position: relative; overflow: hidden;
-    border-radius: 999px;
-    transition: transform .2s cubic-bezier(.16,1,.3,1);
-  }
-  .hy-cta-btn .hy-fill {
-    position: absolute; inset: 0;
-    background: rgba(255,255,255,.15);
-    transform: translateX(-101%);
-    transition: transform .32s cubic-bezier(.16,1,.3,1);
-    z-index: 0;
-  }
-  .hy-cta-btn:hover .hy-fill { transform: translateX(0); }
-  .hy-cta-btn:hover { transform: translateY(-1px); }
-  .hy-cta-btn span { position:relative; z-index:1; display:inline-flex; align-items:center; gap:.45rem; }
-
-  /* kbd */
-  .hy-kbd {
-    display:inline-block; padding:.22rem .55rem;
-    background:#fff;
-    border:1px solid rgba(188,6,19,.18);
-    border-bottom:3px solid rgba(188,6,19,.22);
-    border-radius:6px;
-    font-size:.72rem; font-family:monospace; font-weight:700;
-    color:var(--red, #BC0613); white-space:nowrap;
-    transition: border-color .15s;
-  }
-
-  /* Responsive */
-  @media (max-width: 767px) {
-    .hy-hero-inner  { padding: 6rem 1.25rem 4rem !important; }
-    .hy-split       { flex-direction: column !important; }
-    .hy-split-stats { border-left:none !important; padding-left:0 !important;
-                      border-top:1px solid rgba(255,255,255,.14) !important;
-                      padding-top:1.5rem !important; flex-direction:row !important;
-                      flex-wrap:wrap; gap:1.5rem !important; }
-    .hy-steps-grid  { grid-template-columns: 1fr !important; }
-    .hy-ctrl-grid   { grid-template-columns: 1fr !important; }
-    .hy-sec         { padding: 4rem 1.25rem !important; }
-    .hy-step-n      { font-size: 5rem !important; right: .75rem !important; }
-    .hy-cta-inner   { flex-direction: column !important; align-items: flex-start !important; }
-  }
-  @media (min-width: 768px) and (max-width: 1023px) {
-    .hy-ctrl-grid { grid-template-columns: repeat(2, 1fr) !important; }
-  }
-`;
-
-function InjectCSS() {
-  useEffect(() => {
-    const id = 'fie-help-v1';
-    if (document.getElementById(id)) return;
-    const el = Object.assign(document.createElement('style'), { id, textContent: HELP_CSS });
-    document.head.appendChild(el);
-    return () => el.remove();
-  }, []);
-  return null;
-}
 
 /* ─── Spotlight helper ──────────────────────────────────────────────────── */
 function SpotCard({ children, style, className = '' }) {
@@ -244,7 +110,7 @@ function FaqItem({ q, a }) {
         }}
       >
         <span style={{
-          fontFamily:"'Outfit', sans-serif",
+          fontFamily: 'var(--font-body)',
           fontWeight:600, fontSize:'.9rem',
           color: open ? 'var(--red, #BC0613)' : 'var(--ink-dark, rgba(40,2,5,.85))',
           lineHeight:1.4,
@@ -281,12 +147,11 @@ export default function Ayuda() {
   return (
     <main style={{
       paddingTop:'var(--nav-h, 64px)',
-      fontFamily:"'Outfit', sans-serif",
+      fontFamily: 'var(--font-body)',
       background:'var(--cream, #FDFAF9)',
       color:'var(--red, #BC0613)',
       minHeight:'100dvh',
     }}>
-      <InjectCSS />
 
       {/* ══ HERO ════════════════════════════════════════════════════════ */}
       <section style={{ position:'relative', overflow:'hidden', background:'var(--red, #BC0613)' }}>
@@ -408,7 +273,7 @@ export default function Ayuda() {
           <div style={{ marginBottom:'3rem' }}>
             <p style={{ fontSize:'.68rem', fontWeight:700, letterSpacing:'.15em', textTransform:'uppercase', color:'var(--ink)', marginBottom:'.45rem' }}>Proceso</p>
             <h2 style={{ fontWeight:800, fontSize:'clamp(1.5rem, 3vw, 2.2rem)', letterSpacing:'-.025em', color:'var(--red)', margin:0 }}>
-              En 4 pasos sencillos.
+              En 4 pasos sencillos
             </h2>
           </div>
 
@@ -456,7 +321,7 @@ export default function Ayuda() {
             <div>
               <p style={{ fontSize:'.68rem', fontWeight:700, letterSpacing:'.15em', textTransform:'uppercase', color:'var(--ink)', marginBottom:'.45rem' }}>Referencia</p>
               <h2 style={{ fontWeight:800, fontSize:'clamp(1.5rem, 3vw, 2.2rem)', letterSpacing:'-.025em', color:'var(--red)', margin:0 }}>
-                Controles de navegación.
+                Controles de navegación
               </h2>
             </div>
           </div>
@@ -521,7 +386,7 @@ export default function Ayuda() {
             <div style={{ position:'sticky', top:'calc(var(--nav-h, 64px) + 2rem)' }}>
               <p style={{ fontSize:'.68rem', fontWeight:700, letterSpacing:'.15em', textTransform:'uppercase', color:'var(--ink)', marginBottom:'.45rem' }}>Soporte</p>
               <h2 style={{ fontWeight:800, fontSize:'clamp(1.5rem, 3vw, 2.2rem)', letterSpacing:'-.025em', color:'var(--red)', margin:'0 0 1.25rem' }}>
-                Preguntas<br/>frecuentes.
+                Preguntas<br/>frecuentes
               </h2>
               <p style={{ fontSize:'.88rem', fontWeight:300, color:'var(--ink)', lineHeight:1.75, maxWidth:'32ch' }}>
                 Respuestas a las dudas más comunes sobre el visor interactivo 3D y sus funciones.
@@ -542,50 +407,6 @@ export default function Ayuda() {
             {/* Columna derecha — acordeón */}
             <div>
               {FAQ.map(item => <FaqItem key={item.q} {...item} />)}
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* ══ CTA ═════════════════════════════════════════════════════════ */}
-      <section style={{ borderTop:'1px solid var(--rule)', background:'var(--red, #BC0613)', padding:'5rem 5vw', position:'relative', overflow:'hidden' }}>
-        <div aria-hidden style={{ position:'absolute', top:'-80px', right:'-60px', width:300, height:300, borderRadius:'50%', background:'rgba(255,255,255,.05)', pointerEvents:'none' }}/>
-        <div style={{ maxWidth:1280, margin:'0 auto' }}>
-          <div className="hy-cta-inner" style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:'2.5rem', flexWrap:'wrap' }}>
-            <div style={{ flex:1, maxWidth:520 }}>
-              <p style={{ fontSize:'.68rem', fontWeight:700, letterSpacing:'.15em', textTransform:'uppercase', color:'rgba(255,255,255,.55)', marginBottom:'.6rem' }}>¿Todo listo?</p>
-              <h2 style={{ fontWeight:800, fontSize:'clamp(1.6rem, 3.5vw, 2.8rem)', letterSpacing:'-.025em', color:'#fff', lineHeight:1.08, margin:'0 0 .75rem' }}>
-                Comienza a explorar<br/>
-                <span style={{ color:'rgba(255,255,255,.65)', fontWeight:300 }}>los edificios de la FIE.</span>
-              </h2>
-            </div>
-
-            <div style={{ display:'flex', gap:'.85rem', flexWrap:'wrap', flexShrink:0 }}>
-              <Link to="/directorio" style={{
-                display:'inline-flex', alignItems:'center', gap:'.4rem',
-                padding:'.85rem 1.75rem', borderRadius:'999px',
-                background:'rgba(255,255,255,.12)',
-                border:'1.5px solid rgba(255,255,255,.25)',
-                color:'rgba(255,255,255,.85)', textDecoration:'none',
-                fontWeight:600, fontSize:'.88rem', letterSpacing:'.02em',
-                transition:'border-color .2s, color .2s',
-              }}
-              onMouseEnter={e=>{ e.currentTarget.style.borderColor='rgba(255,255,255,.5)'; e.currentTarget.style.color='#fff'; }}
-              onMouseLeave={e=>{ e.currentTarget.style.borderColor='rgba(255,255,255,.25)'; e.currentTarget.style.color='rgba(255,255,255,.85)'; }}>
-                Ver directorio
-              </Link>
-              <Link to="/explorar" className="hy-cta-btn" style={{
-                display:'inline-flex', padding:'.85rem 1.9rem',
-                background:'#fff',
-                border:'1.5px solid rgba(255,255,255,.4)',
-                color:'var(--red, #BC0613)', textDecoration:'none',
-                fontWeight:800, fontSize:'.88rem', letterSpacing:'.02em',
-              }}>
-                <div className="hy-fill" style={{ background:'rgba(188,6,19,.08)' }}/>
-                <span style={{ color:'var(--red)' }}>
-                  Explorar 3D <Icons.ArrowRight />
-                </span>
-              </Link>
             </div>
           </div>
         </div>

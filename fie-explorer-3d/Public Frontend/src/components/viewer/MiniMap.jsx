@@ -1,13 +1,5 @@
 /**
- * MiniMap.jsx — HU-10
- * Public Frontend/src/components/viewer/MiniMap.jsx
- *
- * Mini-mapa interactivo bidireccional:
- *   · Clic en el mini-mapa  → mapa principal vuela a ese punto (flyTo)
- *   · Arrastre en mini-mapa → mapa principal sigue en tiempo real
- *   · Indicador de viewport → rectángulo que muestra el área visible del mapa principal
- *   · Dos tamaños: compacto (160×120) y expandido (260×200)
- *   · Colapsado por defecto en móvil; expandido en escritorio
+ * MiniMap.jsx 
  */
 
 import React, { useEffect, useRef, useState, useCallback } from 'react';

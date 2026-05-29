@@ -1,6 +1,5 @@
 /**
  * MapboxViewer.jsx — VERSIÓN CON RAYCASTING 3D
- * ─────────────────────────────────────────────────────────────────────────────
  */
 
 import React, { useEffect, useRef, useCallback, useState } from 'react';

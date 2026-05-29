@@ -1,6 +1,5 @@
 /**
  * ControlsOverlay.jsx — HU-03
- * Overlay de instrucciones. Auto-cierre a los 5 s.
  */
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 
