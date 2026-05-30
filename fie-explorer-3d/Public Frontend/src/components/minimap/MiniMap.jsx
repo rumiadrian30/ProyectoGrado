@@ -1,394 +1,501 @@
-/**
- * MiniMap.jsx
- * ─────────────────────────────────────────────────────────────────────────────
- * Minimapa flotante para GeoESPOCH 3D.
- * Usa un <Canvas> secundario ultra-pequeño con una cámara ortográfica fija
- * apuntando verticalmente hacia abajo (position=[0, 200, 0]) que rastrea y
- * refleja la posición XZ de la cámara principal sobre el campus_base.glb.
- *
- * Características:
- *   - Cámara ortográfica top-down con frustum de 200 unidades de ancho
- *   - Indicador de posición de cámara principal (punto cyan pulsante)
- *   - Indicador de dirección de vista (cono/flecha)
- *   - Botón de colapso (minimizar/expandir)
- *   - Renderiza los footprints simplificados de los edificios (planos XZ)
- *   - Clicable: clic en el mapa teletransporta cámara principal a esa pos.
- *   - Compatible con todos los modos de cámara
- *
- * Props:
- *   models      Model[]   — modelos desde la API (para posiciones de edificios)
- *   cameraRef   Ref       — ref a la cámara principal de Three.js
- *   controlsRef Ref       — ref a ViewerControls (para triggerear reposicionado)
- * ─────────────────────────────────────────────────────────────────────────────
- */
+import React, { useMemo } from 'react';
 
-import React, {
-  useRef,
-  useState,
-  useEffect,
-  useCallback,
-  useMemo,
-} from 'react';
-import { Canvas, useFrame, useThree } from '@react-three/fiber';
-import { OrthographicCamera } from '@react-three/drei';
-import * as THREE from 'three';
+function readNumber(...values) {
+  for (const value of values) {
+    const parsed = parseFloat(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
 
-// ─── Constantes del mapa ───────────────────────────────────────────────────
-const MAP_SIZE         = 180;    // px: tamaño del canvas cuadrado visible
-const MAP_FRUSTUM      = 180;    // unidades Three.js de semiancho ortográfico
-const CAM_HEIGHT       = 200;    // altura Y de la cámara del mapa
-const CAM_INDICATOR_R  = 2.5;   // radio del indicador de cámara principal
-const BUILDING_COLOR   = '#1a3a4a';
-const BUILDING_OUTLINE = '#00d4ff';
-const CAMPUS_GROUND    = '#0d1f14';
-const CAM_DOT_COLOR    = '#00d4ff';
-
-// ─── Campus ground plane (representación del recinto) ─────────────────────
-function MapGroundPlane() {
-  return (
-    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.5, 0]}>
-      <planeGeometry args={[500, 500]} />
-      <meshBasicMaterial color={CAMPUS_GROUND} />
-    </mesh>
-  );
+  return 0;
 }
 
-// ─── Edificio simplificado (footprint plano) ──────────────────────────────
-function BuildingFootprint({ model }) {
-  const px = model.building_offset_x ?? 0;
-  const pz = model.building_offset_z ?? 0;
-
-  // Estimamos el footprint con un box plano de 12×8 unidades (genérico)
-  // En producción se puede extender con datos de bounding-box del GLB.
-  return (
-    <mesh position={[px, 0, pz]} rotation={[-Math.PI / 2, 0, 0]}>
-      <planeGeometry args={[12, 8]} />
-      <meshBasicMaterial color={BUILDING_COLOR} />
-    </mesh>
-  );
+function getModelPosition(model, building) {
+  return {
+    x: readNumber(
+      model?.building_offset_x,
+      model?.offset_x,
+      building?.offset_x
+    ),
+    y: readNumber(
+      model?.building_offset_y,
+      model?.offset_y,
+      building?.offset_y
+    ),
+    z: readNumber(
+      model?.building_offset_z,
+      model?.offset_z,
+      building?.offset_z
+    ),
+  };
 }
 
-// Contorno del footprint
-function BuildingOutline({ model }) {
-  const px = model.building_offset_x ?? 0;
-  const pz = model.building_offset_z ?? 0;
-
+export default function MiniMap({
+  buildings = [],
+  allModels = [],
+  selectedBuilding = null,
+  onSelectBuilding,
+  isMobile = false,
+  visible = false,
+  expanded = false,
+  onToggle,
+  onToggleSize,
+  cameraSnapshot,
+}) {
   const points = useMemo(() => {
-    const w = 6, h = 4;
-    return [
-      new THREE.Vector3(-w, 0, -h),
-      new THREE.Vector3( w, 0, -h),
-      new THREE.Vector3( w, 0,  h),
-      new THREE.Vector3(-w, 0,  h),
-      new THREE.Vector3(-w, 0, -h),
-    ];
-  }, []);
+    return buildings.map((building) => {
+      const model = allModels.find(
+        (m) =>
+          String(m.building_id) === String(building.id) &&
+          (m.is_active === true || m.is_active === 1 || m.is_active === '1')
+      );
 
-  const geometry = useMemo(() => {
-    const geo = new THREE.BufferGeometry().setFromPoints(points);
-    return geo;
-  }, [points]);
+      const fallbackModel = model ?? allModels.find(
+        (m) => String(m.building_id) === String(building.id)
+      );
 
-  return (
-    <line position={[px, 0.1, pz]} geometry={geometry}>
-      <lineBasicMaterial color={BUILDING_OUTLINE} linewidth={1.5} />
-    </line>
-  );
-}
+      const pos = getModelPosition(fallbackModel, building);
 
-// ─── Indicador de cámara principal ────────────────────────────────────────
-function CameraIndicator({ cameraRef }) {
-  const meshRef = useRef();
-  const coneRef = useRef();
-  const pulseRef = useRef(0);
+      return {
+        id: building.id,
+        name: building.name,
+        x: pos.x,
+        z: pos.z,
+        hasModel: Boolean(fallbackModel?.file_path),
+      };
+    });
+  }, [buildings, allModels]);
 
-  useFrame(({ clock }) => {
-    const mainCam = cameraRef?.current;
-    if (!mainCam || !meshRef.current) return;
+  const bounds = useMemo(() => {
+    const xs = points.map((p) => p.x);
+    const zs = points.map((p) => p.z);
 
-    // Seguir posición XZ de la cámara principal
-    meshRef.current.position.x = mainCam.position.x;
-    meshRef.current.position.z = mainCam.position.z;
-
-    // Actualizar el cono de dirección
-    if (coneRef.current) {
-      // Extraer yaw de la cámara principal
-      const euler = new THREE.Euler().setFromQuaternion(mainCam.quaternion, 'YXZ');
-      coneRef.current.rotation.y = euler.y;
+    if (cameraSnapshot) {
+      xs.push(cameraSnapshot.cameraX, cameraSnapshot.targetX);
+      zs.push(cameraSnapshot.cameraZ, cameraSnapshot.targetZ);
     }
 
-    // Pulso del indicador
-    pulseRef.current = clock.getElapsedTime();
-    const scale = 1 + Math.sin(pulseRef.current * 2.5) * 0.15;
-    meshRef.current.scale.setScalar(scale);
-  });
+    if (!xs.length || !zs.length) {
+      return {
+        minX: -120,
+        maxX: 120,
+        minZ: -120,
+        maxZ: 120,
+      };
+    }
 
-  return (
-    <group ref={meshRef} position={[0, 0.5, 0]}>
-      {/* Punto principal */}
-      <mesh>
-        <circleGeometry args={[CAM_INDICATOR_R, 24]} />
-        <meshBasicMaterial color={CAM_DOT_COLOR} />
-      </mesh>
+    const padding = 40;
 
-      {/* Halo exterior */}
-      <mesh>
-        <ringGeometry args={[CAM_INDICATOR_R + 0.5, CAM_INDICATOR_R + 1.8, 24]} />
-        <meshBasicMaterial color={CAM_DOT_COLOR} transparent opacity={0.3} />
-      </mesh>
+    return {
+      minX: Math.min(...xs, -120) - padding,
+      maxX: Math.max(...xs, 120) + padding,
+      minZ: Math.min(...zs, -120) - padding,
+      maxZ: Math.max(...zs, 120) + padding,
+    };
+  }, [points, cameraSnapshot]);
 
-      {/* Cono de dirección */}
-      <group ref={coneRef} rotation={[0, 0, 0]}>
-        <mesh position={[0, 0, -(CAM_INDICATOR_R + 4)]}>
-          <coneGeometry args={[1.5, 5, 3]} />
-          <meshBasicMaterial color={CAM_DOT_COLOR} />
-        </mesh>
-      </group>
-    </group>
-  );
-}
+  const W = expanded
+    ? (isMobile ? 240 : 310)
+    : (isMobile ? 148 : 180);
 
-// ─── Escena interior del minimapa ─────────────────────────────────────────
-function MinimapScene({ models, cameraRef }) {
-  const activeModels = useMemo(
-    () => models.filter((m) => m.is_active),
-    [models],
-  );
+  const H = expanded
+    ? (isMobile ? 180 : 230)
+    : (isMobile ? 112 : 136);
+
+  const PAD = expanded ? 22 : 16;
+
+  const project = (x, z) => {
+    const dx = bounds.maxX - bounds.minX || 1;
+    const dz = bounds.maxZ - bounds.minZ || 1;
+
+    return {
+      x: PAD + ((x - bounds.minX) / dx) * (W - PAD * 2),
+      y: PAD + ((z - bounds.minZ) / dz) * (H - PAD * 2),
+    };
+  };
+
+  const cameraPoint = cameraSnapshot
+    ? project(cameraSnapshot.cameraX, cameraSnapshot.cameraZ)
+    : null;
+
+  const targetPoint = cameraSnapshot
+    ? project(cameraSnapshot.targetX, cameraSnapshot.targetZ)
+    : null;
+
+  const handleToggle = (e) => {
+    e?.stopPropagation?.();
+    onToggle?.();
+  };
+
+  const handleToggleSize = (e) => {
+    e?.stopPropagation?.();
+    onToggleSize?.();
+  };
 
   return (
     <>
-      {/* Cámara ortográfica fija top-down */}
-      <OrthographicCamera
-        makeDefault
-        position={[0, CAM_HEIGHT, 0]}
-        zoom={1}
-        near={1}
-        far={500}
-        left={-MAP_FRUSTUM}
-        right={MAP_FRUSTUM}
-        top={MAP_FRUSTUM}
-        bottom={-MAP_FRUSTUM}
-        onUpdate={(cam) => cam.lookAt(0, 0, 0)}
-      />
+      <button
+        onClick={handleToggle}
+        onPointerDown={(e) => e.stopPropagation()}
+        title={visible ? 'Ocultar minimapa' : 'Mostrar minimapa'}
 
-      {/* Iluminación plana */}
-      <ambientLight intensity={1.5} />
-
-      {/* Suelo del campus */}
-      <MapGroundPlane />
-
-      {/* Footprints de edificios */}
-      {activeModels.map((model) => (
-        <React.Fragment key={model.id}>
-          <BuildingFootprint model={model} />
-          <BuildingOutline   model={model} />
-        </React.Fragment>
-      ))}
-
-      {/* Indicador de cámara principal */}
-      <CameraIndicator cameraRef={cameraRef} />
-    </>
-  );
-}
-
-// ─── Componente MiniMap exportado ─────────────────────────────────────────
-export default function MiniMap({ models = [], cameraRef, controlsRef }) {
-  const [collapsed,    setCollapsed]    = useState(false);
-  const [isDragging,   setIsDragging]   = useState(false);
-  const containerRef                    = useRef(null);
-
-  // Teletransportar cámara principal al clicar en el mapa
-  const handleMapClick = useCallback((e) => {
-    if (isDragging) return;
-    const rect = containerRef.current?.getBoundingClientRect();
-    if (!rect) return;
-
-    // Normalizar click a [-1, 1] en el espacio del mapa
-    const nx = ((e.clientX - rect.left)  / rect.width)  * 2 - 1;
-    const ny = ((e.clientY - rect.top)   / rect.height) * 2 - 1;
-
-    // Convertir a coordenadas world del canvas (frustum = MAP_FRUSTUM)
-    const worldX =  nx * MAP_FRUSTUM;
-    const worldZ = -ny * MAP_FRUSTUM; // invertir Y porque Three.js usa Z como profundidad
-
-    // Reposicionar cámara principal via ref
-    const mainCam = cameraRef?.current;
-    if (mainCam) {
-      mainCam.position.x = worldX;
-      mainCam.position.z = worldZ;
-      // Mantener la altura actual
-      if (controlsRef?.current?.resetCamera) {
-        // Solo actualizar target del OrbitControls si está en modo orbital
-        const ctrl = controlsRef.current;
-        if (ctrl.target) {
-          ctrl.target.x = worldX;
-          ctrl.target.z = worldZ;
-          ctrl.update?.();
-        }
-      }
-    }
-  }, [isDragging, cameraRef, controlsRef, MAP_FRUSTUM]);
-
-  const BORDER_COLOR   = 'rgba(0,212,255,0.25)';
-  const SHADOW_COLOR   = '0 8px 32px rgba(0,0,0,0.6), 0 0 0 1px rgba(0,212,255,0.08)';
-  const HEADER_BG      = 'rgba(8,14,24,0.92)';
-
-  return (
-    <div
-      style={{
-        position:  'absolute',
-        bottom:    16,
-        right:     16,
-        zIndex:    30,
-        display:   'flex',
-        flexDirection: 'column',
-        alignItems: 'stretch',
-        borderRadius: 12,
-        overflow:  'hidden',
-        border:    `1px solid ${BORDER_COLOR}`,
-        boxShadow: SHADOW_COLOR,
-        backdropFilter: 'blur(4px)',
-        transition: 'all 0.25s ease',
-        width:  collapsed ? 120 : MAP_SIZE,
-        height: collapsed ? 32  : MAP_SIZE + 32,
-      }}
-      role="complementary"
-      aria-label="Minimapa del campus"
-    >
-      {/* Header del mapa */}
-      <div
+        aria-label={visible ? 'Ocultar minimapa' : 'Mostrar minimapa'}
         style={{
-          height: 32,
-          background: HEADER_BG,
+          position: 'absolute',
+          right: isMobile ? 12 : 12,
+          bottom: isMobile ? 54 : 54,
+          zIndex: 31,
+          pointerEvents: 'auto',
+          width: 36,
+          height: 36,
+          padding: 0,
+          background: 'rgba(255,255,255,0.94)',
+          backdropFilter: 'blur(8px)',
+          border: '1px solid rgba(0,0,0,0.12)',
+          borderRadius: 8,
+          cursor: 'pointer',
           display: 'flex',
           alignItems: 'center',
-          justifyContent: 'space-between',
-          padding: '0 10px',
-          borderBottom: collapsed ? 'none' : `1px solid ${BORDER_COLOR}`,
-          flexShrink: 0,
+          justifyContent: 'center',
+          boxShadow: '0 2px 8px rgba(0,0,0,0.12)',
+          color: visible ? '#BC0613' : '#374151',
+          transition: 'background 0.15s, transform 0.15s, color 0.15s',
+        }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.background = '#f3f4f6';
+          e.currentTarget.style.transform = 'translateY(-1px)';
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.background = 'rgba(255,255,255,0.94)';
+          e.currentTarget.style.transform = 'translateY(0)';
         }}
       >
-        <span style={{
-          color: 'rgba(0,212,255,0.7)',
-          fontSize: 10,
-          fontFamily: "'JetBrains Mono', monospace",
-          letterSpacing: '0.12em',
-          textTransform: 'uppercase',
-          userSelect: 'none',
-        }}>
-          ◈ Minimapa
-        </span>
-        <button
-          type="button"
-          onClick={() => setCollapsed((c) => !c)}
-          aria-label={collapsed ? 'Expandir minimapa' : 'Contraer minimapa'}
-          style={{
-            background: 'none',
-            border: 'none',
-            color: 'rgba(0,212,255,0.5)',
-            cursor: 'pointer',
-            padding: 0,
-            fontSize: 12,
-            lineHeight: 1,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            width: 20,
-            height: 20,
-            borderRadius: 4,
-            transition: 'color 0.15s, background 0.15s',
-          }}
-          onMouseOver={e  => e.currentTarget.style.color   = '#00d4ff'}
-          onMouseOut={e   => e.currentTarget.style.color   = 'rgba(0,212,255,0.5)'}
+        <svg
+          width="16"
+          height="16"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
         >
-          {collapsed ? '▲' : '▼'}
-        </button>
-      </div>
+          <path d="M9 18l-6 3V6l6-3 6 3 6-3v15l-6 3-6-3z" />
+          <path d="M9 3v15M15 6v15" />
+        </svg>
+      </button>
 
-      {/* Canvas del minimapa */}
-      {!collapsed && (
+      {visible && (
         <div
-          ref={containerRef}
-          onClick={handleMapClick}
-          onMouseDown={() => setIsDragging(false)}
-          onMouseMove={() => setIsDragging(true)}
           style={{
-            width:  MAP_SIZE,
-            height: MAP_SIZE,
-            flexShrink: 0,
-            cursor: 'crosshair',
-            position: 'relative',
-          }}
-          title="Clic para teletransportar cámara"
-          role="img"
-          aria-label="Vista aérea del campus — clic para navegar"
-        >
-          <Canvas
-            style={{ width: '100%', height: '100%' }}
-            gl={{
-              antialias: true,
-              alpha: false,
-              powerPreference: 'low-power',
-            }}
-            // Fondo oscuro
-            onCreated={({ gl }) => gl.setClearColor('#0a0f18', 1)}
-          >
-            <MinimapScene models={models} cameraRef={cameraRef} />
-          </Canvas>
-
-          {/* Retícula central */}
-          <div style={{
-            position:   'absolute',
-            inset:      0,
-            pointerEvents: 'none',
-            zIndex:     2,
-          }}>
-            {/* Líneas de retícula */}
-            <div style={{
-              position: 'absolute',
-              top: '50%', left: 0, right: 0,
-              height: 1,
-              background: 'rgba(0,212,255,0.08)',
-              transform: 'translateY(-50%)',
-            }} />
-            <div style={{
-              position: 'absolute',
-              left: '50%', top: 0, bottom: 0,
-              width: 1,
-              background: 'rgba(0,212,255,0.08)',
-              transform: 'translateX(-50%)',
-            }} />
-
-            {/* Esquinas decorativas */}
-            {[
-              { top: 6, left: 6,  borderTop: '1px solid', borderLeft: '1px solid' },
-              { top: 6, right: 6, borderTop: '1px solid', borderRight: '1px solid' },
-              { bottom: 6, left: 6,  borderBottom: '1px solid', borderLeft: '1px solid' },
-              { bottom: 6, right: 6, borderBottom: '1px solid', borderRight: '1px solid' },
-            ].map((s, i) => (
-              <div key={i} style={{
-                position: 'absolute',
-                width: 8, height: 8,
-                borderColor: 'rgba(0,212,255,0.4)',
-                ...s,
-              }} />
-            ))}
-          </div>
-
-          {/* Etiqueta N (Norte) */}
-          <div style={{
             position: 'absolute',
-            top: 8, left: '50%',
-            transform: 'translateX(-50%)',
-            color: 'rgba(0,212,255,0.5)',
-            fontSize: 9,
-            fontFamily: "'JetBrains Mono', monospace",
-            letterSpacing: '0.1em',
+            right: isMobile ? 56 : 58,
+            bottom: isMobile ? 54 : 54,
+            zIndex: 30,
             pointerEvents: 'none',
-            zIndex: 3,
-          }}>N</div>
+          }}
+        >
+          <div
+            style={{
+              width: W,
+              background: 'rgba(255,255,255,.96)',
+              backdropFilter: 'blur(10px)',
+              border: '1px solid rgba(15,23,42,.12)',
+              borderRadius: 14,
+              boxShadow: '0 16px 42px rgba(15,23,42,.22)',
+              overflow: 'hidden',
+              transition: 'width 200ms ease, opacity 180ms ease, transform 180ms ease',
+              animation: 'viewerPanelIn .22s ease',
+              pointerEvents: 'none',
+            }}
+          >
+            <div
+              style={{
+                padding: '0.85rem 0.95rem 0.65rem',
+                borderBottom: '1px solid rgba(15,23,42,.10)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: '0.75rem',
+                pointerEvents: 'none',
+              }}
+            >
+              <div>
+                <p
+                  style={{
+                    margin: 0,
+                    fontSize: '0.8rem',
+                    fontWeight: 800,
+                    color: '#111827',
+                  }}
+                >
+                  Mini mapa
+                </p>
+              </div>
+
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 5,
+                  pointerEvents: 'auto',
+                }}
+              >
+                <button
+                  onClick={handleToggleSize}
+                  onPointerDown={(e) => e.stopPropagation()}
+                  title={expanded ? 'Reducir minimapa' : 'Agrandar minimapa'}
+                  aria-label={expanded ? 'Reducir minimapa' : 'Agrandar minimapa'}
+                  style={{
+                    width: 26,
+                    height: 26,
+                    border: 'none',
+                    background: 'rgba(15,23,42,.06)',
+                    color: '#64748b',
+                    borderRadius: 7,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    padding: 0,
+                    pointerEvents: 'auto',
+                  }}
+                >
+                  {expanded ? (
+                    <svg
+                      width="12"
+                      height="12"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <path d="M8 3v5H3M16 3v5h5M8 21v-5H3M16 21v-5h5" />
+                    </svg>
+                  ) : (
+                    <svg
+                      width="12"
+                      height="12"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <path d="M3 9V3h6M21 9V3h-6M3 15v6h6M21 15v6h-6" />
+                    </svg>
+                  )}
+                </button>
+
+                <button
+                  onClick={handleToggle}
+                  onPointerDown={(e) => e.stopPropagation()}
+                  title="Ocultar minimapa"
+                  aria-label="Ocultar minimapa"
+                  style={{
+                    width: 26,
+                    height: 26,
+                    border: 'none',
+                    background: 'rgba(15,23,42,.06)',
+                    color: '#64748b',
+                    borderRadius: 7,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    padding: 0,
+                    transition: 'background 0.15s, color 0.15s',
+                    pointerEvents: 'auto',
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = 'rgba(15,23,42,.10)';
+                    e.currentTarget.style.color = '#334155';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = 'rgba(15,23,42,.06)';
+                    e.currentTarget.style.color = '#64748b';
+                  }}
+                >
+                  <svg
+                    width="12"
+                    height="12"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.7"
+                    strokeLinecap="round"
+                  >
+                    <path d="M18 6 6 18M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            <svg
+              width={W}
+              height={H}
+              viewBox={`0 0 ${W} ${H}`}
+              style={{
+                display: 'block',
+                background: 'linear-gradient(180deg, rgba(248,250,252,.96), rgba(241,245,249,.96))',
+                pointerEvents: 'none',
+              }}
+            >
+              <defs>
+                <pattern
+                  id="mini-grid-3d-follow"
+                  width="18"
+                  height="18"
+                  patternUnits="userSpaceOnUse"
+                >
+                  <path
+                    d="M 18 0 L 0 0 0 18"
+                    fill="none"
+                    stroke="rgba(15,23,42,.08)"
+                    strokeWidth="1"
+                  />
+                </pattern>
+              </defs>
+
+              <rect
+                x="0"
+                y="0"
+                width={W}
+                height={H}
+                fill="url(#mini-grid-3d-follow)"
+              />
+
+              <path
+                d={`M ${PAD} ${H / 2} C ${W * 0.36} ${H * 0.42}, ${W * 0.58} ${H * 0.60}, ${W - PAD} ${H * 0.46}`}
+                fill="none"
+                stroke="rgba(100,116,139,.28)"
+                strokeWidth="4"
+                strokeLinecap="round"
+              />
+
+              {targetPoint && (
+                <circle
+                  cx={targetPoint.x}
+                  cy={targetPoint.y}
+                  r={expanded ? 5 : 4}
+                  fill="#2563eb"
+                  opacity="0.85"
+                />
+              )}
+
+              {cameraPoint && targetPoint && (
+                <line
+                  x1={cameraPoint.x}
+                  y1={cameraPoint.y}
+                  x2={targetPoint.x}
+                  y2={targetPoint.y}
+                  stroke="#2563eb"
+                  strokeWidth="1.5"
+                  strokeDasharray="3 3"
+                  opacity="0.65"
+                />
+              )}
+
+              {cameraPoint && (
+                <g>
+                  <circle
+                    cx={cameraPoint.x}
+                    cy={cameraPoint.y}
+                    r={expanded ? 7 : 6}
+                    fill="#111827"
+                    stroke="#fff"
+                    strokeWidth="2"
+                  />
+
+                  <path
+                    d={`M ${cameraPoint.x} ${cameraPoint.y - 10} L ${cameraPoint.x - 5} ${cameraPoint.y + 4} L ${cameraPoint.x + 5} ${cameraPoint.y + 4} Z`}
+                    fill="#111827"
+                    opacity="0.9"
+                  />
+                </g>
+              )}
+
+              {points.map((point) => {
+                const p = project(point.x, point.z);
+                const selected = String(selectedBuilding?.id) === String(point.id);
+
+                return (
+                  <g
+                    key={point.id}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onSelectBuilding?.(point.id);
+                    }}
+                    onPointerDown={(e) => e.stopPropagation()}
+                    style={{
+                      cursor: 'pointer',
+                      pointerEvents: 'auto',
+                    }}
+                  >
+                    <circle
+                      cx={p.x}
+                      cy={p.y}
+                      r={selected ? 7 : 5}
+                      fill={
+                        selected
+                          ? '#BC0613'
+                          : point.hasModel
+                            ? '#334155'
+                            : '#94a3b8'
+                      }
+                      stroke="#fff"
+                      strokeWidth="2"
+                    />
+
+                    {selected && (
+                      <circle
+                        cx={p.x}
+                        cy={p.y}
+                        r={11}
+                        fill="none"
+                        stroke="#BC0613"
+                        strokeWidth="1.5"
+                        opacity="0.35"
+                      />
+                    )}
+                  </g>
+                );
+              })}
+
+              <text
+                x={W - PAD}
+                y={H - 8}
+                textAnchor="end"
+                fontSize="9"
+                fontWeight="700"
+                fill="rgba(100,116,139,.65)"
+              >
+                ESPOCH
+              </text>
+            </svg>
+
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '0.65rem 0.95rem 0.75rem',
+                borderTop: '1px solid rgba(15,23,42,.08)',
+                fontSize: '0.6rem',
+                color: '#64748b',
+                fontWeight: 700,
+                pointerEvents: 'none',
+              }}
+            >
+              <span>Cámara</span>
+              <span style={{ color: '#2563eb' }}>Objetivo</span>
+              <span style={{ color: '#BC0613' }}>Edificio</span>
+            </div>
+          </div>
         </div>
       )}
-    </div>
+    </>
   );
 }

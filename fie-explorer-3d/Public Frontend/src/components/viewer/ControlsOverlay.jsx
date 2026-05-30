@@ -113,7 +113,7 @@ export default function ControlsOverlay({ isMobile = false, onDismiss }) {
         style={{
           position: 'absolute',
           right: isMobile ? 56 : 58,
-          bottom: isMobile ? 18 : 95,
+          bottom: isMobile ? 95 : 95,
           zIndex: 31,
           width: isMobile ? 'calc(100% - 76px)' : 290,
           maxWidth: 320,
@@ -124,8 +124,8 @@ export default function ControlsOverlay({ isMobile = false, onDismiss }) {
           backdropFilter: 'blur(10px)',
           overflow: 'hidden',
           animation: leaving
-            ? 'controlsPopoverOut .22s ease forwards'
-            : 'controlsPopoverIn .24s ease',
+            ? 'viewerPanelOut .22s ease forwards'
+            : 'viewerPanelIn .22s ease',
         }}
       >
         <div style={{
@@ -146,14 +146,6 @@ export default function ControlsOverlay({ isMobile = false, onDismiss }) {
               Controles del visor 3D
             </p>
 
-            <p style={{
-              margin: '0.16rem 0 0',
-              fontSize: '0.63rem',
-              color: '#64748b',
-              lineHeight: 1.35,
-            }}>
-              Navega por el campus y selecciona edificios.
-            </p>
           </div>
 
           <button

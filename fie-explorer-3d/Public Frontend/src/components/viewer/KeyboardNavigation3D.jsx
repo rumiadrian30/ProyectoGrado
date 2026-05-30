@@ -2,9 +2,18 @@ import { useEffect, useRef } from 'react';
 import { useThree, useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 
-const BASE_SPEED = 10;
+const BASE_SPEED = 30;
 const FAST_MULTIPLIER = 2.8;
 const ROTATE_SPEED = 1.8;
+
+const LIMITS = {
+  minX: -800,
+  maxX: 800,
+  minY: -2,
+  maxY: 240,
+  minZ: -500,
+  maxZ: 500,
+};
 
 const MOVEMENT_KEYS = new Set([
   'KeyW',
@@ -37,10 +46,17 @@ function isEditableElement(target) {
   );
 }
 
+function clampVector3(vector, limits = LIMITS) {
+  vector.x = THREE.MathUtils.clamp(vector.x, limits.minX, limits.maxX);
+  vector.y = THREE.MathUtils.clamp(vector.y, limits.minY, limits.maxY);
+  vector.z = THREE.MathUtils.clamp(vector.z, limits.minZ, limits.maxZ);
+}
+
 export default function KeyboardNavigation3D({
   orbitRef,
   cameraCommandRef,
   enabled = true,
+  onBoundsWarning,
 }) {
   const { camera } = useThree();
   const keysRef = useRef({});
@@ -148,6 +164,15 @@ export default function KeyboardNavigation3D({
 
     camera.position.add(movement);
     controls.target.add(movement);
+    const beforeClamp = camera.position.clone();
+    clampVector3(camera.position);
+    const wasClamped = !camera.position.equals(beforeClamp);
+    if (wasClamped) {
+      const correction = new THREE.Vector3().subVectors(camera.position, beforeClamp);
+      controls.target.add(correction);
+      clampVector3(controls.target);
+      onBoundsWarning?.();
+    }
     controls.update();
   });
 

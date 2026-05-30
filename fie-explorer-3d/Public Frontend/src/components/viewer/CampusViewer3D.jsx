@@ -19,12 +19,23 @@ import {
   Sky,
   Html,
   PerspectiveCamera,
+  Environment,
 } from '@react-three/drei';
 
 import * as THREE from 'three';
 import { useViewerStore } from '../../store/viewerStore';
 import ControlsOverlay from './ControlsOverlay';
 import KeyboardNavigation3D from './KeyboardNavigation3D';
+import MiniMap3D from '../minimap/MiniMap';
+import {
+  toRad,
+  getModelPosition,
+  getModelScale,
+  getModelRotation,
+  findBuildingModel,
+  getFocusKey,
+} from '../../utils/viewer3DHelpers';
+import MouseNavigation3D from './MouseNavigation3D';
 
 /* ─────────────────────────────────────────────────────────────────────────────
    Constantes de entorno
@@ -40,89 +51,13 @@ const CAMERA_INITIAL = {
 };
 
 const CAMERA_TOP = {
-  position: [0, 380, 0.1],
+  position: [0, 320, 180],
   target: [0, 0, 0],
 };
 
 const MAX_POLAR = Math.PI / 2.1;
 
-/* ─────────────────────────────────────────────────────────────────────────────
-   Helpers
-───────────────────────────────────────────────────────────────────────────── */
 
-function toRad(deg) {
-  return (parseFloat(deg) || 0) * (Math.PI / 180);
-}
-
-function readNumber(...values) {
-  for (const value of values) {
-    const parsed = parseFloat(value);
-    if (Number.isFinite(parsed)) return parsed;
-  }
-
-  return 0;
-}
-
-function getModelPosition(model, building) {
-  return {
-    x: readNumber(
-      model?.building_offset_x,
-      model?.offset_x,
-      building?.offset_x
-    ),
-    y: readNumber(
-      model?.building_offset_y,
-      model?.offset_y,
-      building?.offset_y
-    ),
-    z: readNumber(
-      model?.building_offset_z,
-      model?.offset_z,
-      building?.offset_z
-    ),
-  };
-}
-
-function getModelScale(model) {
-  return {
-    x: readNumber(model?.scale_x, model?.scale) || 1,
-    y: readNumber(model?.scale_y, model?.scale) || 1,
-    z: readNumber(model?.scale_z, model?.scale) || 1,
-  };
-}
-
-function getModelRotation(model) {
-  return {
-    x: parseFloat(model?.rotate_x) || 0,
-    y: parseFloat(model?.rotate_y) || 0,
-    z: parseFloat(model?.rotate_z) || 0,
-  };
-}
-
-function findBuildingModel(allModels, building) {
-  if (!building) return null;
-
-  return allModels.find(
-    (m) =>
-      String(m.building_id) === String(building.id) &&
-      (m.is_active === true || m.is_active === 1 || m.is_active === '1')
-  ) ?? allModels.find(
-    (m) => String(m.building_id) === String(building.id)
-  ) ?? null;
-}
-
-function getFocusKey(building, model) {
-  if (!building) return 'campus';
-
-  const pos = getModelPosition(model, building);
-
-  return [
-    building.id,
-    pos.x.toFixed(3),
-    pos.y.toFixed(3),
-    pos.z.toFixed(3),
-  ].join(':');
-}
 /* ─────────────────────────────────────────────────────────────────────────────
    CampusBase
 ───────────────────────────────────────────────────────────────────────────── */
@@ -130,19 +65,15 @@ function getFocusKey(building, model) {
 function CampusBase() {
   const { scene } = useGLTF(CAMPUS_URL);
 
-  const clonedScene = useMemo(() => {
-    const cloned = scene.clone(true);
-
-    cloned.traverse((obj) => {
+  useMemo(() => {
+    scene.traverse((obj) => {
       if (!obj.isMesh) return;
       obj.receiveShadow = true;
       obj.castShadow = false;
     });
-
-    return cloned;
   }, [scene]);
 
-  return <primitive object={clonedScene} position={[0, 0, 0]} />;
+  return <primitive object={scene} position={[0, 0, 0]} />;
 }
 
 /* ─────────────────────────────────────────────────────────────────────────────
@@ -334,7 +265,14 @@ function CameraController({
 
   const cancelAnimation = useCallback(() => {
     animatingRef.current = false;
-  }, []);
+
+    const controls = orbitRef.current;
+    if (controls) {
+      controls.autoRotate = false;
+      controls.autoRotateSpeed = 0;
+      controls.enableDamping = true;
+    }
+  }, [orbitRef]);
 
   const focusBuilding = useCallback((building) => {
     if (!building) {
@@ -361,7 +299,23 @@ function CameraController({
       },
 
       top() {
+        const controls = orbitRef.current;
+
+        if (controls) {
+          controls.autoRotate = false;
+          controls.autoRotateSpeed = 0;
+          controls.enableDamping = true;
+        }
+
         moveTo(CAMERA_TOP.position, CAMERA_TOP.target);
+
+        window.setTimeout(() => {
+          const currentControls = orbitRef.current;
+          if (!currentControls) return;
+
+          currentControls.autoRotate = true;
+          currentControls.autoRotateSpeed = 0.8;
+        }, 900);
       },
 
       focusBuilding(building) {
@@ -485,7 +439,6 @@ function CameraController({
       animatingRef.current = false;
     }
   });
-
   return null;
 }
 
@@ -501,12 +454,12 @@ function Lighting() {
       <directionalLight
         color="#fff8e7"
         intensity={2.8}
-        position={[120, 200, 80]}
+        position={[1600, 2200, -1800]}
         castShadow
-        shadow-mapSize-width={4096}
-        shadow-mapSize-height={4096}
+        shadow-mapSize-width={1024}
+        shadow-mapSize-height={1024}
         shadow-camera-near={0.5}
-        shadow-camera-far={800}
+        shadow-camera-far={5000}
         shadow-camera-left={-300}
         shadow-camera-right={300}
         shadow-camera-top={300}
@@ -599,6 +552,25 @@ function CameraTracker({ orbitRef, onSnapshot }) {
 }
 
 /* ─────────────────────────────────────────────────────────────────────────────
+   RealisticSky
+───────────────────────────────────────────────────────────────────────────── */
+
+function RealisticSky() {
+  return (
+    <Sky
+      distance={4500}
+      sunPosition={[800, 1400, -1200]}
+      inclination={0.52}
+      azimuth={0.25}
+      mieCoefficient={0.003}
+      mieDirectionalG={0.7}
+      rayleigh={3.2}
+      turbidity={2.8}
+    />
+  );
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
    Scene
 ───────────────────────────────────────────────────────────────────────────── */
 
@@ -610,6 +582,7 @@ function Scene({
   orbitRef,
   cameraCommandRef,
   onCameraSnapshot,
+  onBoundsWarning,
 }) {
   return (
     <>
@@ -618,19 +591,10 @@ function Scene({
         fov={CAMERA_INITIAL.fov}
         position={CAMERA_INITIAL.position}
         near={0.5}
-        far={5000}
+        far={1500}
       />
 
-      <Sky
-        distance={3000}
-        sunPosition={[120, 200, 80]}
-        inclination={0.49}
-        azimuth={0.25}
-        mieCoefficient={0.005}
-        mieDirectionalG={0.8}
-        rayleigh={1}
-        turbidity={8}
-      />
+      <RealisticSky />
 
       <Lighting />
 
@@ -639,14 +603,26 @@ function Scene({
         makeDefault
         maxPolarAngle={MAX_POLAR}
         minDistance={20}
-        maxDistance={800}
+        maxDistance={700}
         enableDamping
         dampingFactor={0.08}
         rotateSpeed={0.65}
         zoomSpeed={1.1}
         panSpeed={0.8}
+        enablePan={true}
         screenSpacePanning={false}
         target={CAMERA_INITIAL.target}
+        autoRotate={false}
+        autoRotateSpeed={0.8}
+        mouseButtons={{
+          LEFT: THREE.MOUSE.PAN,
+          MIDDLE: THREE.MOUSE.DOLLY,
+          RIGHT: THREE.MOUSE.ROTATE,
+        }}
+        touches={{
+          ONE: THREE.TOUCH.PAN,
+          TWO: THREE.TOUCH.DOLLY_ROTATE,
+        }}
         onStart={() => {
           cameraCommandRef.current?.cancelAnimation?.();
         }}
@@ -660,6 +636,12 @@ function Scene({
       />
 
       <KeyboardNavigation3D
+        orbitRef={orbitRef}
+        cameraCommandRef={cameraCommandRef}
+        onBoundsWarning={onBoundsWarning}
+      />
+
+      <MouseNavigation3D
         orbitRef={orbitRef}
         cameraCommandRef={cameraCommandRef}
       />
@@ -903,355 +885,6 @@ function ViewerControls3D({ isMobile, cameraCommandRef }) {
 }
 
 /* ─────────────────────────────────────────────────────────────────────────────
-   MiniMap3D
-───────────────────────────────────────────────────────────────────────────── */
-
-function MiniMap3D({
-  buildings,
-  allModels,
-  selectedBuilding,
-  onSelectBuilding,
-  isMobile,
-  visible,
-  expanded,
-  onToggle,
-  onToggleSize,
-  cameraSnapshot,
-}) {
-  const points = useMemo(() => {
-    return buildings.map((building) => {
-      const model = allModels.find(
-        (m) => String(m.building_id) === String(building.id) && m.is_active
-      );
-
-      const pos = getModelPosition(model, building);
-
-      return {
-        id: building.id,
-        name: building.name,
-        x: pos.x,
-        z: pos.z,
-        hasModel: Boolean(model?.file_path),
-      };
-    });
-  }, [buildings, allModels]);
-
-  const bounds = useMemo(() => {
-    const xs = points.map((p) => p.x);
-    const zs = points.map((p) => p.z);
-
-    if (cameraSnapshot) {
-      xs.push(cameraSnapshot.cameraX, cameraSnapshot.targetX);
-      zs.push(cameraSnapshot.cameraZ, cameraSnapshot.targetZ);
-    }
-
-    if (!xs.length || !zs.length) {
-      return {
-        minX: -120,
-        maxX: 120,
-        minZ: -120,
-        maxZ: 120,
-      };
-    }
-
-    const padding = 40;
-
-    return {
-      minX: Math.min(...xs, -120) - padding,
-      maxX: Math.max(...xs, 120) + padding,
-      minZ: Math.min(...zs, -120) - padding,
-      maxZ: Math.max(...zs, 120) + padding,
-    };
-  }, [points, cameraSnapshot]);
-
-  const W = expanded
-    ? (isMobile ? 240 : 310)
-    : (isMobile ? 148 : 180);
-
-  const H = expanded
-    ? (isMobile ? 180 : 230)
-    : (isMobile ? 112 : 136);
-
-  const PAD = expanded ? 22 : 16;
-
-  const project = (x, z) => {
-    const dx = bounds.maxX - bounds.minX || 1;
-    const dz = bounds.maxZ - bounds.minZ || 1;
-
-    return {
-      x: PAD + ((x - bounds.minX) / dx) * (W - PAD * 2),
-      y: PAD + ((z - bounds.minZ) / dz) * (H - PAD * 2),
-    };
-  };
-
-  const cameraPoint = cameraSnapshot
-    ? project(cameraSnapshot.cameraX, cameraSnapshot.cameraZ)
-    : null;
-
-  const targetPoint = cameraSnapshot
-    ? project(cameraSnapshot.targetX, cameraSnapshot.targetZ)
-    : null;
-
-  return (
-    <div style={{
-      position: 'absolute',
-      right: isMobile ? 10 : 12,
-      bottom: isMobile ? 72 : 54,
-      zIndex: 30,
-    }}>
-      {!visible && (
-        <button
-          onClick={onToggle}
-          title="Mostrar minimapa"
-          aria-label="Mostrar minimapa"
-          style={{
-            width: 36,
-            height: 36,
-            background: 'rgba(255,255,255,0.94)',
-            backdropFilter: 'blur(8px)',
-            border: '1px solid rgba(0,0,0,0.12)',
-            borderRadius: 8,
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            boxShadow: '0 2px 8px rgba(0,0,0,0.12)',
-            color: '#374151',
-          }}
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
-            stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M9 18l-6 3V6l6-3 6 3 6-3v15l-6 3-6-3z" />
-            <path d="M9 3v15M15 6v15" />
-          </svg>
-        </button>
-      )}
-
-      {visible && (
-        <div style={{
-          width: W,
-          background: 'rgba(255,255,255,.94)',
-          backdropFilter: 'blur(10px)',
-          border: '1px solid rgba(0,0,0,.12)',
-          borderRadius: 12,
-          boxShadow: '0 8px 22px rgba(0,0,0,.14)',
-          overflow: 'hidden',
-          transition: 'width 200ms ease',
-        }}>
-          <div style={{
-            padding: '0.45rem 0.6rem',
-            borderBottom: '1px solid rgba(0,0,0,.10)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: 8,
-          }}>
-            <span style={{
-              fontSize: '0.64rem',
-              letterSpacing: '0.08em',
-              textTransform: 'uppercase',
-              fontWeight: 800,
-              color: '#6b7280',
-            }}>
-              Mini mapa
-            </span>
-
-            <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-              <button
-                onClick={onToggleSize}
-                title={expanded ? 'Reducir minimapa' : 'Agrandar minimapa'}
-                aria-label={expanded ? 'Reducir minimapa' : 'Agrandar minimapa'}
-                style={{
-                  width: 22,
-                  height: 22,
-                  border: 'none',
-                  background: 'rgba(15,23,42,.07)',
-                  color: '#374151',
-                  borderRadius: 6,
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  padding: 0,
-                }}
-              >
-                {expanded ? (
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
-                    stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M8 3v5H3M16 3v5h5M8 21v-5H3M16 21v-5h5" />
-                  </svg>
-                ) : (
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
-                    stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M3 9V3h6M21 9V3h-6M3 15v6h6M21 15v6h-6" />
-                  </svg>
-                )}
-              </button>
-
-              <button
-                onClick={onToggle}
-                title="Ocultar minimapa"
-                aria-label="Ocultar minimapa"
-                style={{
-                  width: 22,
-                  height: 22,
-                  border: 'none',
-                  background: 'rgba(188,6,19,.08)',
-                  color: '#BC0613',
-                  borderRadius: 6,
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  padding: 0,
-                }}
-              >
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
-                  stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-                  <path d="M18 6L6 18M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-          </div>
-
-          <svg
-            width={W}
-            height={H}
-            viewBox={`0 0 ${W} ${H}`}
-            style={{
-              display: 'block',
-              background: 'linear-gradient(180deg, rgba(248,250,252,.96), rgba(241,245,249,.96))',
-            }}
-          >
-            <defs>
-              <pattern id="mini-grid-3d-follow" width="18" height="18" patternUnits="userSpaceOnUse">
-                <path
-                  d="M 18 0 L 0 0 0 18"
-                  fill="none"
-                  stroke="rgba(15,23,42,.08)"
-                  strokeWidth="1"
-                />
-              </pattern>
-            </defs>
-
-            <rect x="0" y="0" width={W} height={H} fill="url(#mini-grid-3d-follow)" />
-
-            <path
-              d={`M ${PAD} ${H / 2} C ${W * 0.36} ${H * 0.42}, ${W * 0.58} ${H * 0.60}, ${W - PAD} ${H * 0.46}`}
-              fill="none"
-              stroke="rgba(100,116,139,.28)"
-              strokeWidth="4"
-              strokeLinecap="round"
-            />
-
-            {targetPoint && (
-              <circle
-                cx={targetPoint.x}
-                cy={targetPoint.y}
-                r={expanded ? 5 : 4}
-                fill="#2563eb"
-                opacity="0.85"
-              />
-            )}
-
-            {cameraPoint && targetPoint && (
-              <line
-                x1={cameraPoint.x}
-                y1={cameraPoint.y}
-                x2={targetPoint.x}
-                y2={targetPoint.y}
-                stroke="#2563eb"
-                strokeWidth="1.5"
-                strokeDasharray="3 3"
-                opacity="0.65"
-              />
-            )}
-
-            {cameraPoint && (
-              <g>
-                <circle
-                  cx={cameraPoint.x}
-                  cy={cameraPoint.y}
-                  r={expanded ? 7 : 6}
-                  fill="#111827"
-                  stroke="#fff"
-                  strokeWidth="2"
-                />
-                <path
-                  d={`M ${cameraPoint.x} ${cameraPoint.y - 10} L ${cameraPoint.x - 5} ${cameraPoint.y + 4} L ${cameraPoint.x + 5} ${cameraPoint.y + 4} Z`}
-                  fill="#111827"
-                  opacity="0.9"
-                />
-              </g>
-            )}
-
-            {points.map((point) => {
-              const p = project(point.x, point.z);
-              const selected = String(selectedBuilding?.id) === String(point.id);
-
-              return (
-                <g
-                  key={point.id}
-                  onClick={() => onSelectBuilding?.(point.id)}
-                  style={{ cursor: 'pointer' }}
-                >
-                  <circle
-                    cx={p.x}
-                    cy={p.y}
-                    r={selected ? 7 : 5}
-                    fill={selected ? '#BC0613' : point.hasModel ? '#334155' : '#94a3b8'}
-                    stroke="#fff"
-                    strokeWidth="2"
-                  />
-
-                  {selected && (
-                    <circle
-                      cx={p.x}
-                      cy={p.y}
-                      r={11}
-                      fill="none"
-                      stroke="#BC0613"
-                      strokeWidth="1.5"
-                      opacity="0.35"
-                    />
-                  )}
-                </g>
-              );
-            })}
-
-            <text
-              x={W - PAD}
-              y={H - 8}
-              textAnchor="end"
-              fontSize="9"
-              fontWeight="700"
-              fill="rgba(100,116,139,.65)"
-            >
-              ESPOCH
-            </text>
-          </svg>
-
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            padding: '0.35rem 0.55rem',
-            borderTop: '1px solid rgba(0,0,0,.08)',
-            fontSize: '0.58rem',
-            color: '#64748b',
-            fontWeight: 700,
-          }}>
-            <span>Cámara</span>
-            <span style={{ color: '#2563eb' }}>Objetivo</span>
-            <span style={{ color: '#BC0613' }}>Edificio</span>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-/* ─────────────────────────────────────────────────────────────────────────────
    BuildingBadge
 ───────────────────────────────────────────────────────────────────────────── */
 
@@ -1363,15 +996,7 @@ function StatusPill3D({ isMobile }) {
   );
 }
 
-function ControlsHelpButton({ isMobile, onClick, miniMapVisible, miniMapExpanded }) {
-  const miniMapHeight = miniMapExpanded
-    ? (isMobile ? 180 : 230)
-    : (isMobile ? 112 : 136);
-
-  const bottomOffset = miniMapVisible
-    ? miniMapHeight + (isMobile ? 86 : 70)
-    : (isMobile ? 18 : 95);
-    
+function ControlsHelpButton({ isMobile, onClick, active = false }) {
   return (
     <button
       onClick={onClick}
@@ -1379,8 +1004,8 @@ function ControlsHelpButton({ isMobile, onClick, miniMapVisible, miniMapExpanded
       aria-label="Mostrar controles"
       style={{
         position: 'absolute',
-        right: isMobile ? 10 : 14,
-        bottom: isMobile ? 18 : 95,
+        right: isMobile ? 14 : 14,
+        bottom: isMobile ? 95 : 95,
         zIndex: 25,
         width: 36,
         height: 36,
@@ -1394,7 +1019,7 @@ function ControlsHelpButton({ isMobile, onClick, miniMapVisible, miniMapExpanded
         alignItems: 'center',
         justifyContent: 'center',
         boxShadow: '0 2px 8px rgba(0,0,0,0.12)',
-        color: '#374151',
+        color: active ? '#BC0613' : '#374151',
       }}
     >
       <svg
@@ -1427,14 +1052,14 @@ export default function CampusViewer3D({
   isMobile = false,
 }) {
   const [webglError, setWebglError] = useState(false);
-  const [showOverlay, setShowOverlay] = useState(
-    () => sessionStorage.getItem('fie-3d-overlay-dismissed') !== '1'
-  );
-  const [showMiniMap, setShowMiniMap] = useState(true);
+  const [showOverlay, setShowOverlay] = useState(false);
+  const [showMiniMap, setShowMiniMap] = useState(false);
   const [miniMapExpanded, setMiniMapExpanded] = useState(false);
   const [cameraSnapshot, setCameraSnapshot] = useState(null);
   const orbitRef = useRef(null);
   const cameraCommandRef = useRef(null);
+  const [boundsWarning, setBoundsWarning] = useState(false);
+  const boundsWarningTimerRef = useRef(null);
 
   const { setModelLoading, setModelProgress } = useViewerStore();
 
@@ -1466,6 +1091,26 @@ export default function CampusViewer3D({
     if (found) onBuildingClick?.(found);
   }, [buildings, onBuildingClick]);
 
+  const showBoundsWarning = useCallback(() => {
+    setBoundsWarning(true);
+
+    if (boundsWarningTimerRef.current) {
+      window.clearTimeout(boundsWarningTimerRef.current);
+    }
+
+    boundsWarningTimerRef.current = window.setTimeout(() => {
+      setBoundsWarning(false);
+    }, 1600);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (boundsWarningTimerRef.current) {
+        window.clearTimeout(boundsWarningTimerRef.current);
+      }
+    };
+  }, []);
+
   const selectedHasModel = useMemo(() => {
     return allModels.some(
       (m) => String(m.building_id) === String(building?.id) && m.is_active
@@ -1474,32 +1119,50 @@ export default function CampusViewer3D({
 
   if (webglError) return <WebGLErrorFallback />;
 
+  const toggleControlsOverlay = useCallback(() => {
+    setShowOverlay((prev) => {
+      const next = !prev;
+      if (next) {
+        setShowMiniMap(false);
+      }
+      return next;
+    });
+  }, []);
+
+  const toggleMiniMap = useCallback(() => {
+    setShowMiniMap((prev) => {
+      const next = !prev;
+      if (next) {
+        setShowOverlay(false);
+      }
+      return next;
+    });
+  }, []);
+
   return (
     <div style={{
-      position: 'relative',
       width: '100%',
       height: '100%',
-      overflow: 'hidden',
-      background: '#a8c8e8',
+      background: '#7DB9E8',
     }}>
       <Canvas
-        shadows
-        gl={{
-          antialias: true,
-          toneMapping: THREE.ACESFilmicToneMapping,
-          toneMappingExposure: 1.0,
-          outputColorSpace: THREE.SRGBColorSpace,
-        }}
-        onCreated={({ gl }) => {
-          gl.shadowMap.enabled = true;
-          gl.shadowMap.type = THREE.PCFSoftShadowMap;
-        }}
-        style={{
-          width: '100%',
-          height: '100%',
-          background: '#a8c8e8',
-        }}
-      >
+      shadows
+      gl={{
+        antialias: true,
+        toneMapping: THREE.ACESFilmicToneMapping,
+        toneMappingExposure: 0.9,
+        outputColorSpace: THREE.SRGBColorSpace,
+      }}
+      onCreated={({ gl }) => {
+        gl.shadowMap.enabled = true;
+        gl.shadowMap.type = THREE.PCFSoftShadowMap;
+      }}
+      style={{
+        width: '100%',
+        height: '100%',
+        background: '#7DB9E8',
+      }}
+    >
         <Scene
           allModels={allModels}
           buildings={buildings}
@@ -1508,22 +1171,44 @@ export default function CampusViewer3D({
           orbitRef={orbitRef}
           cameraCommandRef={cameraCommandRef}
           onCameraSnapshot={setCameraSnapshot}
+          onBoundsWarning={showBoundsWarning}
         />
       </Canvas>
+
+      {boundsWarning && (
+        <div style={{
+          position: 'absolute',
+          left: '50%',
+          top: isMobile ? 72 : 18,
+          transform: 'translateX(-50%)',
+          zIndex: 40,
+          padding: '0.55rem 0.85rem',
+          background: 'rgba(17,24,39,.88)',
+          color: '#fff',
+          border: '1px solid rgba(255,255,255,.14)',
+          borderRadius: 10,
+          boxShadow: '0 8px 24px rgba(0,0,0,.22)',
+          backdropFilter: 'blur(8px)',
+          fontSize: isMobile ? '0.7rem' : '0.76rem',
+          fontWeight: 700,
+          pointerEvents: 'none',
+          animation: 'boundsWarningIn .18s ease',
+        }}>
+          Estás saliendo de la zona permitida
+        </div>
+      )}
 
       {showOverlay && (
         <ControlsOverlay
           isMobile={isMobile}
-          onDismiss={() => {
-            setShowOverlay(false);
-            sessionStorage.setItem('fie-3d-overlay-dismissed', '1');
-          }}
+          onDismiss={() => setShowOverlay(false)}
         />
       )}
 
       <ControlsHelpButton
         isMobile={isMobile}
-        onClick={() => setShowOverlay(true)}
+        onClick={toggleControlsOverlay}
+        active={showOverlay}
       />
 
       <ViewerControls3D
@@ -1540,7 +1225,7 @@ export default function CampusViewer3D({
         visible={showMiniMap}
         expanded={miniMapExpanded}
         cameraSnapshot={cameraSnapshot}
-        onToggle={() => setShowMiniMap((v) => !v)}
+        onToggle={toggleMiniMap}
         onToggleSize={() => setMiniMapExpanded((v) => !v)}
       />
 
@@ -1551,6 +1236,19 @@ export default function CampusViewer3D({
       />
 
       <StatusPill3D isMobile={isMobile} />
+
+      <style>{`
+        @keyframes boundsWarningIn {
+          from {
+            opacity: 0;
+            transform: translateX(-50%) translateY(-6px);
+          }
+          to {
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
+          }
+        }
+      `}</style>
     </div>
   );
 }
