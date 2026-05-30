@@ -24,6 +24,7 @@ import {
 import * as THREE from 'three';
 import { useViewerStore } from '../../store/viewerStore';
 import ControlsOverlay from './ControlsOverlay';
+import KeyboardNavigation3D from './KeyboardNavigation3D';
 
 /* ─────────────────────────────────────────────────────────────────────────────
    Constantes de entorno
@@ -53,19 +54,40 @@ function toRad(deg) {
   return (parseFloat(deg) || 0) * (Math.PI / 180);
 }
 
+function readNumber(...values) {
+  for (const value of values) {
+    const parsed = parseFloat(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+
+  return 0;
+}
+
 function getModelPosition(model, building) {
   return {
-    x: parseFloat(model?.offset_x ?? building?.offset_x) || 0,
-    y: parseFloat(model?.offset_y ?? building?.offset_y) || 0,
-    z: parseFloat(model?.offset_z ?? building?.offset_z) || 0,
+    x: readNumber(
+      model?.building_offset_x,
+      model?.offset_x,
+      building?.offset_x
+    ),
+    y: readNumber(
+      model?.building_offset_y,
+      model?.offset_y,
+      building?.offset_y
+    ),
+    z: readNumber(
+      model?.building_offset_z,
+      model?.offset_z,
+      building?.offset_z
+    ),
   };
 }
 
 function getModelScale(model) {
   return {
-    x: parseFloat(model?.scale_x ?? model?.scale) || 1,
-    y: parseFloat(model?.scale_y ?? model?.scale) || 1,
-    z: parseFloat(model?.scale_z ?? model?.scale) || 1,
+    x: readNumber(model?.scale_x, model?.scale) || 1,
+    y: readNumber(model?.scale_y, model?.scale) || 1,
+    z: readNumber(model?.scale_z, model?.scale) || 1,
   };
 }
 
@@ -77,6 +99,30 @@ function getModelRotation(model) {
   };
 }
 
+function findBuildingModel(allModels, building) {
+  if (!building) return null;
+
+  return allModels.find(
+    (m) =>
+      String(m.building_id) === String(building.id) &&
+      (m.is_active === true || m.is_active === 1 || m.is_active === '1')
+  ) ?? allModels.find(
+    (m) => String(m.building_id) === String(building.id)
+  ) ?? null;
+}
+
+function getFocusKey(building, model) {
+  if (!building) return 'campus';
+
+  const pos = getModelPosition(model, building);
+
+  return [
+    building.id,
+    pos.x.toFixed(3),
+    pos.y.toFixed(3),
+    pos.z.toFixed(3),
+  ].join(':');
+}
 /* ─────────────────────────────────────────────────────────────────────────────
    CampusBase
 ───────────────────────────────────────────────────────────────────────────── */
@@ -278,7 +324,7 @@ function CameraController({
   const targetRef = useRef(new THREE.Vector3(...CAMERA_INITIAL.target));
   const cameraTargetRef = useRef(new THREE.Vector3(...CAMERA_INITIAL.position));
   const animatingRef = useRef(false);
-  const lastFocusedBuildingIdRef = useRef(null);
+  const lastFocusKeyRef = useRef(null);
 
   const moveTo = useCallback((position, target) => {
     cameraTargetRef.current.set(position[0], position[1], position[2]);
@@ -296,10 +342,7 @@ function CameraController({
       return;
     }
 
-    const model = allModels.find(
-      (m) => String(m.building_id) === String(building.id)
-    );
-
+    const model = findBuildingModel(allModels, building);
     const pos = getModelPosition(model, building);
 
     moveTo(
@@ -313,7 +356,7 @@ function CameraController({
       cancelAnimation,
 
       reset() {
-        lastFocusedBuildingIdRef.current = null;
+        lastFocusKeyRef.current = null;
         moveTo(CAMERA_INITIAL.position, CAMERA_INITIAL.target);
       },
 
@@ -323,7 +366,10 @@ function CameraController({
 
       focusBuilding(building) {
         if (!building) return;
-        lastFocusedBuildingIdRef.current = String(building.id);
+
+        const model = findBuildingModel(allModels, building);
+        lastFocusKeyRef.current = getFocusKey(building, model);
+
         focusBuilding(building);
       },
 
@@ -403,21 +449,23 @@ function CameraController({
   ]);
 
   useEffect(() => {
-    const currentId = selectedBuilding?.id ? String(selectedBuilding.id) : null;
-
-    if (!currentId) {
-      if (lastFocusedBuildingIdRef.current !== null) {
-        lastFocusedBuildingIdRef.current = null;
+    if (!selectedBuilding) {
+      if (lastFocusKeyRef.current !== null) {
+        lastFocusKeyRef.current = null;
         focusBuilding(null);
       }
+
       return;
     }
 
-    if (lastFocusedBuildingIdRef.current === currentId) return;
+    const model = findBuildingModel(allModels, selectedBuilding);
+    const focusKey = getFocusKey(selectedBuilding, model);
 
-    lastFocusedBuildingIdRef.current = currentId;
+    if (lastFocusKeyRef.current === focusKey) return;
+
+    lastFocusKeyRef.current = focusKey;
     focusBuilding(selectedBuilding);
-  }, [selectedBuilding?.id, focusBuilding]);
+  }, [selectedBuilding, allModels, focusBuilding]);
 
   useFrame(() => {
     const controls = orbitRef.current;
@@ -611,10 +659,16 @@ function Scene({
         cameraCommandRef={cameraCommandRef}
       />
 
+      <KeyboardNavigation3D
+        orbitRef={orbitRef}
+        cameraCommandRef={cameraCommandRef}
+      />
+
       <CameraTracker
         orbitRef={orbitRef}
         onSnapshot={onCameraSnapshot}
       />
+    
 
       <Suspense fallback={<LoadingOverlay />}>
         <CampusBase />
