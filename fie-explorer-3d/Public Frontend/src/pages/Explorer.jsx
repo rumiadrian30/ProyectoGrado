@@ -149,7 +149,7 @@ export default function Explorer() {
 
   // ── Info del modelo del edificio seleccionado ───────────────────────────
   const modelInfo = selectedBuilding
-    ? allExteriorModels.find(m => m.building_id === selectedBuilding.id) ?? null
+    ? allExteriorModels.find(m => String(m.building_id) === String(selectedBuilding.id)) ?? null
     : null;
 
   // ── Hotspots del edificio seleccionado ──────────────────────────────────
@@ -205,6 +205,7 @@ export default function Explorer() {
         buildings={buildings}
         building={selectedBuilding}
         onBuildingClick={handleSelectBuilding}
+        isMobile={isMobile}
       />
 
       {/* ── BACKDROP ─────────────────────────────────────────────────── */}

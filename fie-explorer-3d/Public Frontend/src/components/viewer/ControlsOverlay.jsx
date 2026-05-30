@@ -1,63 +1,105 @@
 /**
- * ControlsOverlay.jsx — HU-03
+ * ControlsOverlay.jsx — GeoESPOCH 3D
+ * Overlay de instrucciones para el visor 3D.
  */
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 
 const DISMISS_MS = 5000;
-const TICK_MS    = 50;
+const TICK_MS = 50;
 
 function Row({ icon, label, sub }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: '0.55rem', padding: '0.18rem 0' }}>
+    <div style={{
+      display: 'flex',
+      alignItems: 'center',
+      gap: '0.6rem',
+      padding: '0.22rem 0',
+    }}>
       <kbd style={{
-        fontSize: '0.58rem', fontFamily: 'monospace', fontWeight: 700,
-        background: 'var(--color-bg-soft)',
-        border: '1px solid var(--color-border)',
-        borderBottom: '2px solid var(--color-border)',
-        borderRadius: 4, padding: '0.08rem 0.35rem',
-        color: 'var(--color-text-2)', whiteSpace: 'nowrap',
-        lineHeight: 1.5, flexShrink: 0,
-      }}>{icon}</kbd>
-      <span style={{ fontSize: '0.72rem', color: 'var(--color-text-2)' }}>
+        minWidth: 54,
+        textAlign: 'center',
+        fontSize: '0.58rem',
+        fontFamily: 'monospace',
+        fontWeight: 800,
+        background: 'rgba(248,250,252,.95)',
+        border: '1px solid rgba(148,163,184,.35)',
+        borderBottom: '2px solid rgba(148,163,184,.55)',
+        borderRadius: 6,
+        padding: '0.12rem 0.38rem',
+        color: '#334155',
+        whiteSpace: 'nowrap',
+        lineHeight: 1.45,
+        flexShrink: 0,
+      }}>
+        {icon}
+      </kbd>
+
+      <span style={{
+        fontSize: '0.74rem',
+        color: '#334155',
+        lineHeight: 1.45,
+      }}>
         {label}
-        {sub && <span style={{ color: 'var(--color-text-4)', fontSize: '0.65rem' }}> · {sub}</span>}
+        {sub && (
+          <span style={{
+            color: '#94a3b8',
+            fontSize: '0.66rem',
+          }}>
+            {' '}· {sub}
+          </span>
+        )}
       </span>
     </div>
   );
 }
 
 export default function ControlsOverlay({ isMobile = false, onDismiss }) {
-  const [visible,  setVisible]  = useState(true);
+  const [visible, setVisible] = useState(true);
   const [progress, setProgress] = useState(0);
-  const [leaving,  setLeaving]  = useState(false);
-  const [secs,     setSecs]     = useState(5);
+  const [leaving, setLeaving] = useState(false);
+  const [secs, setSecs] = useState(5);
+
   const ivRef = useRef(null);
   const t0Ref = useRef(Date.now());
 
   const dismiss = useCallback(() => {
     if (!visible || leaving) return;
+
     clearInterval(ivRef.current);
     setLeaving(true);
-    setTimeout(() => { setVisible(false); onDismiss?.(); }, 260);
+
+    window.setTimeout(() => {
+      setVisible(false);
+      onDismiss?.();
+    }, 260);
   }, [visible, leaving, onDismiss]);
 
   useEffect(() => {
     t0Ref.current = Date.now();
-    ivRef.current = setInterval(() => {
+
+    ivRef.current = window.setInterval(() => {
       const elapsed = Date.now() - t0Ref.current;
       const pct = Math.min(100, (elapsed / DISMISS_MS) * 100);
+
       setProgress(pct);
       setSecs(Math.max(0, Math.ceil((DISMISS_MS - elapsed) / 1000)));
+
       if (pct >= 100) dismiss();
     }, TICK_MS);
+
     return () => clearInterval(ivRef.current);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [dismiss]);
 
   useEffect(() => {
-    const fn = (e) => { if (e.key === 'Escape' || e.key === ' ') { e.preventDefault(); dismiss(); } };
-    window.addEventListener('keydown', fn);
-    return () => window.removeEventListener('keydown', fn);
+    const handleKey = (e) => {
+      if (e.key === 'Escape' || e.key === ' ') {
+        e.preventDefault();
+        dismiss();
+      }
+    };
+
+    window.addEventListener('keydown', handleKey);
+    return () => window.removeEventListener('keydown', handleKey);
   }, [dismiss]);
 
   if (!visible) return null;
@@ -66,126 +108,144 @@ export default function ControlsOverlay({ isMobile = false, onDismiss }) {
     <>
       <div
         role="dialog"
-        aria-label="Instrucciones de navegación"
-        aria-modal="true"
-        onClick={dismiss}
+        aria-label="Controles del visor 3D"
+        onClick={(e) => e.stopPropagation()}
         style={{
-          position: 'absolute', inset: 0, zIndex: 100,
-          background: 'rgba(0,0,0,0.25)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          animation: leaving ? 'ovFadeOut .26s ease forwards' : 'ovFadeIn .25s ease',
+          position: 'absolute',
+          right: isMobile ? 56 : 58,
+          bottom: isMobile ? 18 : 95,
+          zIndex: 31,
+          width: isMobile ? 'calc(100% - 76px)' : 290,
+          maxWidth: 320,
+          background: 'rgba(255,255,255,.96)',
+          border: '1px solid rgba(15,23,42,.12)',
+          borderRadius: 14,
+          boxShadow: '0 16px 42px rgba(15,23,42,.22)',
+          backdropFilter: 'blur(10px)',
+          overflow: 'hidden',
+          animation: leaving
+            ? 'controlsPopoverOut .22s ease forwards'
+            : 'controlsPopoverIn .24s ease',
         }}
       >
-        <div
-          onClick={e => e.stopPropagation()}
-          style={{
-            background: 'var(--color-bg)',
-            border: '1px solid var(--color-border)',
-            borderRadius: 'var(--radius-md)',
-            boxShadow: 'var(--shadow-lg)',
-            padding: '1rem 1.1rem 0.85rem',
-            width: 290,
-            animation: leaving ? 'cardOut .26s ease forwards' : 'cardIn .3s cubic-bezier(.175,.885,.32,1.275)',
-          }}
-        >
-          {/* Header */}
-          <div style={{
-            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-            marginBottom: '0.75rem',
-            paddingBottom: '0.6rem',
-            borderBottom: '1px solid var(--color-border)',
-          }}>
-            <p style={{ margin: 0, fontSize: '0.8rem', fontWeight: 700, color: 'var(--color-text)' }}>
-            Cómo navegar en el visor
+        <div style={{
+          padding: '0.85rem 0.95rem 0.65rem',
+          borderBottom: '1px solid rgba(15,23,42,.10)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: '0.75rem',
+        }}>
+          <div>
+            <p style={{
+              margin: 0,
+              fontSize: '0.8rem',
+              fontWeight: 800,
+              color: '#111827',
+            }}>
+              Controles del visor 3D
             </p>
-            <button
-              onClick={dismiss}
-              aria-label="Cerrar"
-              style={{
-                width: 22, height: 22, borderRadius: 4,
-                background: 'transparent',
-                border: 'none',
-                color: 'var(--color-text-3)', cursor: 'pointer',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                transition: 'background 0.15s, color 0.15s',
-              }}
-              onMouseEnter={e => { e.currentTarget.style.background = 'var(--color-bg-soft)'; e.currentTarget.style.color = 'var(--color-text)'; }}
-              onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--color-text-3)'; }}
+
+            <p style={{
+              margin: '0.16rem 0 0',
+              fontSize: '0.63rem',
+              color: '#64748b',
+              lineHeight: 1.35,
+            }}>
+              Navega por el campus y selecciona edificios.
+            </p>
+          </div>
+
+          <button
+            onClick={dismiss}
+            aria-label="Cerrar"
+            style={{
+              width: 26,
+              height: 26,
+              borderRadius: 7,
+              background: 'rgba(15,23,42,.06)',
+              border: 'none',
+              color: '#64748b',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexShrink: 0,
+            }}
+          >
+            <svg
+              width="12"
+              height="12"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.7"
+              strokeLinecap="round"
             >
-              <svg width="10" height="10" viewBox="0 0 24 24" fill="none"
-                stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-                <path d="M18 6 6 18M6 6l12 12"/>
-              </svg>
-            </button>
-          </div>
-
-          {/* Filas */}
-          <div style={{ display: 'flex', flexDirection: 'column' }}>
-            {isMobile ? (
-              <>
-                <Row icon="1 dedo"  label="Mover cámara" />
-                <Row icon="2 dedos" label="Zoom" sub="pellizca" />
-                <Row icon="2 ↻"     label="Rotar orientación" />
-                <Row icon="Tap 📍"  label="Abrir hotspot" />
-              </>
-            ) : (
-              <>
-                <Row icon="W A S D" label="Mover cámara" sub="también ←↑↓→" />
-                <Row icon="Q / E"   label="Rotar orientación" />
-                <Row icon="R / F"   label="Inclinar vista" />
-                <Row icon="⇧ Shift" label="Velocidad ×4" />
-                <Row icon="Scroll"  label="Zoom" />
-                <Row icon="Clic 📍" label="Abrir hotspot" />
-              </>
-            )}
-          </div>
-
-          {/* Footer */}
-          <div style={{
-            marginTop: '0.85rem',
-            paddingTop: '0.65rem',
-            borderTop: '1px solid var(--color-border)',
-            display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem',
-          }}>
-            <span style={{ fontSize: '0.62rem', color: 'var(--color-text-4)' }}>
-              Se cierra en {secs}s
-            </span>
-            <button
-              onClick={dismiss}
-              style={{
-                padding: '0.35rem 0.8rem',
-                background: 'var(--color-primary, #BC0613)',
-                color: '#fff', border: 'none',
-                borderRadius: 'var(--radius-sm)',
-                fontSize: '0.72rem', fontWeight: 700,
-                fontFamily: 'var(--font-body, inherit)',
-                cursor: 'pointer',
-              }}
-            >
-              Entendido
-            </button>
-          </div>
-
-          {/* Barra de progreso */}
-          <div style={{
-            marginTop: '0.6rem', height: 2,
-            background: 'var(--color-border)', borderRadius: 999,
-          }}>
-            <div style={{
-              height: '100%', width: `${progress}%`,
-              background: 'var(--color-primary, #BC0613)',
-              borderRadius: 999,
-              transition: `width ${TICK_MS}ms linear`,
-            }}/>
-          </div>
+              <path d="M18 6 6 18M6 6l12 12" />
+            </svg>
+          </button>
         </div>
+
+        <div style={{
+          padding: '0.75rem 0.95rem 0.55rem',
+          display: 'flex',
+          flexDirection: 'column',
+        }}>
+          {isMobile ? (
+            <>
+              <Row icon="1 dedo" label="Girar cámara" />
+              <Row icon="2 dedos" label="Acercar o alejar" sub="pellizcar" />
+              <Row icon="Tap" label="Seleccionar edificio" />
+              <Row icon="Botones" label="Cambiar vista técnica" />
+            </>
+          ) : (
+            <>
+              <Row icon="Clic" label="Rotar cámara" sub="arrastrar" />
+              <Row icon="Rueda" label="Acercar o alejar" />
+              <Row icon="Clic der." label="Desplazar vista" />
+              <Row icon="Clic" label="Seleccionar edificio" />
+              <Row icon="Botones" label="Zoom, rotación y vista superior" />
+            </>
+          )}
+        </div>
+
+
+        <div style={{
+          position: 'absolute',
+          right: -7,
+          bottom: 16,
+          width: 14,
+          height: 14,
+          background: 'rgba(255,255,255,.96)',
+          borderRight: '1px solid rgba(15,23,42,.12)',
+          borderBottom: '1px solid rgba(15,23,42,.12)',
+          transform: 'rotate(-45deg)',
+        }} />
       </div>
 
       <style>{`
-        @keyframes ovFadeIn  { from { opacity:0 } to { opacity:1 } }
-        @keyframes ovFadeOut { from { opacity:1 } to { opacity:0 } }
-        @keyframes cardIn  { from { opacity:0; transform:scale(.93) translateY(8px) } to { opacity:1; transform:scale(1) translateY(0) } }
-        @keyframes cardOut { from { opacity:1; transform:scale(1) translateY(0) } to { opacity:0; transform:scale(.95) translateY(4px) } }
+        @keyframes controlsPopoverIn {
+          from {
+            opacity: 0;
+            transform: translateX(8px) scale(.97);
+          }
+          to {
+            opacity: 1;
+            transform: translateX(0) scale(1);
+          }
+        }
+
+        @keyframes controlsPopoverOut {
+          from {
+            opacity: 1;
+            transform: translateX(0) scale(1);
+          }
+          to {
+            opacity: 0;
+            transform: translateX(8px) scale(.97);
+          }
+        }
       `}</style>
     </>
   );
