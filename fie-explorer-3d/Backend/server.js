@@ -1,12 +1,17 @@
+/**
+ * Backend/server.js — GeoESPOCH 3D
+ */
+
 require('dotenv').config();
+
 const path = require('path');
 const express      = require('express');
 const cors         = require('cors');
 const cookieParser = require('cookie-parser');
 const helmet       = require('helmet');
 const rateLimit    = require('express-rate-limit');
+const fs           = require('fs');
 
-// ── Swagger ──────────────────────────────────────────────────
 const { swaggerUi, swaggerSpec, swaggerUiOptions } = require('./swagger');
 
 const authRoutes       = require('./routes/authRoutes');
@@ -19,9 +24,10 @@ const modelRoutes      = require('./routes/modelRoutes');
 const imageRoutes      = require('./routes/imageRoutes');
 const adminUserRoutes  = require('./routes/adminUserRoutes');
 const settingsRoutes   = require('./routes/settingsRoutes');
+
 const { errorMiddleware } = require('./middleware/errorMiddleware');
 const { MODELS_DIR } = require('./middleware/uploadMiddleware');
-const { getClient }  = require('./utils/redisClient');  // ← Redis
+const { getClient }  = require('./utils/redisClient');
 const { clientLogger } = require('./middleware/clientLogger.js');
 
 const app  = express();
@@ -30,7 +36,7 @@ const isProd = process.env.NODE_ENV === 'production';
 
 app.use(clientLogger);
 
-// ── Seguridad: Helmet ────────────────────────────────────────
+// ── Helmet ──────────────────────────────────────────────────────────────────
 app.use(helmet({
   contentSecurityPolicy: {
     directives: {
@@ -58,7 +64,6 @@ app.use(helmet({
   crossOriginEmbedderPolicy: false,
 }));
 
-// Permissions-Policy manual
 app.use((_req, res, next) => {
   res.setHeader(
     'Permissions-Policy',
@@ -67,7 +72,7 @@ app.use((_req, res, next) => {
   next();
 });
 
-// ── Rate limiting ────────────────────────────────────────────
+// ── Rate limiting ───────────────────────────────────────────────────────────
 const globalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 1500,
@@ -75,6 +80,7 @@ const globalLimiter = rateLimit({
   legacyHeaders: false,
   message: { error: 'Demasiadas solicitudes. Intenta en 15 minutos.' },
 });
+
 app.use('/api/', globalLimiter);
 
 const loginLimiter = rateLimit({
@@ -82,11 +88,12 @@ const loginLimiter = rateLimit({
   max: 20,
   standardHeaders: true,
   legacyHeaders: false,
-  message: { error: 'Demasiados intentos de login desde esta IP. Intenta en 15 minutos.' },
+  message: { error: 'Demasiados intentos de login. Intenta en 15 minutos.' },
 });
+
 app.use('/api/auth/login', loginLimiter);
 
-// ── CORS ─────────────────────────────────────────────────────
+// ── CORS ────────────────────────────────────────────────────────────────────
 app.use(cors({
   origin: [
     process.env.ADMIN_FRONTEND_URL  || 'http://localhost:5173',
@@ -103,39 +110,81 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
-// ── Logger de requests ───────────────────────────────────────
-const MC = { GET:'\x1b[36m', POST:'\x1b[32m', PUT:'\x1b[33m', PATCH:'\x1b[35m', DELETE:'\x1b[31m' };
-const R = '\x1b[0m', D = '\x1b[2m', B = '\x1b[1m';
+// ── Logger de requests ──────────────────────────────────────────────────────
+const MC = {
+  GET: '\x1b[36m',
+  POST: '\x1b[32m',
+  PUT: '\x1b[33m',
+  PATCH: '\x1b[35m',
+  DELETE: '\x1b[31m',
+};
+
+const R = '\x1b[0m';
+const D = '\x1b[2m';
+const B = '\x1b[1m';
 
 app.use((req, res, next) => {
   const start = Date.now();
+
   res.on('finish', () => {
     const ms    = Date.now() - start;
     const col   = MC[req.method] || '\x1b[37m';
     const sc    = res.statusCode;
     const scCol = sc >= 500 ? '\x1b[31m' : sc >= 400 ? '\x1b[33m' : '\x1b[32m';
     const usr   = req.admin?.email ? ` ${D}[${req.admin.email}]${R}` : '';
-    console.log(`  ${col}${B}${req.method.padEnd(6)}${R} ${req.path.padEnd(42)} ${scCol}${sc}${R} ${D}${ms}ms${usr}${R}`);
+
+    console.log(
+      `  ${col}${B}${req.method.padEnd(6)}${R} ${req.path.padEnd(42)} ${scCol}${sc}${R} ${D}${ms}ms${usr}${R}`
+    );
   });
+
   next();
 });
 
-// ── Swagger UI (/api/docs) ───────────────────────────────────
+// ── Swagger ─────────────────────────────────────────────────────────────────
 if (!isProd || process.env.SWAGGER_ENABLED === 'true') {
   app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, swaggerUiOptions));
+
   app.get('/api/docs.json', (_req, res) => {
     res.setHeader('Content-Type', 'application/json');
     res.send(swaggerSpec);
   });
 }
 
-// ── Rutas ────────────────────────────────────────────────────
-app.use('/models', express.static(path.isAbsolute(MODELS_DIR) ? MODELS_DIR : path.resolve(__dirname, MODELS_DIR), {
+// ── Ruta explícita para mapa-espoch.glb ─────────────────────────────────────
+// IMPORTANTE:
+// Se usa path.join() y sendFile(filePath) directamente.
+// No usar { root: '/' } en Windows.
+app.get('/models/mapa-espoch.glb', (req, res, next) => {
+  const filePath = path.resolve(MODELS_DIR, 'mapa-espoch.glb');
+
+  if (!fs.existsSync(filePath)) {
+    return res.status(404).json({
+      error: 'mapa-espoch.glb no encontrado',
+      path: filePath,
+      modelsDir: MODELS_DIR,
+    });
+  }
+
+  res.setHeader('Content-Type', 'model/gltf-binary');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET');
+  res.setHeader('Cache-Control', 'public, max-age=3600');
+
+  res.sendFile(filePath, (err) => {
+    if (err) next(err);
+  });
+});
+
+// ── Ruta estática genérica para modelos ─────────────────────────────────────
+app.use('/models', express.static(MODELS_DIR, {
   setHeaders: (res) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET');
-  }
+  },
 }));
+
+// ── Rutas de la API ─────────────────────────────────────────────────────────
 app.use('/api/auth',        authRoutes);
 app.use('/api/hotspots',    hotspotRoutes);
 app.use('/api/audit-logs',  auditRoutes);
@@ -147,44 +196,67 @@ app.use('/api/images',      imageRoutes);
 app.use('/api/admin-users', adminUserRoutes);
 app.use('/api/settings',    settingsRoutes);
 
-app.get('/api/health', (_, res) => {
-  res.json({ status: 'ok', project: 'Explorador 3D FIE', timestamp: new Date().toISOString() });
-});
-
-app.get('/', (_, res) => {
+app.get('/api/health', (_req, res) => {
   res.json({
-    project: 'Explorador 3D FIE — API REST',
-    version: '1.0.0',
-    docs: '/api/docs',
-    health: '/api/health',
+    status: 'ok',
+    project: 'GeoESPOCH 3D',
+    timestamp: new Date().toISOString(),
   });
 });
 
-app.use((req, _, next) => {
-  const err = new Error(`Ruta no encontrada: ${req.method} ${req.path}`);
-  err.status = 404; next(err);
+app.get('/', (_req, res) => {
+  res.json({
+    project: 'Explorador 3D FIE — API REST · ESPOCH',
+    version: '2.0.0',
+    docs:    '/api/docs',
+    health:  '/api/health',
+    campus:  '/models/mapa-espoch.glb',
+  });
 });
+
+// ── 404 ─────────────────────────────────────────────────────────────────────
+app.use((req, _res, next) => {
+  const err = new Error(`Ruta no encontrada: ${req.method} ${req.path}`);
+  err.status = 404;
+  next(err);
+});
+
 app.use(errorMiddleware);
 
-// ── Arranque ─────────────────────────────────────────────────
+// ── Arranque ────────────────────────────────────────────────────────────────
 app.listen(PORT, async () => {
   console.log('');
-  console.log(`${B}\x1b[34m╔════════════════════════════════════════╗${R}`);
-  console.log(`${B}\x1b[34m║   Explorador 3D FIE — API REST · ESPOCH  ║${R}`);
-  console.log(`${B}\x1b[34m║   http://localhost:${PORT}               ║${R}`);
-  console.log(`${B}\x1b[34m║   Docs → http://localhost:${PORT}/api/docs ║${R}`);
-  console.log(`${B}\x1b[34m╚════════════════════════════════════════╝${R}`);
+  console.log(`${B}\x1b[34m╔════════════════════════════════════════════╗${R}`);
+  console.log(`${B}\x1b[34m║   Explorador 3D FIE — API REST · ESPOCH   ║${R}`);
+  console.log(`${B}\x1b[34m║   http://localhost:${PORT}                 ║${R}`);
+  console.log(`${B}\x1b[34m║   Docs   → http://localhost:${PORT}/api/docs ║${R}`);
+  console.log(`${B}\x1b[34m║   Campus → http://localhost:${PORT}/models/mapa-espoch.glb ║${R}`);
+  console.log(`${B}\x1b[34m╚════════════════════════════════════════════╝${R}`);
   console.log('');
 
-  // ── Verificar conexión Redis al arrancar ─────────────────
+  const campusGlb = path.join(MODELS_DIR, 'mapa-espoch.glb');
+
+  console.log(`  ${D}MODELS_DIR:${R} ${MODELS_DIR}`);
+  console.log(`  ${D}Campus GLB:${R} ${campusGlb}`);
+
+  if (fs.existsSync(campusGlb)) {
+    const stat = fs.statSync(campusGlb);
+    console.log(
+      `  \x1b[32m✔\x1b[0m  mapa-espoch.glb encontrado (${(stat.size / 1024 / 1024).toFixed(1)} MB)`
+    );
+  } else {
+    console.warn(`  \x1b[33m⚠\x1b[0m  mapa-espoch.glb NO encontrado en: ${campusGlb}`);
+    console.warn(`  \x1b[33m⚠\x1b[0m  Cópialo ahí antes de usar el visor 3D.`);
+  }
+
   const redis = getClient();
+
   if (redis) {
     try {
       await redis.ping();
       console.log(`  \x1b[36m[Redis]\x1b[0m \x1b[32m Conectado\x1b[0m → ${process.env.REDIS_URL}`);
     } catch (err) {
       console.warn(`  \x1b[33m[Redis]\x1b[0m \x1b[31m✗ No disponible\x1b[0m — ${err.message}`);
-      console.warn(`  \x1b[33m[Redis]\x1b[0m   La API funcionará sin caché. Instala Redis y reinicia.`);
     }
   }
 
