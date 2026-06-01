@@ -1,14 +1,5 @@
 /**
  * Explorer.jsx — GeoESPOCH 3D
- *
- * Página principal del visor. Usa CampusViewer3D (react-three/fiber)
- * en lugar de MapboxViewer. No depende de mapbox-gl.
- *
- * CAMBIOS RESPECTO A LA VERSIÓN ANTERIOR:
- *  - Reemplaza <MapboxViewer> por <CampusViewer3D>
- *  - Elimina buildingOffsetToGPS (ya no hay coordenadas GPS)
- *  - Elimina buildingsWithGPS (no se necesita minimap de Mapbox)
- *  - Mantiene toda la lógica de sidebar, hotspots y filtros intacta
  */
 
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
@@ -223,6 +214,11 @@ export default function Explorer() {
     navigate(`/explorar/${b.id}`, { replace: true });
     if (isMobile) setSidebarOpen(false);
   }, [setSelectedBuilding, setActiveHotspot, navigate, isMobile]);
+
+  const handleHotspotClick = useCallback((hs) => {
+    setActiveHotspot(hs);
+    if (isMobile) setSidebarOpen(false);
+  }, [setActiveHotspot, isMobile]);
 
   /* ──────────────────────────────────────────────────────────────────────
      RENDER
