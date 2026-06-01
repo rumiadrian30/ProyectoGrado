@@ -2,17 +2,17 @@ import { useEffect, useRef } from 'react';
 import { useThree, useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 
-const BASE_SPEED = 30;
-const FAST_MULTIPLIER = 2.8;
+const BASE_SPEED = 35;
+const FAST_MULTIPLIER = 4.8;
 const ROTATE_SPEED = 1.8;
 
 const LIMITS = {
-  minX: -800,
-  maxX: 800,
-  minY: -2,
+  minX: -997.5,
+  maxX: 997.5,
+  minY: -10,
   maxY: 240,
-  minZ: -500,
-  maxZ: 500,
+  minZ: -877.5,
+  maxZ: 877.5,
 };
 
 const MOVEMENT_KEYS = new Set([

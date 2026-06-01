@@ -16,10 +16,8 @@ import { Canvas, useThree, useFrame } from '@react-three/fiber';
 import {
   OrbitControls,
   useGLTF,
-  Sky,
   Html,
   PerspectiveCamera,
-  Environment,
 } from '@react-three/drei';
 
 import * as THREE from 'three';
@@ -456,10 +454,10 @@ function Lighting() {
         intensity={2.8}
         position={[1600, 2200, -1800]}
         castShadow
-        shadow-mapSize-width={1024}
-        shadow-mapSize-height={1024}
+        shadow-mapSize-width={512}
+        shadow-mapSize-height={512}
         shadow-camera-near={0.5}
-        shadow-camera-far={5000}
+        shadow-camera-far={1500}
         shadow-camera-left={-300}
         shadow-camera-right={300}
         shadow-camera-top={300}
@@ -533,7 +531,7 @@ function CameraTracker({ orbitRef, onSnapshot }) {
     const now = clock.getElapsedTime();
 
     // No actualizar cada frame para no causar renders excesivos
-    if (now - lastUpdateRef.current < 0.08) return;
+    if (now - lastUpdateRef.current < 0.2) return;
     lastUpdateRef.current = now;
 
     const controls = orbitRef.current;
@@ -552,25 +550,6 @@ function CameraTracker({ orbitRef, onSnapshot }) {
 }
 
 /* ─────────────────────────────────────────────────────────────────────────────
-   RealisticSky
-───────────────────────────────────────────────────────────────────────────── */
-
-function RealisticSky() {
-  return (
-    <Sky
-      distance={4500}
-      sunPosition={[800, 1400, -1200]}
-      inclination={0.52}
-      azimuth={0.25}
-      mieCoefficient={0.003}
-      mieDirectionalG={0.7}
-      rayleigh={3.2}
-      turbidity={2.8}
-    />
-  );
-}
-
-/* ─────────────────────────────────────────────────────────────────────────────
    Scene
 ───────────────────────────────────────────────────────────────────────────── */
 
@@ -586,6 +565,8 @@ function Scene({
 }) {
   return (
     <>
+      <color attach="background" args={['#6BB7E8']} />
+
       <PerspectiveCamera
         makeDefault
         fov={CAMERA_INITIAL.fov}
@@ -593,8 +574,6 @@ function Scene({
         near={0.5}
         far={1500}
       />
-
-      <RealisticSky />
 
       <Lighting />
 
@@ -639,11 +618,6 @@ function Scene({
         orbitRef={orbitRef}
         cameraCommandRef={cameraCommandRef}
         onBoundsWarning={onBoundsWarning}
-      />
-
-      <MouseNavigation3D
-        orbitRef={orbitRef}
-        cameraCommandRef={cameraCommandRef}
       />
 
       <CameraTracker
@@ -1147,6 +1121,7 @@ export default function CampusViewer3D({
     }}>
       <Canvas
       shadows
+      dpr={[1, 1.5]}
       gl={{
         antialias: true,
         toneMapping: THREE.ACESFilmicToneMapping,

@@ -96,6 +96,24 @@ export default function Explorer() {
   const [typeFilter,        setTypeFilter]         = useState('all');
   const [openNowOnly,       setOpenNowOnly]        = useState(false);
 
+  const activeBuildings = useMemo(() => {
+    return buildings.filter((b) =>
+      b.is_active === true ||
+      b.is_active === 1 ||
+      b.is_active === '1' ||
+      b.is_active === undefined
+    );
+  }, [buildings]);
+
+  const activeExteriorModels = useMemo(() => {
+    return allExteriorModels.filter((m) =>
+      m.is_active === true ||
+      m.is_active === 1 ||
+      m.is_active === '1'
+    );
+  }, [allExteriorModels]);
+
+
   useEffect(() => { if (isMobile) setSidebarOpen(false); }, [isMobile]);
 
   // ── Carga de edificios ──────────────────────────────────────────────────
@@ -107,19 +125,30 @@ export default function Explorer() {
 
   // ── Resolución de buildingId desde URL ─────────────────────────────────
   useEffect(() => {
-    if (!buildings.length) return;
+    if (!activeBuildings.length) return;
+
     if (buildingId) {
-      const found = buildings.find(
-        b => String(b.id) === String(buildingId) && b.is_active !== false
+      const found = activeBuildings.find(
+        b => String(b.id) === String(buildingId)
       );
-      if (found) { setSelectedBuilding(found); setShowSelector(false); }
-      else { setSelectedBuilding(null); navigate('/explorar', { replace: true }); setShowSelector(true); }
+
+      if (found) {
+        setSelectedBuilding(found);
+        setShowSelector(false);
+      } else {
+        setSelectedBuilding(null);
+        navigate('/explorar', { replace: true });
+        setShowSelector(true);
+      }
+
       return;
     }
+
     if (selectedBuilding) {
-      const stillExists = buildings.find(
-        b => String(b.id) === String(selectedBuilding.id) && b.is_active !== false
+      const stillExists = activeBuildings.find(
+        b => String(b.id) === String(selectedBuilding.id)
       );
+
       if (stillExists) {
         setSelectedBuilding(stillExists);
         setShowSelector(false);
@@ -131,25 +160,32 @@ export default function Explorer() {
     } else {
       setShowSelector(true);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [buildings]);
+  }, [
+    activeBuildings,
+    buildingId,
+    selectedBuilding,
+    setSelectedBuilding,
+    navigate,
+  ]);
 
-  // ── Polling de modelos 3D activos (cada 10 s) ───────────────────────────
+  // ── Carga de modelos 3D activos ───────────────────────────────────────────
   useEffect(() => {
     let cancelled = false;
-    function fetchModels() {
-      modelsService.getAllActive()
-        .then(data => { if (!cancelled) setAllExteriorModels(data); })
-        .catch(console.error);
-    }
-    fetchModels();
-    const interval = setInterval(fetchModels, 10_000);
-    return () => { cancelled = true; clearInterval(interval); };
+
+    modelsService.getAllActive()
+      .then(data => {
+        if (!cancelled) setAllExteriorModels(data);
+      })
+      .catch(console.error);
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   // ── Info del modelo del edificio seleccionado ───────────────────────────
   const modelInfo = selectedBuilding
-    ? allExteriorModels.find(m => String(m.building_id) === String(selectedBuilding.id)) ?? null
+    ? activeExteriorModels.find(m => String(m.building_id) === String(selectedBuilding.id)) ?? null
     : null;
 
   // ── Hotspots del edificio seleccionado ──────────────────────────────────
@@ -188,8 +224,6 @@ export default function Explorer() {
     if (isMobile) setSidebarOpen(false);
   }, [setSelectedBuilding, setActiveHotspot, navigate, isMobile]);
 
-  const handleHotspotClick = useCallback((hs) => setActiveHotspot(hs), [setActiveHotspot]);
-
   /* ──────────────────────────────────────────────────────────────────────
      RENDER
   ────────────────────────────────────────────────────────────────────── */
@@ -201,8 +235,8 @@ export default function Explorer() {
 
       {/* ── VISOR 3D (reemplaza MapboxViewer) ─────────────────────── */}
       <CampusViewer3D
-        allModels={allExteriorModels}
-        buildings={buildings}
+        allModels={activeExteriorModels}
+        buildings={activeBuildings}
         building={selectedBuilding}
         onBuildingClick={handleSelectBuilding}
         isMobile={isMobile}
@@ -550,7 +584,7 @@ export default function Explorer() {
       <HotspotPanel />
       {showSelector && (
         <BuildingSelector
-          buildings={buildings}
+          buildings={activeBuildings}
           onSelect={handleSelectBuilding}
           onClose={selectedBuilding ? () => setShowSelector(false) : null}
         />
