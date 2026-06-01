@@ -27,7 +27,7 @@ if (!supported) {
         </h2>
         <p style={{ color: '#6b7280', fontSize: '0.9rem', lineHeight: 1.6, marginBottom: '1.5rem' }}>
           Tu navegador o dispositivo no soporta <strong>WebGL</strong>, tecnología necesaria
-          para el visor 3D de GeoESPOCH. Actualiza tu navegador o descarga uno compatible:
+          para el visor 3D de Explorador FIE. Actualiza tu navegador o descarga uno compatible:
         </p>
         <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'center', flexWrap: 'wrap' }}>
           <a

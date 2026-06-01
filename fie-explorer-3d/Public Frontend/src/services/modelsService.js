@@ -8,32 +8,26 @@ export const modelsService = {
   /** Todos los modelos (con building_name y building_code) */
   getAll: () => api.get('/models').then(r => r.data),
 
-  /** Modelos de un edificio concreto, opcionalmente filtrados por tipo */
-  getByBuilding: (buildingId, modelType = null) => {
+  /** Modelos activos de un edificio concreto */
+  getByBuilding: (buildingId) => {
     return api.get('/models').then(r => {
       const all = Array.isArray(r.data) ? r.data : (r.data?.data ?? []);
-      return all.filter(m =>
-        m.building_id === buildingId &&
-        m.is_active &&
-        (modelType ? m.model_type === modelType : true)
-      );
+      return all.filter(m => m.building_id === buildingId && m.is_active);
     });
   },
 
-  /** Primer modelo activo de un edificio para un tipo y LOD dados */
-  getActive: (buildingId, modelType = 'exterior', lodLevel = 0) => {
+  /** Modelo activo de un edificio para un LOD dado (sin model_type) */
+  getActive: (buildingId, lodLevel = 0) => {
     return api.get('/models').then(r => {
       const all = Array.isArray(r.data) ? r.data : (r.data?.data ?? []);
       const candidates = all.filter(m =>
         m.building_id === buildingId &&
-        m.model_type  === modelType  &&
         m.is_active
       );
       if (!candidates.length) return null;
       const exact = candidates.find(m => m.lod_level === lodLevel);
       const model = exact ?? candidates.sort((a, b) => a.lod_level - b.lod_level)[0];
 
-      // ← Prefija la URL del backend para que GLTFLoader pueda descargarlo
       if (model?.file_path) {
         model.file_path = `${API_BASE}${model.file_path}`;
       }
@@ -41,25 +35,23 @@ export const modelsService = {
     });
   },
 
-  /** Todos los modelos activos de todos los edificios (mejor LOD por edificio+tipo) */
-  getAllActive: (modelType = 'exterior') => {
+  /** Mejor modelo activo por edificio (LOD más bajo = mayor calidad) */
+  getAllActive: () => {
     return api.get('/models').then(r => {
       const all = Array.isArray(r.data) ? r.data : (r.data?.data ?? []);
 
-      // Mejor modelo activo por edificio (LOD más bajo = mayor calidad)
       const byBuilding = {};
       all
-        .filter(m => m.is_active && m.model_type === modelType)
+        .filter(m => m.is_active)
         .forEach(m => {
           const prev = byBuilding[m.building_id];
           if (!prev || m.lod_level < prev.lod_level) byBuilding[m.building_id] = m;
         });
 
-      const models = Object.values(byBuilding).map(m => ({
+      return Object.values(byBuilding).map(m => ({
         ...m,
         file_path: `${API_BASE}${m.file_path}`,
       }));
-      return models;
     });
   },
 };

@@ -232,7 +232,6 @@ function DeleteModelDialog({ modal, onConfirm, onClose, checking, deleting }) {
               {[
                 { label: 'Archivo',    value: <code style={{ fontSize: '10px', fontFamily: 'monospace', color: 'var(--muted)', wordBreak: 'break-all' }}>{m.file_path}</code> },
                 { label: 'Edificio',   value: m.building_name ? `${m.building_name} (${m.building_code || ''})` : '—' },
-                { label: 'Tipo',       value: <span className="badge b-blue" style={{ fontSize: '10px', textTransform: 'capitalize' }}>{m.model_type}</span> },
                 { label: 'Resolución', value: <span className={`badge ${LOD_BADGE[m.lod_level] || 'b-gray'}`} style={{ fontSize: '10px' }}>{LOD_LABELS[m.lod_level] ?? `LOD ${m.lod_level}`}</span> },
                 { label: 'Tamaño',     value: m.file_size_mb ? `${m.file_size_mb} MB` : '—' },
                 { label: 'Estado',     value: m.is_active
@@ -291,7 +290,7 @@ export default function Models() {
   const TRANSFORM_DEFAULTS = { scale_x: 1, scale_y: 1, scale_z: 1, rotate_x: 0, rotate_y: 0, rotate_z: 0 }
 
   function openNew() {
-    setForm({ model_type: 'exterior', lod_level: 0, format: 'GLB', building_id: buildings[0]?.id || '', ...TRANSFORM_DEFAULTS })
+    setForm({ lod_level: 0, format: 'GLB', building_id: buildings[0]?.id || '', ...TRANSFORM_DEFAULTS })
     setShowPreview(false)
     setModal({ type: 'new' })
   }
@@ -417,7 +416,7 @@ export default function Models() {
           <table>
             <thead>
               <tr>
-                <th>Edificio</th><th>Tipo</th><th>Resolución</th>
+                <th>Edificio</th><th>Resolución</th>
                 <th>Archivo</th><th>Tamaño</th>
                 <th>Escala</th><th>Rotación Y</th><th>Posición (del edificio)</th>
                 <th>Estado</th><th>Acciones</th>
@@ -425,14 +424,13 @@ export default function Models() {
             </thead>
             <tbody>
               {filtered.length === 0
-                ? <tr><td colSpan={10}><div className="empty-state">Sin modelos registrados</div></td></tr>
+                ? <tr><td colSpan={9}><div className="empty-state">Sin modelos registrados</div></td></tr>
                 : filtered.map(m => (
                   <tr key={m.id}>
                     <td>
                       <div style={{ fontWeight: 500, fontSize: '13px' }}>{m.building_name}</div>
                       <div style={{ fontSize: '11px', color: 'var(--faint)' }}>{m.building_code}</div>
                     </td>
-                    <td><span className="badge b-blue" style={{ textTransform: 'capitalize' }}>{m.model_type}</span></td>
                     <td><span className={`badge ${LOD_BADGE[m.lod_level]}`}>{LOD_LABELS[m.lod_level]}</span></td>
                     <td style={{ maxWidth: 200 }}>
                       <code className="mono" style={{ fontSize: '11px', color: 'var(--muted)', display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.file_path}</code>
@@ -497,22 +495,13 @@ export default function Models() {
             </select>
           </div>
 
-          <div className="form-grid-2">
-            <div className="form-group">
-              <label className="form-label">Tipo *</label>
-              <select className="form-select" value={form.model_type} onChange={e => set('model_type', e.target.value)}>
-                <option value="exterior">Exterior</option>
-                <option value="interior">Interior</option>
-              </select>
-            </div>
-            <div className="form-group">
-              <label className="form-label">Nivel LOD *</label>
-              <select className="form-select" value={form.lod_level} onChange={e => set('lod_level', parseInt(e.target.value))}>
-                <option value={0}>0 — Alta resolución</option>
-                <option value={1}>1 — Media resolución</option>
-                <option value={2}>2 — Baja resolución</option>
-              </select>
-            </div>
+          <div className="form-group">
+            <label className="form-label">Nivel LOD *</label>
+            <select className="form-select" value={form.lod_level} onChange={e => set('lod_level', parseInt(e.target.value))}>
+              <option value={0}>0 — Alta resolución</option>
+              <option value={1}>1 — Media resolución</option>
+              <option value={2}>2 — Baja resolución</option>
+            </select>
           </div>
 
           <div className="form-group">

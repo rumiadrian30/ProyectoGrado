@@ -1,6 +1,6 @@
 /**
  * swagger.js
- * Definición OpenAPI 3.0 completa para GeoESPOCH 3D API.
+ * Definición OpenAPI 3.0 completa para Explorador 3D FIE API.
  * Montado en /api/docs por swagger-ui-express.
  */
 
@@ -198,13 +198,13 @@ const errRef = (code) => ({ $ref: `#/components/schemas/Error${code}` });
 const swaggerSpec = {
   openapi: '3.0.3',
   info: {
-    title: 'GeoESPOCH 3D — API REST',
+    title: 'Explorador 3D FIE — API REST',
     version: '1.0.0',
     description: `
-## Documentación de la API REST — GeoESPOCH 3D (ESPOCH)
+## Documentación de la API REST — Explorador 3D FIE (ESPOCH)
 
 Esta API provee todos los endpoints necesarios para el visor 3D público y el panel
-de administración del proyecto GeoESPOCH 3D de la Escuela de Ingeniería en Sistemas (EIS), ESPOCH.
+de administración del proyecto Explorador 3D FIE de la Escuela de Ingeniería en Sistemas (EIS), ESPOCH.
 
 ### Autenticación
 Los endpoints marcados con 🔒 **Bearer** requieren un JWT válido enviado como **cookie HttpOnly** \`token\`
@@ -221,14 +221,14 @@ Para pruebas en Swagger UI, pega el valor del JWT en el campo \`bearerAuth\`.
 Todos los endpoints están optimizados para responder en ≤ 500 ms bajo carga normal.
     `.trim(),
     contact: {
-      name:  'GeoESPOCH 3D — ESPOCH',
+      name:  'Explorador 3D FIE — ESPOCH',
       email: 'soporte@espoch.edu.ec',
     },
     license: { name: 'MIT' },
   },
   servers: [
     { url: 'http://localhost:3001', description: 'Desarrollo local' },
-    { url: 'https://geo-espoch.espoch.edu.ec', description: 'Producción' },
+    { url: 'https://fie-explorer-3d.espoch.edu.ec', description: 'Producción' },
   ],
   tags: [
     { name: 'Auth',          description: 'Autenticación JWT con bloqueo progresivo y bcrypt 12' },
@@ -274,7 +274,7 @@ Todos los endpoints están optimizados para responder en ≤ 500 ms bajo carga n
               type: 'object',
               properties: {
                 status:    { type: 'string', example: 'ok' },
-                project:   { type: 'string', example: 'GeoESPOCH 3D' },
+                project:   { type: 'string', example: 'Explorador 3D FIE' },
                 timestamp: { type: 'string', format: 'date-time' },
               },
             }}},
@@ -876,10 +876,10 @@ Autentica al administrador con email y contraseña.
 
 // ── Opciones de UI ─────────────────────────────────────────────────────────
 const swaggerUiOptions = {
-  customSiteTitle: 'GeoESPOCH 3D — API Docs',
+  customSiteTitle: 'Explorador 3D FIE — API Docs',
   customCss: `
     .topbar { background-color: #003087 !important; }
-    .topbar-wrapper img { content: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 40"><text y="28" font-size="20" fill="white" font-family="Arial" font-weight="bold">GeoESPOCH 3D</text></svg>'); height: 36px; }
+    .topbar-wrapper img { content: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 40"><text y="28" font-size="20" fill="white" font-family="Arial" font-weight="bold">Explorador 3D FIE</text></svg>'); height: 36px; }
     .swagger-ui .info .title { color: #003087; }
     .swagger-ui .btn.authorize { background-color: #003087; border-color: #003087; }
     .swagger-ui .opblock.opblock-get    .opblock-summary { border-color: #0ea5e9; }

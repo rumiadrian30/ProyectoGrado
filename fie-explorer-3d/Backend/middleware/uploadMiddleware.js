@@ -5,12 +5,10 @@ const fs     = require('fs');
 
 // Carpeta destino de los modelos GLB/GLTF.
 // Prioridad: variable de entorno MODELS_DIR → carpeta local uploads/models/
-// (La carpeta uploads/models está dentro del propio Backend para que
-//  res.sendFile y multer siempre resuelvan la misma ruta absoluta.)
 const MODELS_DIR = process.env.MODELS_DIR
-  ? path.resolve(process.env.MODELS_DIR)
+  ? process.env.MODELS_DIR          // ya es absoluta, no envolver en path.resolve
   : path.resolve(__dirname, '../uploads/models');
-
+  
 // Crear carpeta si no existe
 if (!fs.existsSync(MODELS_DIR)) {
   fs.mkdirSync(MODELS_DIR, { recursive: true });
@@ -20,21 +18,18 @@ const storage = multer.diskStorage({
   destination: (_req, _file, cb) => cb(null, MODELS_DIR),
 
   filename: (_req, file, cb) => {
-    // Limpiar nombre: espacios → guiones, quitar caracteres raros
-    const clean = file.originalname
+    // 1. Limpiar nombre: minúsculas, espacios → guiones, quitar caracteres especiales
+    const ext   = path.extname(file.originalname).toLowerCase();
+    const base  = path.basename(file.originalname, path.extname(file.originalname))
       .toLowerCase()
       .replace(/\s+/g, '-')
-      .replace(/[^a-z0-9.\-_]/g, '');
+      .replace(/[^a-z0-9\-_]/g, '');
 
-    // Evitar colisiones: prefijo timestamp si ya existe
-    const dest = path.join(MODELS_DIR, clean);
-    if (fs.existsSync(dest)) {
-      const ext  = path.extname(clean);
-      const base = path.basename(clean, ext);
-      cb(null, `${base}_${Date.now()}${ext}`);
-    } else {
-      cb(null, clean);
-    }
+    // 2. Siempre agregar timestamp → nombre único garantizado, sin colisiones,
+    //    sin necesidad de verificar existencia en disco ni renombrar después.
+    //    Ejemplo: "doritos_1778907637845.glb"
+    const uniqueName = `${base}_${Date.now()}${ext}`;
+    cb(null, uniqueName);
   },
 });
 
