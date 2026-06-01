@@ -94,50 +94,15 @@ const loginLimiter = rateLimit({
 app.use('/api/auth/login', loginLimiter);
 
 // ── CORS ────────────────────────────────────────────────────────────────────
-const allowedOrigins = [
-  process.env.ADMIN_FRONTEND_URL || 'http://localhost:5173',
-  process.env.PUBLIC_FRONTEND_URL || 'http://localhost:5174',
-  'http://localhost:5175',
-  'http://127.0.0.1:5173',
-  'http://127.0.0.1:5174',
-  'https://4jv65wnm-5174.brs.devtunnels.ms',
-];
-
-function isAllowedOrigin(origin) {
-  return (
-    !origin ||
-    allowedOrigins.includes(origin) ||
-    origin.endsWith('.brs.devtunnels.ms')
-  );
-}
-
-app.use((req, res, next) => {
-  const origin = req.headers.origin;
-
-  if (isAllowedOrigin(origin)) {
-    res.setHeader('Access-Control-Allow-Origin', origin || '*');
-  }
-
-  res.setHeader('Vary', 'Origin');
-  res.setHeader('Access-Control-Allow-Credentials', 'true');
-  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-  res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
-
-  if (req.method === 'OPTIONS') {
-    return res.sendStatus(204);
-  }
-
-  next();
-});
-
 app.use(cors({
-  origin(origin, callback) {
-    if (isAllowedOrigin(origin)) {
-      return callback(null, true);
-    }
-    return callback(new Error(`CORS bloqueado para origen: ${origin}`));
-  },
+  origin: [
+    process.env.ADMIN_FRONTEND_URL  || 'http://localhost:5173',
+    process.env.PUBLIC_FRONTEND_URL || 'http://localhost:5174',
+    'http://localhost:5175',
+    'http://127.0.0.1:5173',
+    'http://127.0.0.1:5174',
+    'null',
+  ],
   credentials: true,
 }));
 
@@ -198,16 +163,8 @@ app.get('/models/mapa-espoch.glb', (req, res, next) => {
     });
   }
 
-  const origin = req.headers.origin;
-
-  if (isAllowedOrigin(origin)) {
-    res.setHeader('Access-Control-Allow-Origin', origin || '*');
-  }
-
-  res.setHeader('Vary', 'Origin');
-  res.setHeader('Content-Type', 'model/gltf-binary');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET');
   res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
   res.setHeader('Cache-Control', 'public, max-age=3600');
 

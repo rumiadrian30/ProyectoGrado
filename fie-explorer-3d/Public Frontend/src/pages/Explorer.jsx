@@ -236,6 +236,8 @@ export default function Explorer() {
         building={selectedBuilding}
         onBuildingClick={handleSelectBuilding}
         isMobile={isMobile}
+        sidebarOpen={sidebarOpen}
+        onRequestChangeBuilding={() => setShowSelector(true)}
       />
 
       {/* ── BACKDROP ─────────────────────────────────────────────────── */}

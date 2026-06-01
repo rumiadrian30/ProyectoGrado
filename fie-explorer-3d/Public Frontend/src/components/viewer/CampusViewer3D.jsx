@@ -34,6 +34,7 @@ import {
   getFocusKey,
 } from '../../utils/viewer3DHelpers';
 import MouseNavigation3D from './MouseNavigation3D';
+import MapPin from './MapPin';
 
 /* ─────────────────────────────────────────────────────────────────────────────
    Constantes de entorno
@@ -563,6 +564,9 @@ function Scene({
   onCameraSnapshot,
   onBoundsWarning,
 }) {
+  
+  const [hoveredPinId, setHoveredPinId] = useState(null);
+
   return (
     <>
       <color attach="background" args={['#6BB7E8']} />
@@ -580,7 +584,7 @@ function Scene({
       <OrbitControls
         ref={orbitRef}
         makeDefault
-        maxPolarAngle={MAX_POLAR}
+        maxPolarAngle={Math.PI / 2.1}
         minDistance={20}
         maxDistance={700}
         enableDamping
@@ -588,7 +592,7 @@ function Scene({
         rotateSpeed={0.65}
         zoomSpeed={1.1}
         panSpeed={0.8}
-        enablePan={true}
+        enablePan
         screenSpacePanning={false}
         target={CAMERA_INITIAL.target}
         autoRotate={false}
@@ -624,7 +628,6 @@ function Scene({
         orbitRef={orbitRef}
         onSnapshot={onCameraSnapshot}
       />
-    
 
       <Suspense fallback={<LoadingOverlay />}>
         <CampusBase />
@@ -635,14 +638,29 @@ function Scene({
           (m) => String(m.building_id) === String(building.id) && m.is_active
         );
 
+        const activeFocusId = hoveredPinId ?? selectedBuilding?.id ?? null;
+
+        const isDimmed =
+          activeFocusId !== null &&
+          String(activeFocusId) !== String(building.id);
+
         return (
-          <BuildingEntry
-            key={building.id}
-            model={model}
-            building={building}
-            isSelected={selectedBuilding?.id === building.id}
-            onClick={onBuildingClick}
-          />
+          <React.Fragment key={building.id}>
+            <BuildingEntry
+              model={model}
+              building={building}
+              isSelected={selectedBuilding?.id === building.id}
+              onClick={onBuildingClick}
+            />
+
+            <MapPin
+              building={building}
+              isSelected={selectedBuilding?.id === building.id}
+              isDimmed={isDimmed}
+              onHoverChange={setHoveredPinId}
+              onClick={onBuildingClick}
+            />
+          </React.Fragment>
         );
       })}
     </>
@@ -708,7 +726,6 @@ function WebGLErrorFallback() {
         >
           Chrome
         </a>
-
         <a
           href="https://www.mozilla.org/firefox"
           target="_blank"
@@ -933,6 +950,62 @@ function BuildingBadge({ building, hasModel, isMobile }) {
 }
 
 /* ─────────────────────────────────────────────────────────────────────────────
+   ChangeBuildingFloatingButton
+───────────────────────────────────────────────────────────────────────────── */
+
+function ChangeBuildingFloatingButton({ building, isMobile, onClick }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title="Cambiar edificio"
+      aria-label="Cambiar edificio"
+      style={{
+        position: 'absolute',
+        bottom: isMobile ? 18 : 48,
+        left: '50%',
+        transform: 'translateX(-50%)',
+        zIndex: 24,
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 8,
+        padding: isMobile ? '0.48rem 0.85rem' : '0.55rem 1rem',
+        background: 'rgba(255,255,255,0.94)',
+        backdropFilter: 'blur(8px)',
+        border: '1px solid rgba(188,6,19,0.18)',
+        borderRadius: 999,
+        boxShadow: '0 2px 8px rgba(0,0,0,0.12)',
+        color: '#BC0613',
+        fontSize: isMobile ? '0.72rem' : '0.78rem',
+        fontWeight: 800,
+        cursor: 'pointer',
+        whiteSpace: 'nowrap',
+        fontFamily: 'var(--font-body, system-ui)',
+      }}
+    >
+      <svg
+        width="14"
+        height="14"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2.2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <path d="M3 21h18" />
+        <path d="M3 7l9-4 9 4" />
+        <path d="M4 7v14" />
+        <path d="M20 7v14" />
+        <path d="M9 21v-8h6v8" />
+      </svg>
+
+      {building ? 'Cambiar edificio' : 'Seleccionar edificio'}
+    </button>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
    StatusPill3D
 ───────────────────────────────────────────────────────────────────────────── */
 
@@ -1024,6 +1097,8 @@ export default function CampusViewer3D({
   building,
   onBuildingClick,
   isMobile = false,
+  sidebarOpen = true,
+  onRequestChangeBuilding,
 }) {
   const [webglError, setWebglError] = useState(false);
   const [showOverlay, setShowOverlay] = useState(false);
@@ -1060,8 +1135,13 @@ export default function CampusViewer3D({
     return () => window.clearTimeout(timer);
   }, [setModelLoading, setModelProgress]);
 
-  const handleBuildingClick = useCallback((buildingId) => {
-    const found = buildings.find((b) => String(b.id) === String(buildingId));
+  const handleBuildingClick = useCallback((buildingOrId) => {
+    if (typeof buildingOrId === 'object' && buildingOrId !== null) {
+      onBuildingClick?.(buildingOrId);
+      return;
+    }
+
+    const found = buildings.find((b) => String(b.id) === String(buildingOrId));
     if (found) onBuildingClick?.(found);
   }, [buildings, onBuildingClick]);
 
@@ -1204,11 +1284,19 @@ export default function CampusViewer3D({
         onToggleSize={() => setMiniMapExpanded((v) => !v)}
       />
 
-      <BuildingBadge
-        building={building}
-        hasModel={selectedHasModel}
-        isMobile={isMobile}
-      />
+      {sidebarOpen ? (
+        <BuildingBadge
+          building={building}
+          hasModel={selectedHasModel}
+          isMobile={isMobile}
+        />
+      ) : (
+        <ChangeBuildingFloatingButton
+          building={building}
+          isMobile={isMobile}
+          onClick={onRequestChangeBuilding}
+        />
+      )}
 
       <StatusPill3D isMobile={isMobile} />
 
