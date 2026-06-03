@@ -109,7 +109,6 @@ router.get('/', auth, async (req, res, next) => {
 });
 
 // ── GET /api/audit-logs/export  → CSV ──────────────────────────────────────
-// Mismos filtros que GET /, sin paginación, devuelve CSV
 router.get('/export', auth, async (req, res, next) => {
   const key = ENC_KEY();
   try {

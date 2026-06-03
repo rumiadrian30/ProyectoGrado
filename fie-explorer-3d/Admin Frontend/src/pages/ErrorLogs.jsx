@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { api, fmt } from '../api'
+import { api, fmt, actionBadgeClass } from '../api'
 
 const SEVERITIES   = ['ALL','DEBUG','INFO','WARN','ERROR','FATAL']
 const PER_PAGE_OPS = [10, 25, 50, 100]
