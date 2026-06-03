@@ -3,156 +3,7 @@ import { api, fmt } from '../api'
 import GlbPreview from '../components/GlbPreview'
 
 const LOD_LABELS = { 0: 'Alta (LOD 0)', 1: 'Media (LOD 1)', 2: 'Baja (LOD 2)' }
-const LOD_BADGE  = { 0: 'b-green', 1: 'b-amber', 2: 'b-gray' }
-
-function Modal({ title, children, onConfirm, confirmLabel = 'Guardar', danger = false, onClose, disabled = false }) {
-  return (
-    <div className="overlay" onClick={e => e.target.className === 'overlay' && onClose()}>
-      <div className="modal">
-        <h3>{title}</h3>
-        {children}
-        <div className="modal-footer">
-          <button className="btn" onClick={onClose}>Cancelar</button>
-          <button className={`btn ${danger ? 'btn-danger' : 'btn-primary'}`}
-            onClick={onConfirm} disabled={disabled}>{confirmLabel}</button>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-function ScaleEditor({ form, set }) {
-  const [uniform, setUniform] = useState(true)
-  function setScale(axis, val) {
-    const n = parseFloat(val) || 0.001
-    if (uniform) { set('scale_x', n); set('scale_y', n); set('scale_z', n) }
-    else { set(`scale_${axis}`, n) }
-  }
-  const sx = form.scale_x ?? 1
-  const sy = form.scale_y ?? 1
-  const sz = form.scale_z ?? 1
-  return (
-    <div style={{ border: '1px solid var(--border)', borderRadius: '10px', overflow: 'hidden', marginTop: '4px' }}>
-      <div style={{ background: 'var(--bg)', padding: '8px 12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--muted)' }}>Escala del modelo</span>
-        <button type="button" className="btn btn-sm" style={{ fontSize: '11px', padding: '2px 8px' }}
-          onClick={() => { set('scale_x', 1); set('scale_y', 1); set('scale_z', 1) }}>Resetear 1×</button>
-      </div>
-      <div style={{ padding: '10px 12px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
-          <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text)' }}>Escala (X / Y / Z)</label>
-          <label style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '11px', color: 'var(--muted)', cursor: 'pointer' }}>
-            <input type="checkbox" checked={uniform} onChange={e => setUniform(e.target.checked)} style={{ accentColor: 'var(--primary)' }} />
-            Uniforme
-          </label>
-        </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '6px' }}>
-          {['x', 'y', 'z'].map(ax => (
-            <div key={ax}>
-              <label style={{ fontSize: '10px', color: 'var(--faint)', display: 'block', marginBottom: '2px', textAlign: 'center' }}>{ax.toUpperCase()}</label>
-              <input className="form-input" type="number" step="0.01" min="0.001"
-                style={{ textAlign: 'center', padding: '4px', fontSize: '12px' }}
-                value={form[`scale_${ax}`] ?? 1}
-                onChange={e => setScale(ax, e.target.value)} />
-            </div>
-          ))}
-        </div>
-        <div style={{ marginTop: '4px', display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
-          {[0.1, 0.25, 0.5, 1, 2, 5].map(v => (
-            <button key={v} type="button"
-              style={{
-                fontSize: '10px', padding: '2px 7px', borderRadius: '4px',
-                border: '1px solid var(--border)', cursor: 'pointer',
-                background: (sx === v && sy === v && sz === v) ? 'var(--primary)' : 'transparent',
-                color: (sx === v && sy === v && sz === v) ? '#fff' : 'var(--muted)',
-              }}
-              onClick={() => { set('scale_x', v); set('scale_y', v); set('scale_z', v) }}>{v}×</button>
-          ))}
-        </div>
-        <div style={{ marginTop: '10px', padding: '8px 10px', background: '#f8fafc', border: '1px solid #e5e7eb', borderRadius: '6px', fontSize: '11px', color: 'var(--muted)', display: 'flex', alignItems: 'flex-start', gap: '6px' }}>
-          <span>La posición (X, Y, Z) la controla el <strong>edificio padre</strong>. Edítala en la sección Edificios.</span>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-function RotationEditor({ form, set }) {
-  const Y_PRESETS = [0, 45, 90, 135, 180, 225, 270, 315]
-  return (
-    <div style={{ border: '1px solid var(--border)', borderRadius: '10px', overflow: 'hidden', marginTop: '8px' }}>
-      <div style={{ background: 'var(--bg)', padding: '8px 12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--muted)' }}>Rotación del modelo (grados)</span>
-        <button type="button" className="btn btn-sm" style={{ fontSize: '11px', padding: '2px 8px' }}
-          onClick={() => { set('rotate_x', 0); set('rotate_y', 0); set('rotate_z', 0) }}>Resetear 0°</button>
-      </div>
-      <div style={{ padding: '10px 12px' }}>
-        <div style={{ marginBottom: '10px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '5px' }}>
-            <label style={{ fontSize: '12px', fontWeight: 600 }}>Y — Orientación (guiñada)</label>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <input type="number" step="1" min="-360" max="360"
-                value={form.rotate_y ?? 0}
-                onChange={e => set('rotate_y', parseFloat(e.target.value) || 0)}
-                style={{ width: '70px', padding: '3px 6px', textAlign: 'center', border: '1px solid var(--border)', borderRadius: '5px', fontSize: '12px', fontWeight: 700 }} />
-              <span style={{ fontSize: '11px', color: 'var(--faint)' }}>°</span>
-            </div>
-          </div>
-          <input type="range" min="-180" max="180" step="1"
-            value={form.rotate_y ?? 0}
-            onChange={e => set('rotate_y', parseFloat(e.target.value))}
-            style={{ width: '100%', accentColor: 'var(--primary, #BC0613)', cursor: 'pointer' }} />
-          <div style={{ display: 'flex', gap: '3px', flexWrap: 'wrap', marginTop: '4px' }}>
-            {Y_PRESETS.map(v => (
-              <button key={v} type="button"
-                style={{
-                  flex: 1, padding: '2px 0', fontSize: '10px', borderRadius: '4px',
-                  border: '1px solid var(--border)', cursor: 'pointer', minWidth: '30px',
-                  background: (form.rotate_y ?? 0) === v ? 'var(--primary, #BC0613)' : 'transparent',
-                  color: (form.rotate_y ?? 0) === v ? '#fff' : 'var(--muted)',
-                }}
-                onClick={() => set('rotate_y', v)}>{v}°</button>
-            ))}
-          </div>
-        </div>
-        <details style={{ marginTop: '4px' }}>
-          <summary style={{ fontSize: '11px', color: 'var(--muted)', cursor: 'pointer', userSelect: 'none', padding: '3px 0' }}>
-            Avanzado: X (cabeceo) y Z (alabeo)
-          </summary>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginTop: '8px' }}>
-            {[
-              { ax: 'x', label: 'X — Cabeceo' },
-              { ax: 'z', label: 'Z — Alabeo' },
-            ].map(({ ax, label }) => (
-              <div key={ax}>
-                <label style={{ fontSize: '11px', color: 'var(--muted)', display: 'block', marginBottom: '3px' }}>{label}</label>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                  <input type="number" step="1" min="-180" max="180"
-                    value={form[`rotate_${ax}`] ?? 0}
-                    onChange={e => set(`rotate_${ax}`, parseFloat(e.target.value) || 0)}
-                    style={{ flex: 1, padding: '4px 6px', textAlign: 'center', border: '1px solid var(--border)', borderRadius: '5px', fontSize: '12px' }} />
-                  <span style={{ fontSize: '11px', color: 'var(--faint)' }}>°</span>
-                </div>
-                <div style={{ display: 'flex', gap: '2px', marginTop: '3px' }}>
-                  {[-90, -45, 0, 45, 90].map(v => (
-                    <button key={v} type="button"
-                      style={{
-                        flex: 1, padding: '1px 0', fontSize: '9px', borderRadius: '3px',
-                        border: '1px solid var(--border)', cursor: 'pointer',
-                        background: (form[`rotate_${ax}`] ?? 0) === v ? 'var(--primary, #BC0613)' : 'transparent',
-                        color: (form[`rotate_${ax}`] ?? 0) === v ? '#fff' : 'var(--muted)',
-                      }}
-                      onClick={() => set(`rotate_${ax}`, v)}>{v}°</button>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-        </details>
-      </div>
-    </div>
-  )
-}
+const TRANSFORM_DEFAULTS = { scale_x: 1, scale_y: 1, scale_z: 1, rotate_x: 0, rotate_y: 0, rotate_z: 0 }
 
 function scaleLabel(m) {
   const x = parseFloat(m.scale_x) || 1
@@ -170,92 +21,211 @@ function positionLabel(m) {
   return `(${x}, ${y}, ${z})`
 }
 
-// ── Diálogo de confirmación de eliminación con verificación y preview ──────────
+/* ── Modal ──────────────────────────────────────────────────── */
+function Modal({ title, children, onConfirm, confirmLabel = 'Guardar', danger = false, onClose, disabled = false }) {
+  return (
+    <div className="md-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="md-modal">
+        <div className="md-modal-header">
+          <h3 className="md-modal-title">{title}</h3>
+          <button className="md-modal-close" onClick={onClose} aria-label="Cerrar"><IconX /></button>
+        </div>
+        <div className="md-modal-body">{children}</div>
+        <div className="md-modal-footer">
+          <button className="md-btn md-btn--ghost" onClick={onClose}>Cancelar</button>
+          <button
+            className={`md-btn ${danger ? 'md-btn--danger' : 'md-btn--primary'}`}
+            onClick={onConfirm} disabled={disabled}
+          >
+            {confirmLabel}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/* ── ScaleEditor ────────────────────────────────────────────── */
+function ScaleEditor({ form, set }) {
+  const [uniform, setUniform] = useState(true)
+
+  function setScale(axis, val) {
+    const n = parseFloat(val) || 0.001
+    if (uniform) { set('scale_x', n); set('scale_y', n); set('scale_z', n) }
+    else set(`scale_${axis}`, n)
+  }
+
+  const sx = form.scale_x ?? 1, sy = form.scale_y ?? 1, sz = form.scale_z ?? 1
+
+  return (
+    <div className="md-transform-box">
+      <div className="md-transform-header">
+        <span className="md-transform-title">Escala del modelo</span>
+        <button type="button" className="md-btn md-btn--xs md-btn--ghost"
+          onClick={() => { set('scale_x', 1); set('scale_y', 1); set('scale_z', 1) }}>
+          Resetear 1×
+        </button>
+      </div>
+      <div className="md-transform-body">
+        <div className="md-transform-row-hdr">
+          <span className="md-field-label">Escala (X / Y / Z)</span>
+          <label className="md-uniform-toggle">
+            <input type="checkbox" checked={uniform} onChange={e => setUniform(e.target.checked)} />
+            Uniforme
+          </label>
+        </div>
+        <div className="md-grid-3">
+          {['x', 'y', 'z'].map(ax => (
+            <div key={ax} className="md-axis-field">
+              <span className="md-axis-label">{ax.toUpperCase()}</span>
+              <input className="md-input md-input--center" type="number" step="0.01" min="0.001"
+                value={form[`scale_${ax}`] ?? 1}
+                onChange={e => setScale(ax, e.target.value)} />
+            </div>
+          ))}
+        </div>
+        <div className="md-preset-row">
+          {[0.1, 0.25, 0.5, 1, 2, 5].map(v => (
+            <button key={v} type="button"
+              className={`md-preset-btn ${sx === v && sy === v && sz === v ? 'md-preset-btn--active' : ''}`}
+              onClick={() => { set('scale_x', v); set('scale_y', v); set('scale_z', v) }}>
+              {v}×
+            </button>
+          ))}
+        </div>
+        <div className="md-info-note">
+          La posición (X, Y, Z) la controla el <strong>edificio padre</strong>. Edítala en la sección Edificios.
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/* ── RotationEditor ─────────────────────────────────────────── */
+function RotationEditor({ form, set }) {
+  const Y_PRESETS = [0, 45, 90, 135, 180, 225, 270, 315]
+  return (
+    <div className="md-transform-box" style={{ marginTop: '10px' }}>
+      <div className="md-transform-header">
+        <span className="md-transform-title">Rotación del modelo (grados)</span>
+        <button type="button" className="md-btn md-btn--xs md-btn--ghost"
+          onClick={() => { set('rotate_x', 0); set('rotate_y', 0); set('rotate_z', 0) }}>
+          Resetear 0°
+        </button>
+      </div>
+      <div className="md-transform-body">
+        <div className="md-transform-row-hdr">
+          <span className="md-field-label">Y — Orientación (guiñada)</span>
+          <div className="md-axis-inline">
+            <input type="number" step="1" min="-360" max="360"
+              className="md-input md-input--sm md-input--center"
+              value={form.rotate_y ?? 0}
+              onChange={e => set('rotate_y', parseFloat(e.target.value) || 0)} />
+            <span className="md-unit">°</span>
+          </div>
+        </div>
+        <input type="range" min="-180" max="180" step="1"
+          className="md-range"
+          value={form.rotate_y ?? 0}
+          onChange={e => set('rotate_y', parseFloat(e.target.value))} />
+        <div className="md-preset-row">
+          {Y_PRESETS.map(v => (
+            <button key={v} type="button"
+              className={`md-preset-btn ${(form.rotate_y ?? 0) === v ? 'md-preset-btn--active' : ''}`}
+              onClick={() => set('rotate_y', v)}>
+              {v}°
+            </button>
+          ))}
+        </div>
+        <details className="md-details">
+          <summary className="md-details-summary">Avanzado: X (cabeceo) y Z (alabeo)</summary>
+          <div className="md-grid-2" style={{ marginTop: '10px' }}>
+            {[{ ax: 'x', label: 'X — Cabeceo' }, { ax: 'z', label: 'Z — Alabeo' }].map(({ ax, label }) => (
+              <div key={ax}>
+                <span className="md-field-label" style={{ display: 'block', marginBottom: '5px' }}>{label}</span>
+                <div className="md-axis-inline">
+                  <input type="number" step="1" min="-180" max="180"
+                    className="md-input md-input--sm md-input--center"
+                    value={form[`rotate_${ax}`] ?? 0}
+                    onChange={e => set(`rotate_${ax}`, parseFloat(e.target.value) || 0)} />
+                  <span className="md-unit">°</span>
+                </div>
+                <div className="md-preset-row" style={{ marginTop: '5px' }}>
+                  {[-90, -45, 0, 45, 90].map(v => (
+                    <button key={v} type="button"
+                      className={`md-preset-btn ${(form[`rotate_${ax}`] ?? 0) === v ? 'md-preset-btn--active' : ''}`}
+                      onClick={() => set(`rotate_${ax}`, v)}>
+                      {v}°
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </details>
+      </div>
+    </div>
+  )
+}
+
+/* ── DeleteModelDialog ──────────────────────────────────────── */
 function DeleteModelDialog({ modal, onConfirm, onClose, checking, deleting }) {
   const m = modal.model
 
-  if (checking) {
-    return (
-      <Modal title="Confirmar eliminación" onConfirm={() => {}} confirmLabel="Verificando…" disabled onClose={onClose}>
-        <div style={{ textAlign: 'center', padding: '24px 0', color: 'var(--muted)' }}>
-          <div style={{ fontSize: '24px', marginBottom: '10px' }}>🔍</div>
-          <div style={{ fontSize: '13px' }}>Verificando que el modelo existe en el servidor…</div>
-        </div>
-      </Modal>
-    )
-  }
+  if (checking) return (
+    <Modal title="Verificando modelo…" onConfirm={() => {}} confirmLabel="Verificando…" disabled onClose={onClose}>
+      <div className="md-checking">
+        <div className="md-spinner" />
+        <span>Verificando que el modelo existe en el servidor…</span>
+      </div>
+    </Modal>
+  )
 
-  if (!m) {
-    return (
-      <Modal title="Modelo no encontrado" onConfirm={onClose} confirmLabel="Cerrar" onClose={onClose}>
-        <div style={{ textAlign: 'center', padding: '20px 0', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
-          <div style={{ fontSize: '32px' }}>⚠️</div>
-          <p style={{ fontSize: '13px', color: 'var(--muted)', maxWidth: 280 }}>
-            El modelo <code className="tag" style={{ fontSize: '11px' }}>{modal.name}</code> ya no existe
-            o fue eliminado por otro administrador. Recarga la lista.
-          </p>
-        </div>
-      </Modal>
-    )
-  }
+  if (!m) return (
+    <Modal title="Modelo no encontrado" onConfirm={onClose} confirmLabel="Cerrar" onClose={onClose}>
+      <div className="md-not-found">
+        <IconAlert />
+        <p>El modelo <code className="md-code">{modal.name}</code> ya no existe o fue eliminado por otro administrador.</p>
+      </div>
+    </Modal>
+  )
 
   return (
-    <Modal
-      title="Eliminar modelo 3D"
+    <Modal title="Eliminar modelo 3D"
       onConfirm={onConfirm}
       confirmLabel={deleting ? 'Eliminando…' : 'Sí, eliminar'}
-      danger
-      disabled={deleting}
-      onClose={onClose}
-    >
-      {/* Advertencia */}
-      <div style={{
-        background: '#fff7ed', border: '1px solid #fed7aa', borderRadius: '8px',
-        padding: '10px 14px', marginBottom: '14px',
-        display: 'flex', alignItems: 'flex-start', gap: '8px',
-      }}>
-        <span style={{ fontSize: '18px', flexShrink: 0 }}>⚠️</span>
-        <div>
-          <div style={{ fontSize: '13px', fontWeight: 600, color: '#9a3412' }}>Esta acción es irreversible</div>
-          <div style={{ fontSize: '11px', color: '#c2410c', marginTop: '2px' }}>
-            El archivo GLB será eliminado permanentemente del servidor.
-          </div>
-        </div>
+      danger disabled={deleting}
+      onClose={onClose}>
+
+      <div className="md-alert md-alert--warn" style={{ marginBottom: '14px' }}>
+        <div className="md-alert-title">Esta acción es irreversible</div>
+        <div className="md-alert-body">El archivo GLB será eliminado permanentemente del servidor.</div>
       </div>
 
-      {/* Preview + detalles */}
-      <div style={{ border: '1px solid var(--border)', borderRadius: '10px', overflow: 'hidden', marginBottom: '14px' }}>
+      <div className="md-preview-wrap" style={{ marginBottom: '14px' }}>
         <GlbPreview filePath={m.file_path} height={180} />
-        <div style={{ padding: '12px 14px', background: 'var(--surface)' }}>
-          <table style={{ width: '100%', fontSize: '12px', borderCollapse: 'collapse' }}>
-            <tbody>
-              {[
-                { label: 'Archivo',    value: <code style={{ fontSize: '10px', fontFamily: 'monospace', color: 'var(--muted)', wordBreak: 'break-all' }}>{m.file_path}</code> },
-                { label: 'Edificio',   value: m.building_name ? `${m.building_name} (${m.building_code || ''})` : '—' },
-                { label: 'Resolución', value: <span className={`badge ${LOD_BADGE[m.lod_level] || 'b-gray'}`} style={{ fontSize: '10px' }}>{LOD_LABELS[m.lod_level] ?? `LOD ${m.lod_level}`}</span> },
-                { label: 'Tamaño',     value: m.file_size_mb ? `${m.file_size_mb} MB` : '—' },
-                { label: 'Estado',     value: m.is_active
-                    ? <span style={{ color: 'var(--success)', fontWeight: 500 }}>● Activo</span>
-                    : <span style={{ color: 'var(--danger)',  fontWeight: 500 }}>● Inactivo</span> },
-              ].map(row => (
-                <tr key={row.label}>
-                  <td style={{ padding: '4px 10px 4px 0', color: 'var(--faint)', fontWeight: 500, width: '80px', verticalAlign: 'top' }}>{row.label}</td>
-                  <td style={{ padding: '4px 0' }}>{row.value}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className="md-preview-meta">
+          {[
+            { label: 'Archivo',    value: <code className="md-code" style={{ wordBreak: 'break-all' }}>{m.file_path}</code> },
+            { label: 'Edificio',   value: m.building_name ? `${m.building_name} (${m.building_code || ''})` : '—' },
+            { label: 'Resolución', value: <span className={`md-lod-badge md-lod-badge--${m.lod_level}`}>{LOD_LABELS[m.lod_level] ?? `LOD ${m.lod_level}`}</span> },
+            { label: 'Tamaño',     value: m.file_size_mb ? `${m.file_size_mb} MB` : '—' },
+            { label: 'Estado',     value: <span className={`md-status ${m.is_active ? 'md-status--active' : 'md-status--inactive'}`}><span className="md-status-dot" />{m.is_active ? 'Activo' : 'Inactivo'}</span> },
+          ].map(row => (
+            <div key={row.label} className="md-meta-row">
+              <span className="md-meta-label">{row.label}</span>
+              <span className="md-meta-value">{row.value}</span>
+            </div>
+          ))}
         </div>
       </div>
 
-      <p style={{ fontSize: '12px', color: 'var(--muted)', textAlign: 'center' }}>
-        ¿Confirmas que deseas eliminar este modelo?
-      </p>
+      <p className="md-delete-confirm-text">¿Confirmas que deseas eliminar este modelo?</p>
     </Modal>
   )
 }
 
-// ── Página principal ──────────────────────────────────────────────────────────
+/* ── Página principal ───────────────────────────────────────── */
 export default function Models() {
   const [models,    setModels]    = useState([])
   const [buildings, setBuildings] = useState([])
@@ -287,12 +257,9 @@ export default function Models() {
     setToast({ msg, type }); setTimeout(() => setToast(null), 3500)
   }
 
-  const TRANSFORM_DEFAULTS = { scale_x: 1, scale_y: 1, scale_z: 1, rotate_x: 0, rotate_y: 0, rotate_z: 0 }
-
   function openNew() {
     setForm({ lod_level: 0, format: 'GLB', building_id: buildings[0]?.id || '', ...TRANSFORM_DEFAULTS })
-    setShowPreview(false)
-    setModal({ type: 'new' })
+    setShowPreview(false); setModal({ type: 'new' })
   }
 
   function openEditTransform(m) {
@@ -305,14 +272,11 @@ export default function Models() {
       rotate_y: parseFloat(m.rotate_y) || 0,
       rotate_z: parseFloat(m.rotate_z) || 0,
     })
-    setShowPreview(false)
-    setModal({ type: 'edit-transform', id: m.id, name: m.file_path })
+    setShowPreview(false); setModal({ type: 'edit-transform', id: m.id, name: m.file_path })
   }
 
-  // Abre el diálogo de eliminar verificando primero si existe en el servidor
   async function openDelete(m) {
-    setDeleteModel(null)
-    setDeleteChecking(true)
+    setDeleteModel(null); setDeleteChecking(true)
     setModal({ type: 'delete', id: m.id, name: m.file_path })
     try {
       const all = await api('GET', '/models')
@@ -343,7 +307,7 @@ export default function Models() {
         xhr.send(formData)
       })
       setForm(f => ({ ...f, file_path: result.file_path, file_size_mb: result.file_size_mb, format: result.format }))
-      showToast(`✅ "${file.name}" subido correctamente.`)
+      showToast(`"${file.name}" subido correctamente.`)
       setTimeout(() => setShowPreview(true), 300)
     } catch (err) { showToast(err.message, 'error') }
     finally { setUploading(false); setUploadPct(0); if (fileInputRef.current) fileInputRef.current.value = '' }
@@ -367,7 +331,7 @@ export default function Models() {
         scale_x: form.scale_x, scale_y: form.scale_y, scale_z: form.scale_z,
         rotate_x: form.rotate_x, rotate_y: form.rotate_y, rotate_z: form.rotate_z,
       })
-      setModal(null); showToast('Escala y rotación actualizadas. Recarga el visor para ver los cambios.'); loadAll()
+      setModal(null); showToast('Escala y rotación actualizadas.'); loadAll()
     } catch (e) { showToast(e.message, 'error') }
     finally { setSaving(false) }
   }
@@ -391,210 +355,268 @@ export default function Models() {
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
   const filtered = filter === 'all' ? models : models.filter(m => m.building_id === filter)
 
-  if (loading) return <div className="loader">Cargando…</div>
+  if (loading) return (
+    <div className="md-loading">
+      <div className="md-spinner" />
+      <span>Cargando modelos…</span>
+    </div>
+  )
 
   return (
-    <>
-      <div className="page-hdr">
+    <div className="md-root">
+
+      {/* Header */}
+      <div className="md-page-hdr">
         <div>
-          <div className="page-title">Modelos 3D</div>
-          <div className="page-sub">{models.length} modelos · Posición controlada por el edificio · Escala editable aquí</div>
+          <h2 className="md-page-title">Modelos 3D</h2>
+          <p className="md-page-sub">
+            {models.length} modelos · Posición controlada por el edificio · Escala editable aquí
+          </p>
         </div>
-        <button className="btn btn-primary btn-sm" onClick={openNew}>+ Registrar modelo</button>
+        <button className="md-btn md-btn--primary" onClick={openNew}>
+          <IconPlus /> Registrar modelo
+        </button>
       </div>
 
-      <div className="tab-row">
-        <button className={`tab-btn ${filter === 'all' ? 'active' : ''}`} onClick={() => setFilter('all')}>Todos</button>
-        {buildings.map(b => (
-          <button key={b.id} className={`tab-btn ${filter === b.id ? 'active' : ''}`}
-            onClick={() => setFilter(b.id)}>{b.code}</button>
-        ))}
+      {/* Filtro */}
+      <div className="md-tabs">
+        <button className={`md-tab ${filter === 'all' ? 'md-tab--active' : ''}`} onClick={() => setFilter('all')}>
+          Todos
+          <span className="md-tab-count">{models.length}</span>
+        </button>
+        {buildings.map(b => {
+          const count = models.filter(m => m.building_id === b.id).length
+          return (
+            <button key={b.id}
+              className={`md-tab ${filter === b.id ? 'md-tab--active' : ''}`}
+              onClick={() => setFilter(b.id)}>
+              {b.code}
+              <span className="md-tab-count">{count}</span>
+            </button>
+          )
+        })}
       </div>
 
-      <div className="card card-flush">
-        <div className="table-wrap">
-          <table>
-            <thead>
+      {/* Tabla */}
+      <div className="md-table-wrap">
+        <table className="md-table">
+          <thead>
+            <tr>
+              <th>Edificio</th>
+              <th>Resolución</th>
+              <th>Archivo</th>
+              <th>Tamaño</th>
+              <th>Escala</th>
+              <th>Rot. Y</th>
+              <th>Posición</th>
+              <th>Estado</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.length === 0 ? (
               <tr>
-                <th>Edificio</th><th>Resolución</th>
-                <th>Archivo</th><th>Tamaño</th>
-                <th>Escala</th><th>Rotación Y</th><th>Posición (del edificio)</th>
-                <th>Estado</th><th>Acciones</th>
+                <td colSpan={9}>
+                  <div className="md-empty">
+                    <IconEmpty />
+                    <span>Sin modelos registrados</span>
+                  </div>
+                </td>
               </tr>
-            </thead>
-            <tbody>
-              {filtered.length === 0
-                ? <tr><td colSpan={9}><div className="empty-state">Sin modelos registrados</div></td></tr>
-                : filtered.map(m => (
-                  <tr key={m.id}>
-                    <td>
-                      <div style={{ fontWeight: 500, fontSize: '13px' }}>{m.building_name}</div>
-                      <div style={{ fontSize: '11px', color: 'var(--faint)' }}>{m.building_code}</div>
-                    </td>
-                    <td><span className={`badge ${LOD_BADGE[m.lod_level]}`}>{LOD_LABELS[m.lod_level]}</span></td>
-                    <td style={{ maxWidth: 200 }}>
-                      <code className="mono" style={{ fontSize: '11px', color: 'var(--muted)', display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.file_path}</code>
-                    </td>
-                    <td style={{ fontSize: '12px', color: 'var(--muted)' }}>{m.file_size_mb ? `${m.file_size_mb} MB` : '—'}</td>
-                    <td>
-                      {scaleLabel(m)
-                        ? <span style={{ color: 'var(--primary)', fontWeight: 700, fontSize: '12px' }}>⤢ {scaleLabel(m)}</span>
-                        : <span style={{ color: 'var(--faint)', fontSize: '12px' }}>1×</span>}
-                    </td>
-                    <td>
-                      {parseFloat(m.rotate_y) !== 0 && (
-                        <span style={{ color: '#6d28d9', fontWeight: 700, fontSize: '12px' }}>⟳ {parseFloat(m.rotate_y)||0}°</span>
-                      )}
-                    </td>
-                    <td style={{ fontSize: '11px', color: 'var(--muted)' }}>
-                      {positionLabel(m)
-                        ? <code style={{ fontSize: '10px' }}>{positionLabel(m)}</code>
-                        : <span style={{ color: 'var(--faint)' }}>(0, 0, 0)</span>}
-                    </td>
-                    <td>
-                      {m.is_active
-                        ? <span style={{ color: 'var(--success)', fontSize: '12px' }}>● Activo</span>
-                        : <span style={{ color: 'var(--danger)',  fontSize: '12px' }}>● Inactivo</span>}
-                    </td>
-                    <td>
-                      <div style={{ display: 'flex', gap: '4px' }}>
-                        <button className="btn btn-sm btn-icon" title="Escala y rotación" onClick={() => openEditTransform(m)}>⚙</button>
-                        <button className="btn btn-sm btn-icon" title={m.is_active ? 'Desactivar' : 'Activar'} onClick={() => toggleActive(m)}>{m.is_active ? '⊘' : '✓'}</button>
-                        <button className="btn btn-sm btn-danger btn-icon" title="Eliminar" onClick={() => openDelete(m)}>✕</button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
-              }
-            </tbody>
-          </table>
-        </div>
+            ) : filtered.map(m => {
+              const sl = scaleLabel(m)
+              const pl = positionLabel(m)
+              const ry = parseFloat(m.rotate_y) || 0
+              return (
+                <tr key={m.id} className="md-row">
+                  <td>
+                    <span className="md-cell-name">{m.building_name}</span>
+                    <span className="md-cell-sub">{m.building_code}</span>
+                  </td>
+                  <td>
+                    <span className={`md-lod-badge md-lod-badge--${m.lod_level}`}>
+                      {LOD_LABELS[m.lod_level]}
+                    </span>
+                  </td>
+                  <td className="md-cell-file">
+                    <code className="md-code md-code--truncate" title={m.file_path}>{m.file_path}</code>
+                  </td>
+                  <td className="md-cell-mono">{m.file_size_mb ? `${m.file_size_mb} MB` : <span className="md-dash">—</span>}</td>
+                  <td className="md-cell-mono">
+                    {sl
+                      ? <span className="md-transform-value">{sl}</span>
+                      : <span className="md-dash">1×</span>}
+                  </td>
+                  <td className="md-cell-mono">
+                    {ry !== 0
+                      ? <span className="md-transform-value">{ry}°</span>
+                      : <span className="md-dash">0°</span>}
+                  </td>
+                  <td>
+                    {pl
+                      ? <code className="md-code">{pl}</code>
+                      : <span className="md-dash">(0, 0, 0)</span>}
+                  </td>
+                  <td>
+                    <span className={`md-status ${m.is_active ? 'md-status--active' : 'md-status--inactive'}`}>
+                      <span className="md-status-dot" />
+                      {m.is_active ? 'Activo' : 'Inactivo'}
+                    </span>
+                  </td>
+                  <td>
+                    <div className="md-actions">
+                      <button className="md-action-btn" title="Escala y rotación" onClick={() => openEditTransform(m)}>
+                        <IconSettings />
+                      </button>
+                      <button
+                        className={`md-action-btn ${m.is_active ? 'md-action-btn--warn' : 'md-action-btn--ok'}`}
+                        title={m.is_active ? 'Desactivar' : 'Activar'}
+                        onClick={() => toggleActive(m)}>
+                        {m.is_active ? <IconPause /> : <IconPlay />}
+                      </button>
+                      <button className="md-action-btn md-action-btn--danger" title="Eliminar" onClick={() => openDelete(m)}>
+                        <IconTrash />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
       </div>
 
-      {/* ── Modal: Nuevo modelo ── */}
+      {/* Modal: Nuevo modelo */}
       {modal?.type === 'new' && (
-        <Modal title="Registrar modelo 3D" onConfirm={confirmNew}
+        <Modal title="Registrar modelo 3D"
+          onConfirm={confirmNew}
           confirmLabel={saving ? 'Registrando…' : 'Registrar'}
           disabled={!form.file_path || uploading || saving}
           onClose={() => { setModal(null); setForm({}); setShowPreview(false) }}>
 
-          <div className="form-group">
-            <label className="form-label">Edificio *</label>
-            <select className="form-select" value={form.building_id} onChange={e => set('building_id', e.target.value)}>
-              <option value="">— Selecciona un edificio —</option>
-              {buildings.filter(b => b.is_active).map(b => (
-                <option key={b.id} value={b.id}>{b.name} ({b.code})</option>
-              ))}
-              {buildings.filter(b => !b.is_active).length > 0 && (
-                <optgroup label="── Inactivos ──">
-                  {buildings.filter(b => !b.is_active).map(b => (
-                    <option key={b.id} value={b.id}>{b.name} ({b.code})</option>
-                  ))}
-                </optgroup>
-              )}
-            </select>
-          </div>
-
-          <div className="form-group">
-            <label className="form-label">Nivel LOD *</label>
-            <select className="form-select" value={form.lod_level} onChange={e => set('lod_level', parseInt(e.target.value))}>
-              <option value={0}>0 — Alta resolución</option>
-              <option value={1}>1 — Media resolución</option>
-              <option value={2}>2 — Baja resolución</option>
-            </select>
-          </div>
-
-          <div className="form-group">
-            <label className="form-label">Archivo del modelo *</label>
-            <input ref={fileInputRef} type="file" accept=".glb,.gltf" style={{ display: 'none' }} onChange={handleFileChange} />
-            {!form.file_path && !uploading && (
-              <button type="button" className="btn btn-primary"
-                style={{ width: '100%', padding: '0.65rem', fontSize: '13px' }}
-                onClick={() => fileInputRef.current?.click()}>
-                📂 Seleccionar archivo .glb / .gltf
-              </button>
-            )}
-            {uploading && (
-              <div style={{ border: '1px solid var(--border)', borderRadius: '8px', padding: '12px', textAlign: 'center' }}>
-                <div style={{ fontSize: '12px', color: 'var(--muted)', marginBottom: '8px' }}>Subiendo… {uploadPct}%</div>
-                <div style={{ background: 'var(--bg)', borderRadius: '4px', height: '6px', overflow: 'hidden' }}>
-                  <div style={{ height: '100%', width: `${uploadPct}%`, background: 'var(--primary, #BC0613)', borderRadius: '4px', transition: 'width 200ms' }} />
-                </div>
-              </div>
-            )}
-            {form.file_path && !uploading && (
-              <>
-                <div style={{ border: '1px solid #bbf7d0', borderRadius: '8px', background: '#f0fdf4', padding: '10px 12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', marginBottom: '8px' }}>
-                  <div style={{ minWidth: 0 }}>
-                    <div style={{ fontSize: '12px', fontWeight: 600, color: '#15803d' }}>✅ Archivo subido</div>
-                    <div style={{ fontSize: '11px', color: '#166534', marginTop: '2px', fontFamily: 'monospace', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{form.file_path}</div>
-                    {form.file_size_mb && <div style={{ fontSize: '11px', color: '#4ade80', marginTop: '1px' }}>{form.file_size_mb} MB · {form.format}</div>}
-                  </div>
-                  <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
-                    <button type="button" className="btn btn-sm" style={{ fontSize: '11px' }}
-                      onClick={() => setShowPreview(p => !p)}>
-                      {showPreview ? '◐ Ocultar' : '◉ Preview'}
-                    </button>
-                    <button type="button" className="btn btn-sm" style={{ fontSize: '11px' }}
-                      onClick={() => { set('file_path', ''); set('file_size_mb', null); setShowPreview(false); fileInputRef.current?.click() }}>
-                      Cambiar
-                    </button>
-                  </div>
-                </div>
-                {showPreview && (
-                  <div style={{ marginBottom: '8px', borderRadius: '10px', overflow: 'hidden', border: '1px solid var(--border)' }}>
-                    <GlbPreview filePath={form.file_path} height={200} />
-                  </div>
+          <div className="md-form">
+            <div className="md-field">
+              <label className="md-label">Edificio <span className="md-required">*</span></label>
+              <select className="md-input" value={form.building_id} onChange={e => set('building_id', e.target.value)}>
+                <option value="">— Selecciona un edificio —</option>
+                {buildings.filter(b => b.is_active).map(b => (
+                  <option key={b.id} value={b.id}>{b.name} ({b.code})</option>
+                ))}
+                {buildings.filter(b => !b.is_active).length > 0 && (
+                  <optgroup label="Inactivos">
+                    {buildings.filter(b => !b.is_active).map(b => (
+                      <option key={b.id} value={b.id}>{b.name} ({b.code})</option>
+                    ))}
+                  </optgroup>
                 )}
-              </>
-            )}
-            <small style={{ color: 'var(--faint)', fontSize: '11px', display: 'block', marginTop: '4px' }}>
-              Máx. 200 MB · Formatos: .glb, .gltf
-            </small>
-          </div>
+              </select>
+            </div>
 
-          <div className="form-group">
-            <label className="form-label">Escala inicial</label>
-            <ScaleEditor form={form} set={set} />
-          </div>
-          <div className="form-group">
-            <label className="form-label">Rotación inicial</label>
-            <RotationEditor form={form} set={set} />
-          </div>
-          <div className="form-group">
-            <label className="form-label">Versión (opcional)</label>
-            <input className="form-input" placeholder="v1.0" value={form.version || ''} onChange={e => set('version', e.target.value)} />
+            <div className="md-field">
+              <label className="md-label">Nivel LOD <span className="md-required">*</span></label>
+              <select className="md-input" value={form.lod_level} onChange={e => set('lod_level', parseInt(e.target.value))}>
+                <option value={0}>0 — Alta resolución</option>
+                <option value={1}>1 — Media resolución</option>
+                <option value={2}>2 — Baja resolución</option>
+              </select>
+            </div>
+
+            <div className="md-field">
+              <label className="md-label">Archivo del modelo <span className="md-required">*</span></label>
+              <input ref={fileInputRef} type="file" accept=".glb,.gltf" style={{ display: 'none' }} onChange={handleFileChange} />
+
+              {!form.file_path && !uploading && (
+                <button type="button" className="md-btn md-btn--primary md-btn--full"
+                  onClick={() => fileInputRef.current?.click()}>
+                  <IconUpload /> Seleccionar archivo .glb / .gltf
+                </button>
+              )}
+
+              {uploading && (
+                <div className="md-upload-progress">
+                  <span className="md-upload-label">Subiendo… {uploadPct}%</span>
+                  <div className="md-progress-track">
+                    <div className="md-progress-bar" style={{ width: `${uploadPct}%` }} />
+                  </div>
+                </div>
+              )}
+
+              {form.file_path && !uploading && (
+                <>
+                  <div className="md-file-ok">
+                    <div className="md-file-ok-info">
+                      <span className="md-file-ok-title"><IconCheck /> Archivo subido</span>
+                      <span className="md-file-ok-path">{form.file_path}</span>
+                      {form.file_size_mb && <span className="md-file-ok-meta">{form.file_size_mb} MB · {form.format}</span>}
+                    </div>
+                    <div className="md-file-ok-actions">
+                      <button type="button" className="md-btn md-btn--ghost md-btn--sm"
+                        onClick={() => setShowPreview(p => !p)}>
+                        {showPreview ? 'Ocultar' : 'Preview'}
+                      </button>
+                      <button type="button" className="md-btn md-btn--ghost md-btn--sm"
+                        onClick={() => { set('file_path', ''); set('file_size_mb', null); setShowPreview(false); fileInputRef.current?.click() }}>
+                        Cambiar
+                      </button>
+                    </div>
+                  </div>
+                  {showPreview && (
+                    <div className="md-preview-wrap">
+                      <GlbPreview filePath={form.file_path} height={200} />
+                    </div>
+                  )}
+                </>
+              )}
+              <span className="md-field-hint">Máx. 200 MB · Formatos: .glb, .gltf</span>
+            </div>
+
+            <div className="md-field">
+              <label className="md-label">Escala inicial</label>
+              <ScaleEditor form={form} set={set} />
+            </div>
+            <div className="md-field">
+              <label className="md-label">Rotación inicial</label>
+              <RotationEditor form={form} set={set} />
+            </div>
+            <div className="md-field">
+              <label className="md-label">Versión (opcional)</label>
+              <input className="md-input" placeholder="v1.0"
+                value={form.version || ''} onChange={e => set('version', e.target.value)} />
+            </div>
           </div>
         </Modal>
       )}
 
-      {/* ── Modal: Editar escala/rotación ── */}
+      {/* Modal: Editar escala/rotación */}
       {modal?.type === 'edit-transform' && (
         <Modal title="Escala y rotación del modelo"
           onConfirm={confirmEditTransform}
           confirmLabel={saving ? 'Guardando…' : 'Guardar cambios'}
           disabled={saving}
           onClose={() => { setModal(null); setShowPreview(false) }}>
-          <p style={{ fontSize: '12px', color: 'var(--muted)', marginBottom: '10px' }}>
-            <code className="tag" style={{ fontSize: '10px' }}>{modal.name}</code>
-          </p>
-          <div style={{ marginBottom: '10px' }}>
-            <button type="button" className="btn btn-sm" style={{ width: '100%', fontSize: '12px' }}
+
+          <div className="md-form">
+            <code className="md-code" style={{ marginBottom: '4px', display: 'block' }}>{modal.name}</code>
+
+            <button type="button" className="md-btn md-btn--ghost md-btn--full"
+              style={{ marginBottom: '4px' }}
               onClick={() => setShowPreview(p => !p)}>
-              {showPreview ? '◐ Ocultar preview 3D' : '◉ Mostrar preview 3D del modelo'}
+              {showPreview ? 'Ocultar preview 3D' : 'Mostrar preview 3D del modelo'}
             </button>
+
+            {showPreview && form.file_path && (
+              <div className="md-preview-wrap" style={{ marginBottom: '4px' }}>
+                <GlbPreview filePath={form.file_path} height={180} />
+              </div>
+            )}
+
+            <ScaleEditor form={form} set={set} />
+            <RotationEditor form={form} set={set} />
           </div>
-          {showPreview && form.file_path && (
-            <div style={{ marginBottom: '12px', borderRadius: '10px', overflow: 'hidden', border: '1px solid var(--border)' }}>
-              <GlbPreview filePath={form.file_path} height={180} />
-            </div>
-          )}
-          <ScaleEditor form={form} set={set} />
-          <RotationEditor form={form} set={set} />
         </Modal>
       )}
 
-      {/* ── Modal: Eliminar (con verificación y preview) ── */}
+      {/* Modal: Eliminar */}
       {modal?.type === 'delete' && (
         <DeleteModelDialog
           modal={{ ...modal, model: deleteModel }}
@@ -605,7 +627,24 @@ export default function Models() {
         />
       )}
 
-      {toast && <div className={`toast toast-${toast.type}`}>{toast.msg}</div>}
-    </>
+      {toast && (
+        <div className={`md-toast ${toast.type === 'error' ? 'md-toast--error' : 'md-toast--success'}`}>
+          {toast.type === 'error' ? <IconAlert /> : <IconCheck />}
+          <span>{toast.msg}</span>
+        </div>
+      )}
+    </div>
   )
 }
+
+/* ── Icons ──────────────────────────────────────────────────── */
+function IconPlus()     { return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> }
+function IconSettings() { return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg> }
+function IconTrash()    { return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg> }
+function IconCheck()    { return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg> }
+function IconPause()    { return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><line x1="9" y1="9" x2="9" y2="15"/><line x1="15" y1="9" x2="15" y2="15"/></svg> }
+function IconPlay()     { return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><polygon points="10 8 16 12 10 16 10 8"/></svg> }
+function IconX()        { return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg> }
+function IconAlert()    { return <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v4m0 4h.01"/></svg> }
+function IconUpload()   { return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg> }
+function IconEmpty()    { return <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 2l8 4.5v9L12 20l-8-4.5v-9L12 2z"/><path d="M12 2v18M4 6.5l8 5 8-5"/></svg> }
