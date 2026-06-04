@@ -11,14 +11,13 @@ export function useContextMenuGuard() {
     function blockContextMenu(e) {
       e.preventDefault()
 
-      // p evidencia en capturas
+      // notificación de evidencia
       const existing = document.getElementById('rc-block-msg')
       if (existing) return
 
       const msg = document.createElement('div')
       msg.id = 'rc-block-msg'
       msg.innerText = 'Clic derecho deshabilitado por seguridad'
-
       Object.assign(msg.style, {
         position: 'fixed',
         top: '20px',
