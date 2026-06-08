@@ -22,7 +22,7 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
   const isProd = mode === 'production'
 
-  // ── Configuración del plugin de ofuscación ───────────────
+  // ── config del plugin de ofuscacion ───────────────
   const obfuscatorConfig = isProd && obfuscatorPlugin
     ? obfuscatorPlugin({
         include: ['**/*.{js,jsx,ts,tsx}'],
