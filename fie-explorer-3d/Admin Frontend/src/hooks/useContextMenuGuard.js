@@ -35,7 +35,7 @@ export function useContextMenuGuard() {
 
       timeout = setTimeout(() => {
         msg.remove()
-      }, 1500)
+      }, 2500)
     }
 
     document.addEventListener('contextmenu', blockContextMenu)
