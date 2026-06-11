@@ -17,6 +17,11 @@ export default defineConfig({
         target: 'http://localhost:3001',
         changeOrigin: true,
       },
+      // Imágenes de hotspots subidas desde el admin
+      '/hotspot-images': {
+        target: 'http://localhost:3001',
+        changeOrigin: true,
+      },
     },
   },
 

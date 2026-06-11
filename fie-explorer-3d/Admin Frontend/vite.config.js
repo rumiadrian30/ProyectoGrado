@@ -104,7 +104,7 @@ export default defineConfig(({ mode }) => {
           default-src 'self';
           script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.gstatic.com blob:;
           style-src 'self' 'unsafe-inline';
-          img-src 'self' data: blob:;
+          img-src 'self' data: blob: http://localhost:3001;
           connect-src 'self' http://localhost:3001 https://www.gstatic.com blob:;
           worker-src 'self' blob:;
         `.replace(/\n/g, ' ').trim(),
@@ -114,6 +114,14 @@ export default defineConfig(({ mode }) => {
       },
       proxy: {
         '/api': {
+          target:       'http://localhost:3001',
+          changeOrigin: true,
+        },
+        '/hotspot-images': {
+          target:       'http://localhost:3001',
+          changeOrigin: true,
+        },
+        '/models': {
           target:       'http://localhost:3001',
           changeOrigin: true,
         },
