@@ -236,6 +236,7 @@ export default function Models() {
   const [filter,    setFilter]    = useState('all')
   const [uploading, setUploading] = useState(false)
   const [uploadPct, setUploadPct] = useState(0)
+  const [fileError, setFileError] = useState(null)
   const [saving,    setSaving]    = useState(false)
   const [showPreview,    setShowPreview]    = useState(false)
   const [deleteChecking, setDeleteChecking] = useState(false)
@@ -259,7 +260,7 @@ export default function Models() {
 
   function openNew() {
     setForm({ lod_level: 0, format: 'GLB', building_id: buildings[0]?.id || '', ...TRANSFORM_DEFAULTS })
-    setShowPreview(false); setModal({ type: 'new' })
+    setShowPreview(false); setFileError(null); setModal({ type: 'new' })
   }
 
   function openEditTransform(m) {
@@ -288,8 +289,33 @@ export default function Models() {
   async function handleFileChange(e) {
     const file = e.target.files?.[0]
     if (!file) return
+
+    // Limpiar error previo sin tocar el resto del form
+    setFileError(null)
+
+    // Validación de formato en el cliente — mensaje descriptivo
     const ext = file.name.split('.').pop().toLowerCase()
-    if (!['glb', 'gltf'].includes(ext)) { showToast('Solo se aceptan archivos .glb o .gltf', 'error'); return }
+    if (!['glb', 'gltf'].includes(ext)) {
+      setFileError(
+        `Formato no permitido: .${ext}. ` +
+        `El visor 3D solo acepta archivos .glb o .gltf. ` +
+        `Los archivos .${ext} no son compatibles.`
+      )
+      if (fileInputRef.current) fileInputRef.current.value = ''
+      return
+    }
+
+    // Validación de tamaño en el cliente (50 MB)
+    const sizeMB = file.size / (1024 * 1024)
+    if (sizeMB > 50) {
+      setFileError(
+        `El archivo pesa ${sizeMB.toFixed(1)} MB, supera el límite de 50 MB. ` +
+        `Optimiza el modelo antes de subirlo (reduce polígonos o texturas).`
+      )
+      if (fileInputRef.current) fileInputRef.current.value = ''
+      return
+    }
+
     setUploading(true); setUploadPct(0); setShowPreview(false)
     try {
       const formData = new FormData()
@@ -301,15 +327,26 @@ export default function Models() {
         xhr.upload.onprogress = ev => { if (ev.lengthComputable) setUploadPct(Math.round(ev.loaded / ev.total * 100)) }
         xhr.onload = () => {
           if (xhr.status >= 200 && xhr.status < 300) resolve(JSON.parse(xhr.responseText))
-          else { try { reject(new Error(JSON.parse(xhr.responseText).error)) } catch { reject(new Error(`Error ${xhr.status}`)) } }
+          else {
+            let msg = `Error del servidor (${xhr.status})`
+            try {
+              const body = JSON.parse(xhr.responseText)
+              msg = body.error || msg
+            } catch { /* mantener msg genérico */ }
+            reject(new Error(msg))
+          }
         }
-        xhr.onerror = () => reject(new Error('Error de red'))
+        xhr.onerror = () => reject(new Error('Error de red al subir el archivo. Verifica tu conexión.'))
         xhr.send(formData)
       })
+      // Actualizar solo los campos del archivo, sin tocar edificio, LOD ni transforms
       setForm(f => ({ ...f, file_path: result.file_path, file_size_mb: result.file_size_mb, format: result.format }))
       showToast(`"${file.name}" subido correctamente.`)
       setTimeout(() => setShowPreview(true), 300)
-    } catch (err) { showToast(err.message, 'error') }
+    } catch (err) {
+      // Error inline persistente — el formulario NO se limpia
+      setFileError(err.message)
+    }
     finally { setUploading(false); setUploadPct(0); if (fileInputRef.current) fileInputRef.current.value = '' }
   }
 
@@ -555,19 +592,31 @@ export default function Models() {
                         {showPreview ? 'Ocultar' : 'Preview'}
                       </button>
                       <button type="button" className="md-btn md-btn--ghost md-btn--sm"
-                        onClick={() => { set('file_path', ''); set('file_size_mb', null); setShowPreview(false); fileInputRef.current?.click() }}>
+                        onClick={() => { set('file_path', ''); set('file_size_mb', null); setShowPreview(false); setFileError(null); fileInputRef.current?.click() }}>
                         Cambiar
                       </button>
                     </div>
                   </div>
                   {showPreview && (
                     <div className="md-preview-wrap">
-                      <GlbPreview filePath={form.file_path} height={200} />
+                      <GlbPreview filePath={form.file_path} height={50} />
                     </div>
                   )}
                 </>
               )}
-              <span className="md-field-hint">Máx. 200 MB · Formatos: .glb, .gltf</span>
+
+              {fileError && !uploading && (
+                <div className="md-file-error">
+                  <IconAlert />
+                  <span>{fileError}</span>
+                  <button type="button" className="md-btn md-btn--ghost md-btn--sm"
+                    onClick={() => { setFileError(null); fileInputRef.current?.click() }}>
+                    Reintentar
+                  </button>
+                </div>
+              )}
+
+              <span className="md-field-hint">Máx. 50 MB · Formatos: .glb, .gltf</span>
             </div>
 
             <div className="md-field">

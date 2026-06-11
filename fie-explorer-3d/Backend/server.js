@@ -27,6 +27,7 @@ const settingsRoutes   = require('./routes/settingsRoutes');
 
 const { errorMiddleware } = require('./middleware/errorMiddleware');
 const { MODELS_DIR } = require('./middleware/uploadMiddleware');
+const { IMAGES_DIR } = require('./middleware/uploadImageMiddleware');
 const { getClient }  = require('./utils/redisClient');
 const { clientLogger } = require('./middleware/clientLogger.js');
 
@@ -172,6 +173,17 @@ app.get('/models/mapa-espoch.glb', (req, res, next) => {
     if (err) next(err);
   });
 });
+
+// ── Ruta estática para imágenes de hotspot ───────────────────────────────────
+app.use('/hotspot-images', express.static(IMAGES_DIR, {
+  setHeaders: (res) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+    res.setHeader('Cache-Control', 'public, max-age=3600');
+  },
+}));
 
 // ── Ruta estática genérica para modelos ─────────────────────────────────────
 app.use('/models', express.static(MODELS_DIR, {
