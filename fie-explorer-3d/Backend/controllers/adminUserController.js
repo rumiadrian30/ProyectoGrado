@@ -1,227 +1,618 @@
+// Backend/controllers/adminUserController.js
+
 const bcrypt = require('bcrypt');
-const pool   = require('../db/pool');
+const pool = require('../db/pool');
 const { writeAudit } = require('./authController');
 const { validatePassword } = require('../utils/passwordValidator');
-const log = (msg) => console.log(`  \x1b[35m[USER]\x1b[0m ${msg}`);
+
+const {
+  notifyPasswordReset,
+  notifyAccountDeactivated,
+  notifyAccountActivated,
+  notifyAccountDeleted,
+} = require('../utils/emailService');
+
+const log = (msg) => {
+  console.log(`  \x1b[35m[USER]\x1b[0m ${msg}`);
+};
+
+// ─────────────────────────────────────────────────────────────
+// Utilidad para interpretar la opción de notificación
+// ─────────────────────────────────────────────────────────────
+
+function parseNotifyOption(value, defaultValue = true) {
+  if (
+    value === undefined ||
+    value === null ||
+    value === ''
+  ) {
+    return defaultValue;
+  }
+
+  if (typeof value === 'boolean') {
+    return value;
+  }
+
+  return String(value).toLowerCase() === 'true';
+}
+
+// ─────────────────────────────────────────────────────────────
+// Listar usuarios administradores
+// ─────────────────────────────────────────────────────────────
 
 async function list(req, res, next) {
   if (req.admin.role !== 'superadmin') {
-    const e = new Error('Acceso restringido a superadministradores.'); e.status = 403; return next(e);
+    const e = new Error(
+      'Acceso restringido a superadministradores.'
+    );
+
+    e.status = 403;
+    return next(e);
   }
+
   try {
     const { rows } = await pool.query(`
-      SELECT id, full_name, email, role, is_active,
-             failed_attempts, last_login, created_at
-      FROM admin_users ORDER BY created_at ASC
+      SELECT
+        id,
+        full_name,
+        email,
+        role,
+        is_active,
+        failed_attempts,
+        last_login,
+        created_at
+      FROM admin_users
+      ORDER BY created_at ASC
     `);
+
     log(`Listado: ${rows.length} usuarios`);
+
     res.json(rows);
-  } catch (err) { next(err); }
+  } catch (err) {
+    next(err);
+  }
 }
+
+// ─────────────────────────────────────────────────────────────
+// Crear usuario administrador
+// ─────────────────────────────────────────────────────────────
 
 async function create(req, res, next) {
   if (req.admin.role !== 'superadmin') {
-    const e = new Error('Acceso restringido a superadministradores.'); e.status = 403; return next(e);
+    const e = new Error(
+      'Acceso restringido a superadministradores.'
+    );
+
+    e.status = 403;
+    return next(e);
   }
 
-  const { full_name, email, password, role } = req.body;
+  const {
+    full_name,
+    email,
+    password,
+    role,
+  } = req.body;
 
-  // Validaciones básicas
-  if (!full_name?.trim() || !email?.trim() || !password) {
-    const e = new Error('full_name, email y password son obligatorios.'); e.status = 400; return next(e);
+  if (
+    !full_name?.trim() ||
+    !email?.trim() ||
+    !password
+  ) {
+    const e = new Error(
+      'full_name, email y password son obligatorios.'
+    );
+
+    e.status = 400;
+    return next(e);
   }
+
   if (!['admin', 'superadmin'].includes(role)) {
-    const e = new Error('Rol inválido. Usar: admin o superadmin.'); e.status = 400; return next(e);
+    const e = new Error(
+      'Rol inválido. Usar: admin o superadmin.'
+    );
+
+    e.status = 400;
+    return next(e);
   }
 
-  // ── Validar fortaleza de contraseña ──────────────────────
-  const { valid, errors } = validatePassword(password);
+  const {
+    valid,
+    errors,
+  } = validatePassword(password);
+
   if (!valid) {
-    const e = new Error('La contraseña no cumple los requisitos de seguridad:\n• ' + errors.join('\n• '));
+    const e = new Error(
+      'La contraseña no cumple los requisitos de seguridad:\n• ' +
+      errors.join('\n• ')
+    );
+
     e.status = 422;
-    e.passwordErrors = errors;  // para el frontend
+    e.passwordErrors = errors;
+
     return next(e);
   }
 
   try {
     const hash = await bcrypt.hash(password, 12);
 
-    // El trigger fn_check_role_limit en la BD validará el límite de roles.
-    // Si se supera, PostgreSQL lanza ERRCODE P0001 que capturamos abajo.
-    const { rows } = await pool.query(`
-      INSERT INTO admin_users (full_name, email, password_hash, role)
-      VALUES ($1,$2,$3,$4)
-      RETURNING id, full_name, email, role, is_active, created_at
-    `, [full_name.trim(), email.toLowerCase().trim(), hash, role]);
+    const { rows } = await pool.query(
+      `
+        INSERT INTO admin_users (
+          full_name,
+          email,
+          password_hash,
+          role
+        )
+        VALUES ($1, $2, $3, $4)
+        RETURNING
+          id,
+          full_name,
+          email,
+          role,
+          is_active,
+          created_at
+      `,
+      [
+        full_name.trim(),
+        email.toLowerCase().trim(),
+        hash,
+        role,
+      ]
+    );
 
     await writeAudit({
-      user_id: req.admin.id, action: 'CREATE',
-      entity_type: 'admin_users', entity_id: rows[0].id,
-      new_values: { full_name: rows[0].full_name, email: rows[0].email, role: rows[0].role },
-      ip_address: req.ip, user_agent: req.headers['user-agent'],
+      user_id: req.admin.id,
+      action: 'CREATE',
+      entity_type: 'admin_users',
+      entity_id: rows[0].id,
+
+      new_values: {
+        full_name: rows[0].full_name,
+        email: rows[0].email,
+        role: rows[0].role,
+      },
+
+      ip_address: req.ip,
+      user_agent: req.headers['user-agent'],
     });
 
-    log(`✅ CREADO — ${rows[0].email} (${rows[0].role}) por ${req.admin.email}`);
-    res.status(201).json(rows[0]);
+    log(
+      `CREADO — ${rows[0].email} (${rows[0].role}) ` +
+      `por ${req.admin.email}`
+    );
 
+    res.status(201).json(rows[0]);
   } catch (err) {
-    // Email duplicado
     if (err.code === '23505') {
-      const e = new Error('Ya existe un usuario con ese correo.'); e.status = 409; return next(e);
+      const e = new Error(
+        'Ya existe un usuario con ese correo.'
+      );
+
+      e.status = 409;
+      return next(e);
     }
-    // Trigger de límite de roles (ERRCODE P0001)
+
     if (err.code === 'P0001') {
-      const e = new Error(err.message); e.status = 409; return next(e);
+      const e = new Error(err.message);
+
+      e.status = 409;
+      return next(e);
     }
+
     next(err);
   }
 }
+
+// ─────────────────────────────────────────────────────────────
+// Activar o desactivar usuario
+// ─────────────────────────────────────────────────────────────
 
 async function toggleActive(req, res, next) {
   if (req.admin.role !== 'superadmin') {
-    const e = new Error('Acceso restringido a superadministradores.'); e.status = 403; return next(e);
-  }
-  const { id } = req.params;
-  if (id === req.admin.id) {
-    const e = new Error('No puedes desactivar tu propia cuenta.'); e.status = 400; return next(e);
-  }
-  try {
-    const { rows } = await pool.query(
-      `UPDATE admin_users SET is_active = NOT is_active, updated_at = NOW()
-       WHERE id = $1 RETURNING id, full_name, email, role, is_active`, [id]
+    const e = new Error(
+      'Acceso restringido a superadministradores.'
     );
-    if (!rows[0]) { const e = new Error('Usuario no encontrado.'); e.status = 404; return next(e); }
 
-    const action = rows[0].is_active ? 'ACTIVATE' : 'DEACTIVATE';
-    await writeAudit({
-      user_id: req.admin.id, action,
-      entity_type: 'admin_users', entity_id: id,
-      new_values: { is_active: rows[0].is_active },
-      ip_address: req.ip, user_agent: req.headers['user-agent'],
-    });
-
-    log(`${rows[0].is_active ? '🟢' : '🔴'} ${action} — ${rows[0].email}`);
-    res.json(rows[0]);
-  } catch (err) {
-    // Trigger límite al reactivar
-    if (err.code === 'P0001') {
-      const e = new Error(err.message); e.status = 409; return next(e);
-    }
-    next(err);
+    e.status = 403;
+    return next(e);
   }
-}
 
-async function resetPassword(req, res, next) {
-  if (req.admin.role !== 'superadmin') {
-    const e = new Error('Acceso restringido a superadministradores.'); e.status = 403; return next(e);
-  }
   const { id } = req.params;
-  const { new_password } = req.body;
 
-  // ── Validar fortaleza de la nueva contraseña ─────────────
-  const { valid, errors } = validatePassword(new_password || '');
-  if (!valid) {
-    const e = new Error('La contraseña no cumple los requisitos:\n• ' + errors.join('\n• '));
-    e.status = 422;
-    e.passwordErrors = errors;
+  const notify = parseNotifyOption(
+    req.body?.notify,
+    true
+  );
+
+  if (String(id) === String(req.admin.id)) {
+    const e = new Error(
+      'No puedes desactivar tu propia cuenta.'
+    );
+
+    e.status = 400;
     return next(e);
   }
 
   try {
-    const hash = await bcrypt.hash(new_password, 12);
-    await pool.query(
-      `UPDATE admin_users SET password_hash=$1, failed_attempts=0,
-       locked_until=NULL, updated_at=NOW() WHERE id=$2`,
-      [hash, id]
+    const { rows } = await pool.query(
+      `
+        UPDATE admin_users
+        SET
+          is_active = NOT is_active,
+          updated_at = NOW()
+        WHERE id = $1
+        RETURNING
+          id,
+          full_name,
+          email,
+          role,
+          is_active
+      `,
+      [id]
     );
+
+    if (!rows[0]) {
+      const e = new Error(
+        'Usuario no encontrado.'
+      );
+
+      e.status = 404;
+      return next(e);
+    }
+
+    const targetUser = rows[0];
+
+    const action = targetUser.is_active
+      ? 'ACTIVATE'
+      : 'DEACTIVATE';
+
     await writeAudit({
-      user_id: req.admin.id, action: 'UPDATE',
-      entity_type: 'admin_users', entity_id: id,
-      new_values: { password_reset: true },
-      ip_address: req.ip, user_agent: req.headers['user-agent'],
+      user_id: req.admin.id,
+      action,
+      entity_type: 'admin_users',
+      entity_id: id,
+
+      new_values: {
+        is_active: targetUser.is_active,
+        notification_requested: notify,
+      },
+
+      ip_address: req.ip,
+      user_agent: req.headers['user-agent'],
     });
-    log(`🔑 PASSWORD RESET — usuario ${id} por ${req.admin.email}`);
-    res.json({ message: 'Contraseña actualizada correctamente.' });
-  } catch (err) { next(err); }
+
+    if (notify) {
+      if (targetUser.is_active) {
+        void notifyAccountActivated({
+          targetUser,
+          changedBy: req.admin,
+          ip: req.ip,
+        });
+      } else {
+        void notifyAccountDeactivated({
+          targetUser,
+          changedBy: req.admin,
+          ip: req.ip,
+        });
+      }
+    }
+
+    log(
+      `${targetUser.is_active ? 'ACTIVADO' : 'DESACTIVADO'} — ` +
+      `${targetUser.email} — ` +
+      `notificación solicitada: ${notify ? 'sí' : 'no'}`
+    );
+
+    res.json({
+      ...targetUser,
+      notificationRequested: notify,
+    });
+  } catch (err) {
+    if (err.code === 'P0001') {
+      const e = new Error(err.message);
+
+      e.status = 409;
+      return next(e);
+    }
+
+    next(err);
+  }
 }
+
+// ─────────────────────────────────────────────────────────────
+// Restablecer contraseña
+// ─────────────────────────────────────────────────────────────
+
+async function resetPassword(req, res, next) {
+  if (req.admin.role !== 'superadmin') {
+    const e = new Error(
+      'Acceso restringido a superadministradores.'
+    );
+
+    e.status = 403;
+    return next(e);
+  }
+
+  const { id } = req.params;
+  const { new_password } = req.body;
+
+  const notify = parseNotifyOption(
+    req.body?.notify,
+    true
+  );
+
+  const {
+    valid,
+    errors,
+  } = validatePassword(new_password || '');
+
+  if (!valid) {
+    const e = new Error(
+      'La contraseña no cumple los requisitos:\n• ' +
+      errors.join('\n• ')
+    );
+
+    e.status = 422;
+    e.passwordErrors = errors;
+
+    return next(e);
+  }
+
+  try {
+    const hash = await bcrypt.hash(
+      new_password,
+      12
+    );
+
+    const { rows: updated } = await pool.query(
+      `
+        UPDATE admin_users
+        SET
+          password_hash = $1,
+          failed_attempts = 0,
+          locked_until = NULL,
+          updated_at = NOW()
+        WHERE id = $2
+        RETURNING
+          id,
+          full_name,
+          email
+      `,
+      [
+        hash,
+        id,
+      ]
+    );
+
+    if (!updated[0]) {
+      const e = new Error(
+        'Usuario no encontrado.'
+      );
+
+      e.status = 404;
+      return next(e);
+    }
+
+    await writeAudit({
+      user_id: req.admin.id,
+      action: 'UPDATE',
+      entity_type: 'admin_users',
+      entity_id: id,
+
+      new_values: {
+        password_reset: true,
+        notification_requested: notify,
+      },
+
+      ip_address: req.ip,
+      user_agent: req.headers['user-agent'],
+    });
+
+    if (notify) {
+      void notifyPasswordReset({
+        targetUser: updated[0],
+        changedBy: req.admin,
+        ip: req.ip,
+      });
+    }
+
+    log(
+      `PASSWORD RESET — usuario ${id} ` +
+      `por ${req.admin.email} — ` +
+      `notificación solicitada: ${notify ? 'sí' : 'no'}`
+    );
+
+    res.json({
+      message:
+        'Contraseña actualizada correctamente.',
+
+      notificationRequested: notify,
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+// Eliminar usuario permanentemente
+// ─────────────────────────────────────────────────────────────
 
 /**
  * DELETE /api/admin-users/:id
- * Eliminación física (hard delete). Exclusivo para superadmin.
  *
- * Protecciones:
- *  - Solo superadmin puede ejecutarlo.
- *  - No puede eliminarse a sí mismo.
- *  - No puede eliminar al último superadmin activo del sistema.
- *  - Si el usuario no existe, responde 404.
- *  - El registro de auditoría se escribe ANTES del DELETE,
- *    porque tras la eliminación el user_id ya no existe.
+ * Ejemplo con notificación:
+ * DELETE /api/admin-users/10?notify=true
+ *
+ * Ejemplo sin notificación:
+ * DELETE /api/admin-users/10?notify=false
  */
 async function remove(req, res, next) {
   if (req.admin.role !== 'superadmin') {
-    const e = new Error('Acceso restringido a superadministradores.'); e.status = 403; return next(e);
+    const e = new Error(
+      'Acceso restringido a superadministradores.'
+    );
+
+    e.status = 403;
+    return next(e);
   }
 
   const { id } = req.params;
 
-  // No puede eliminarse a sí mismo
-  if (id === String(req.admin.id)) {
-    const e = new Error('No puedes eliminar tu propia cuenta.'); e.status = 400; return next(e);
+  const notify = parseNotifyOption(
+    req.query?.notify,
+    true
+  );
+
+  if (String(id) === String(req.admin.id)) {
+    const e = new Error(
+      'No puedes eliminar tu propia cuenta.'
+    );
+
+    e.status = 400;
+    return next(e);
   }
 
   const client = await pool.connect();
+
+  let target = null;
+  let transactionFinished = false;
+
   try {
     await client.query('BEGIN');
 
-    // 1. Verificar que el usuario existe y obtener sus datos
     const { rows: found } = await client.query(
-      `SELECT id, full_name, email, role, is_active FROM admin_users WHERE id = $1`,
+      `
+        SELECT
+          id,
+          full_name,
+          email,
+          role,
+          is_active
+        FROM admin_users
+        WHERE id = $1
+      `,
       [id]
     );
+
     if (!found[0]) {
       await client.query('ROLLBACK');
-      const e = new Error('Usuario no encontrado.'); e.status = 404; return next(e);
-    }
-    const target = found[0];
 
-    // 2. Proteger al último superadmin activo
-    if (target.role === 'superadmin') {
-      const { rows: superCount } = await client.query(
-        `SELECT COUNT(*)::int AS cnt FROM admin_users WHERE role = 'superadmin' AND is_active = true`
+      transactionFinished = true;
+
+      const e = new Error(
+        'Usuario no encontrado.'
       );
+
+      e.status = 404;
+      return next(e);
+    }
+
+    target = found[0];
+
+    if (target.role === 'superadmin') {
+      const { rows: superCount } =
+        await client.query(`
+          SELECT COUNT(*)::int AS cnt
+          FROM admin_users
+          WHERE role = 'superadmin'
+            AND is_active = true
+        `);
+
       if (superCount[0].cnt <= 1) {
         await client.query('ROLLBACK');
+
+        transactionFinished = true;
+
         const e = new Error(
-          'No se puede eliminar al único superadministrador activo del sistema.'
-        ); e.status = 409; return next(e);
+          'No se puede eliminar al único ' +
+          'superadministrador activo del sistema.'
+        );
+
+        e.status = 409;
+        return next(e);
       }
     }
 
-    // 3. Escribir auditoría ANTES del delete (el user_id aún existe)
     await writeAudit({
-      user_id:     req.admin.id,
-      action:      'DELETE',
+      user_id: req.admin.id,
+      action: 'DELETE',
       entity_type: 'admin_users',
-      entity_id:   id,
-      old_values:  { full_name: target.full_name, email: target.email, role: target.role },
-      ip_address:  req.ip,
-      user_agent:  req.headers['user-agent'],
+      entity_id: id,
+
+      old_values: {
+        full_name: target.full_name,
+        email: target.email,
+        role: target.role,
+      },
+
+      new_values: {
+        notification_requested: notify,
+      },
+
+      ip_address: req.ip,
+      user_agent: req.headers['user-agent'],
     });
 
-    // 4. Borrado físico — la FK de audit_logs tiene ON DELETE SET NULL (migración 004)
-    await client.query(`DELETE FROM admin_users WHERE id = $1`, [id]);
+    await client.query(
+      `
+        DELETE FROM admin_users
+        WHERE id = $1
+      `,
+      [id]
+    );
 
     await client.query('COMMIT');
 
-    log(`🗑️  HARD DELETE — ${target.email} (${target.role}) eliminado por ${req.admin.email}`);
-    res.json({ message: `Usuario "${target.full_name}" eliminado permanentemente.` });
+    transactionFinished = true;
 
+    if (notify) {
+      void notifyAccountDeleted({
+        targetUser: target,
+        changedBy: req.admin,
+        ip: req.ip,
+      });
+    }
+
+    log(
+      `HARD DELETE — ${target.email} (${target.role}) ` +
+      `eliminado por ${req.admin.email} — ` +
+      `notificación solicitada: ${notify ? 'sí' : 'no'}`
+    );
+
+    res.json({
+      message:
+        `Usuario "${target.full_name}" ` +
+        'eliminado permanentemente.',
+
+      notificationRequested: notify,
+    });
   } catch (err) {
-    await client.query('ROLLBACK');
+    if (!transactionFinished) {
+      try {
+        await client.query('ROLLBACK');
+      } catch (rollbackError) {
+        log(
+          `Error al revertir transacción: ` +
+          rollbackError.message
+        );
+      }
+    }
+
     next(err);
   } finally {
     client.release();
   }
 }
 
-module.exports = { list, create, toggleActive, resetPassword, remove };
+// ─────────────────────────────────────────────────────────────
+// Exportaciones
+// ─────────────────────────────────────────────────────────────
+
+module.exports = {
+  list,
+  create,
+  toggleActive,
+  resetPassword,
+  remove,
+};

@@ -6475,3 +6475,86 @@ tr:hover td  { background: #f8fafc; }
   .st-config-control { width: 100%; }
   .st-roles-grid    { grid-template-columns: 1fr; }
 }
+
+.au-notify-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  width: fit-content;
+  max-width: 100%;
+  margin-top: -4px;
+  padding: 14px 0;
+  cursor: pointer;
+  user-select: none;
+}
+
+.au-notify-checkbox {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.au-notify-control {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+
+  width: 16px;
+  height: 16px;
+  margin-top: 2px;
+
+  box-sizing: border-box;
+  border: 1.5px solid #aeb4bd;
+  border-radius: 4px;
+  background: #ffffff;
+  color: transparent;
+
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease;
+}
+
+.au-notify-control svg {
+  width: 11px;
+  height: 11px;
+}
+
+.au-notify-checkbox:checked + .au-notify-control {
+  border-color: #6b7280;
+  background: #6b7280;
+  color: #ffffff;
+}
+
+.au-notify-checkbox:focus-visible + .au-notify-control {
+  outline: 2px solid rgba(107, 114, 128, 0.25);
+  outline-offset: 2px;
+}
+
+.au-notify-option:hover .au-notify-title {
+  color: #111827;
+}
+
+.au-notify-content {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.au-notify-title {
+  color: #4b5563;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.4;
+  transition: color 0.15s ease;
+}
+
+.au-notify-description {
+  color: #9ca3af;
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 1.45;
+}

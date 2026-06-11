@@ -5,7 +5,6 @@ const GROUP_META = {
   login:         { label: 'Seguridad de acceso',  desc: 'Control de intentos de inicio de sesión y bloqueo de cuentas.' },
   session:       { label: 'Sesión',               desc: 'Duración y comportamiento de las sesiones de usuario.' },
   accessibility: { label: 'Accesibilidad',        desc: 'Opciones para facilitar el acceso al explorador público.' },
-  system:        { label: 'Sistema',              desc: 'Comportamiento general del explorador 3D.' },
 }
 
 const STRING_OPTIONS = {
@@ -20,7 +19,6 @@ const TABS = [
   { id: 'login',         label: 'Seguridad',        icon: <IconShield /> },
   { id: 'session',       label: 'Sesión',            icon: <IconClock />  },
   { id: 'accessibility', label: 'Accesibilidad',     icon: <IconEye />    },
-  { id: 'system',        label: 'Sistema',           icon: <IconSettings />},
   { id: 'roles',         label: 'Límites de roles',  icon: <IconUsers />  },
 ]
 
