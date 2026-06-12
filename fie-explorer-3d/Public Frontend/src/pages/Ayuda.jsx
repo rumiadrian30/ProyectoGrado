@@ -35,38 +35,37 @@ const Icons = {
 /* ─── DATA ──────────────────────────────────────────────────────────────── */
 const STEPS = [
   { n:'01', Icon: Icons.Building, title:'Selecciona un edificio',   body:'Elige entre los bloques activos desde el selector de entrada — el mapa vuela automáticamente hasta el edificio.' },
-  { n:'02', Icon: Icons.Map,      title:'Navega por el mapa 3D',    body:'Usa el ratón o los dedos en móvil. En escritorio puedes usar W/A/S/D para avanzar y los botones del panel derecho para zoom y pitch.' },
+  { n:'02', Icon: Icons.Map,      title:'Navega en el visor 3D',    body:'Usa el ratón para orbitar, hacer pan y zoom sobre el modelo. En móvil, un dedo rota y dos dedos hacen zoom. El modelo responde a OrbitControls de Three.js para una navegación fluida y precisa.' },
   { n:'03', Icon: Icons.Pin,      title:'Haz clic en un hotspot',   body:'Los puntos de interés sobre el modelo abren una ficha completa: nombre, docente, horario, teléfono y descripción del espacio.' },
   { n:'04', Icon: Icons.Filter,   title:'Filtra desde el panel',    body:'El panel izquierdo lista todos los hotspots. Usa los filtros por tipo o activa "Abierto ahora" para ver solo los espacios disponibles.' },
 ];
 
 const KEYBOARD_CONTROLS = [
-  { keys:['W','↑'],          desc:'Avanzar hacia el norte' },
-  { keys:['S','↓'],          desc:'Retroceder hacia el sur' },
-  { keys:['A','←'],          desc:'Desplazar hacia la izquierda' },
-  { keys:['D','→'],          desc:'Desplazar hacia la derecha' },
-  { keys:['Q'],              desc:'Rotar cámara izquierda (bearing)' },
-  { keys:['E'],              desc:'Rotar cámara derecha (bearing)' },
-  { keys:['R'],              desc:'Subir ángulo de visión (pitch)' },
-  { keys:['F'],              desc:'Bajar ángulo de visión (pitch)' },
-  { keys:['Shift','W/A/S/D'],desc:'Movimiento rápido (×4)' },
+  { keys:['W','↑'],            desc:'Mover cámara hacia adelante / acercar' },
+  { keys:['S','↓'],            desc:'Mover cámara hacia atrás / alejar' },
+  { keys:['A','←'],            desc:'Desplazar cámara a la izquierda (pan)' },
+  { keys:['D','→'],            desc:'Desplazar cámara a la derecha (pan)' },
+  { keys:['Q'],                desc:'Girar la cámara hacia la izquierda (orbit)' },
+  { keys:['E'],                desc:'Girar la cámara hacia la derecha (orbit)' },
+  { keys:['Ctrl'],             desc:'Bajar la cámara verticalmente' },
+  { keys:['Space'],            desc:'Subir la cámara verticalmente' },
+  { keys:['Rueda del ratón'],  desc:'Zoom in / zoom out suavizado' },
 ];
 
 const POINTER_CONTROLS = [
-  { keys:['Arrastrar'],       desc:'Rotar y desplazar el mapa' },
-  { keys:['Scroll'],          desc:'Zoom in / zoom out' },
-  { keys:['Ctrl+arrastrar'],  desc:'Inclinar la cámara (pitch)' },
-  { keys:['1 dedo'],          desc:'Rotar y mover — táctil' },
-  { keys:['2 dedos'],         desc:'Zoom — pellizco táctil' },
-  { keys:['Clic hotspot'],    desc:'Ver información del espacio' },
-  { keys:['≡'],               desc:'Abrir / cerrar panel lateral' },
-  { keys:['⌂'],               desc:'Volver a la vista del campus' },
+  { keys:['Clic izq'],              desc:'Seleccionar un hotspot del modelo' },
+  { keys:['Clic izq + arrastrar'],  desc:'Mover la cámara en el plano (pan)' },
+  { keys:['Clic der + arrastrar'],  desc:'Girar la cámara alrededor del modelo (orbit)' },
+  { keys:['Scroll'],                desc:'Zoom in / zoom out suavizado' },
+  { keys:['1 dedo (táctil)'],       desc:'Mover la cámara en el plano (pan)' },
+  { keys:['2 dedos (táctil)'],      desc:'Zoom — pellizco para acercar o alejar' },
+  { keys:['3 dedos (táctil)'],      desc:'Girar la cámara (orbit táctil)' },
 ];
 
 const FAQ = [
   { q:'¿Necesito instalar algo para usar el visor 3D?',           a:'No. Explorador 3D FIE funciona completamente en el navegador. Solo necesitas Chrome, Firefox, Edge o Safari actualizados con soporte para WebGL.' },
   { q:'¿Por qué no aparece el modelo 3D de un edificio?',         a:'Puede que ese edificio aún no tenga un modelo 3D registrado o que sus coordenadas GPS no estén configuradas. En ese caso el visor muestra un cubo rojo de demostración.' },
-  { q:'¿Cómo funciona la vista Exterior e Interior?',             a:'Con los botones del panel izquierdo puedes alternar entre la vista exterior del edificio y la vista interior por planta. Cada vista puede tener su propio modelo GLB registrado.' },
+  { q:'¿Cómo funciona la vista Exterior e Interior?',             a:'La mayoría de edificios del campus solo tienen vista exterior. El edificio principal de la FIE es el único que cuenta con vista interior por planta, donde puedes navegar aula por aula. Usa los botones del panel izquierdo para alternar entre ambas vistas cuando estén disponibles.' },
   { q:'¿Puedo usar el visor en el móvil?',                        a:'Sí. El visor es completamente responsivo. En pantallas pequeñas el panel lateral se oculta automáticamente y puedes abrirlo con el botón ≡ de la esquina superior izquierda.' },
   { q:'¿Qué significa el badge "Abierto ahora"?',                 a:'Cada hotspot puede tener un horario configurado. El sistema calcula en tiempo real si el espacio está dentro de ese horario y muestra el badge verde "Abierto" o rojo "Cerrado".' },
   { q:'¿Cómo reporto información incorrecta?',                    a:'Contacta al equipo de administración de la Facultad. Los datos se gestionan desde el panel de administración y se reflejan en el visor de inmediato.' },
