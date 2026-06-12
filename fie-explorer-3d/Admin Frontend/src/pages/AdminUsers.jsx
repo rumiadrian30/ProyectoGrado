@@ -30,33 +30,6 @@ function Avatar({ name }) {
   return <div className="au-avatar">{initials}</div>
 }
 
-function NotifyOption({ checked, onChange, actionText }) {
-  return (
-    <label className="au-notify-option">
-      <input
-        type="checkbox"
-        className="au-notify-checkbox"
-        checked={checked}
-        onChange={e => onChange(e.target.checked)}
-      />
-
-      <span className="au-notify-control" aria-hidden="true">
-        <IconCheck />
-      </span>
-
-      <span className="au-notify-content">
-        <span className="au-notify-title">
-          Enviar notificación por correo
-        </span>
-
-        <span className="au-notify-description">
-          Informar al usuario que su cuenta {actionText}.
-        </span>
-      </span>
-    </label>
-  )
-}
-
 export default function AdminUsers({ currentUser }) {
   const [users,   setUsers]   = useState([])
   const [loading, setLoading] = useState(true)
@@ -106,22 +79,14 @@ export default function AdminUsers({ currentUser }) {
         { notify: notifyUser }
       )
       setModal(null)
-      showToast(
-        result.notificationRequested
-          ? `Usuario ${modal.isActive ? 'desactivado' : 'activado'} y notificación solicitada.`
-          : `Usuario ${modal.isActive ? 'desactivado' : 'activado'} sin enviar notificación.`
-      )
-      load()
-    } catch (e) {
-      showToast(e.message, 'error')
-    }
+      showToast(`Usuario ${modal.isActive ? 'desactivado' : 'activado'}.`); load()
+    } catch (e) { showToast(e.message, 'error') }
   }
 
   async function confirmReset() {
     setPwdErrors([])
     if (!isPasswordValid(newPwd))
       return showToast('La contraseña no cumple todos los requisitos.', 'error')
-
     try {
       const result = await api(
         'PATCH',
@@ -154,17 +119,8 @@ export default function AdminUsers({ currentUser }) {
       )
 
       setModal(null)
-
-      showToast(
-        result.notificationRequested
-          ? `Usuario "${modal.name}" eliminado y notificación solicitada.`
-          : `Usuario "${modal.name}" eliminado sin enviar notificación.`
-      )
-
-      load()
-    } catch (e) {
-      showToast(e.message, 'error')
-    }
+      showToast(`Usuario "${modal.name}" eliminado permanentemente.`); load()
+    } catch (e) { showToast(e.message, 'error') }
   }
 
   if (loading) return (
@@ -250,33 +206,21 @@ export default function AdminUsers({ currentUser }) {
                   <td>
                     <div className="au-actions">
                       <button className="au-action-btn" title="Resetear contraseña"
-                        onClick={() => {
-                          setNewPwd('')
-                          setPwdErrors([])
-                          setNotifyUser(true)
-                          setModal({ type: 'reset', id: u.id, name: u.full_name })
-                        }}>
+                        onClick={() => { setNewPwd(''); setPwdErrors([]); setModal({ type: 'reset', id: u.id, name: u.full_name }) }}>
                         <IconKey />
                       </button>
                       <button
                         className={`au-action-btn ${u.is_active ? 'au-action-btn--warn' : 'au-action-btn--ok'}`}
                         title={u.is_active ? 'Desactivar' : 'Activar'}
                         disabled={isSelf}
-                        onClick={() => {
-                          setNotifyUser(true)
-                          setModal({ type: 'toggle', id: u.id, name: u.full_name, isActive: u.is_active })
-                        }}>
+                        onClick={() => setModal({ type: 'toggle', id: u.id, name: u.full_name, isActive: u.is_active })}>
                         {u.is_active ? <IconPause /> : <IconPlay />}
                       </button>
                       {currentUser?.role === 'superadmin' && !isSelf && (
                         <button
                           className="au-action-btn au-action-btn--danger"
                           title="Eliminar usuario permanentemente"
-                          onClick={() => {
-                            setDeleteConfirmText('')
-                            setNotifyUser(true)
-                            setModal({ type: 'delete', id: u.id, name: u.full_name, email: u.email, role: u.role })
-                          }}>
+                          onClick={() => { setDeleteConfirmText(''); setModal({ type: 'delete', id: u.id, name: u.full_name, email: u.email, role: u.role }) }}>
                           <IconTrash />
                         </button>
                       )}
@@ -342,12 +286,6 @@ export default function AdminUsers({ currentUser }) {
               <p className="au-confirm-hint">El usuario no podrá iniciar sesión mientras esté desactivado.</p>
             )}
           </div>
-
-          <NotifyOption
-            checked={notifyUser}
-            onChange={setNotifyUser}
-            actionText={modal.isActive ? 'fue desactivada' : 'fue reactivada'}
-          />
         </Modal>
       )}
 
@@ -367,12 +305,6 @@ export default function AdminUsers({ currentUser }) {
               </div>
             )}
             <PasswordInput value={newPwd} onChange={setNewPwd} label="Nueva contraseña *" />
-
-            <NotifyOption
-              checked={notifyUser}
-              onChange={setNotifyUser}
-              actionText="tuvo un cambio de contraseña"
-            />
           </div>
         </Modal>
       )}
@@ -403,12 +335,6 @@ export default function AdminUsers({ currentUser }) {
                   </span>
                 </div>
               </div>
-
-              <NotifyOption
-                checked={notifyUser}
-                onChange={setNotifyUser}
-                actionText="fue eliminada permanentemente"
-              />
 
               <div className="au-field">
                 <label className="au-label">
