@@ -10,6 +10,7 @@ import AdminLogin from './AdminLogin'
 import AdminShell from './AdminShell'
 import Toast from './components/Toast'
 import { jwtDecode } from 'jwt-decode'
+import AppErrorBoundary from './components/common/AppErrorBoundary';
 
 const DEFAULT_INACTIVITY_MIN = 15
 
@@ -39,7 +40,7 @@ export default function App() {
     setTimeout(() => setToast(null), duration)
   }
 
-  // ── Cargar session.token_expires_minutes desde la BD ────────────────────
+  // ── Cargar session.token_expires_minutes ────────────────────
   async function loadSessionConfig() {
     try {
       const token = encryptedSession.getItem('admin_token')
@@ -203,7 +204,7 @@ export default function App() {
 
   }, [user])
 
-  // ── Logout automático ante 401 ──────────────────────────────────────────
+  // ── Logout automático ──────────────────────────────────────────
   useEffect(() => {
     onUnauthorized(() => handleLogout(true))
   }, [])
@@ -269,15 +270,17 @@ export default function App() {
           onClose={() => setToast(null)}
         />
       )}
-      {!user ? (
-        <AdminLogin onSuccess={handleSuccess} />
-      ) : (
-        <AdminShell
-          user={user}
-          onLogout={handleLogout}
-          inactivityMs={inactivityMs}
-        />
-      )}
+      <AppErrorBoundary>
+        {!user ? (
+          <AdminLogin onSuccess={handleSuccess} />
+        ) : (
+          <AdminShell
+            user={user}
+            onLogout={handleLogout}
+            inactivityMs={inactivityMs}
+          />
+        )}
+      </AppErrorBoundary>
     </>
   )
 }

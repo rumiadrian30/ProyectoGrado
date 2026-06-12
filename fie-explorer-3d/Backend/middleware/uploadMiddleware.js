@@ -6,9 +6,9 @@ const fs     = require('fs');
 // Carpeta destino de los modelos GLB/GLTF.
 // Prioridad: variable de entorno MODELS_DIR → carpeta local uploads/models/
 const MODELS_DIR = process.env.MODELS_DIR
-  ? path.resolve(process.env.MODELS_DIR)
+  ? process.env.MODELS_DIR          // ya es absoluta, no envolver en path.resolve
   : path.resolve(__dirname, '../uploads/models');
-
+  
 // Crear carpeta si no existe
 if (!fs.existsSync(MODELS_DIR)) {
   fs.mkdirSync(MODELS_DIR, { recursive: true });

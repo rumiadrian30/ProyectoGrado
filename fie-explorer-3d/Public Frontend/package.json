@@ -1,7 +1,7 @@
 {
   "name": "fie-explorer-3d-frontend",
-  "version": "1.0.0",
-  "description": "Explorador 3D interactivo de la FIE-ESPOCH",
+  "version": "2.0.0",
+  "description": "Explorador 3D interactivo de la FIE-ESPOCH — visor nativo Three.js sin Mapbox",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -9,16 +9,15 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@react-three/drei": "^9.92.7",
-    "@react-three/fiber": "^8.15.12",
+    "@react-three/drei": "^9.105.0",
+    "@react-three/fiber": "^8.17.0",
     "axios": "^1.6.5",
     "crypto-js": "^4.2.0",
     "framer-motion": "^10.18.0",
-    "mapbox-gl": "^3.3.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-router-dom": "^6.21.1",
-    "three": "^0.160.0",
+    "three": "^0.167.0",
     "zustand": "^4.4.7"
   },
   "devDependencies": {

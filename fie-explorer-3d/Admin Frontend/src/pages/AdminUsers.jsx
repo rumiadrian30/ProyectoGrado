@@ -41,6 +41,7 @@ export default function AdminUsers({ currentUser }) {
   const [newPwd,  setNewPwd]  = useState('')
   const [pwdErrors, setPwdErrors]           = useState([])
   const [deleteConfirmText, setDeleteConfirmText] = useState('')
+  const [notifyUser, setNotifyUser] = useState(true)
 
   useEffect(() => { load() }, [])
 
@@ -72,7 +73,11 @@ export default function AdminUsers({ currentUser }) {
 
   async function confirmToggle() {
     try {
-      await api('PATCH', `/admin-users/${modal.id}/toggle`)
+      const result = await api(
+        'PATCH',
+        `/admin-users/${modal.id}/toggle`,
+        { notify: notifyUser }
+      )
       setModal(null)
       showToast(`Usuario ${modal.isActive ? 'desactivado' : 'activado'}.`); load()
     } catch (e) { showToast(e.message, 'error') }
@@ -83,9 +88,23 @@ export default function AdminUsers({ currentUser }) {
     if (!isPasswordValid(newPwd))
       return showToast('La contraseña no cumple todos los requisitos.', 'error')
     try {
-      await api('PATCH', `/admin-users/${modal.id}/reset-password`, { new_password: newPwd })
-      setModal(null); setNewPwd('')
-      showToast('Contraseña actualizada correctamente.')
+      const result = await api(
+        'PATCH',
+        `/admin-users/${modal.id}/reset-password`,
+        {
+          new_password: newPwd,
+          notify: notifyUser,
+        }
+      )
+
+      setModal(null)
+      setNewPwd('')
+
+      showToast(
+        result.notificationRequested
+          ? 'Contraseña actualizada y notificación solicitada.'
+          : 'Contraseña actualizada sin enviar notificación.'
+      )
     } catch (e) {
       if (e.data?.passwordErrors) setPwdErrors(e.data.passwordErrors)
       showToast(e.message, 'error')
@@ -94,7 +113,11 @@ export default function AdminUsers({ currentUser }) {
 
   async function confirmDelete() {
     try {
-      await api('DELETE', `/admin-users/${modal.id}`)
+      const result = await api(
+        'DELETE',
+        `/admin-users/${modal.id}?notify=${notifyUser}`
+      )
+
       setModal(null)
       showToast(`Usuario "${modal.name}" eliminado permanentemente.`); load()
     } catch (e) { showToast(e.message, 'error') }

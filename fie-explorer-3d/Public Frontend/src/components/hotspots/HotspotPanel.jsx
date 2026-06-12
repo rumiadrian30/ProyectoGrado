@@ -2,7 +2,7 @@
  * HotspotPanel.jsx — Explorador 3D FIE
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useViewerStore } from '../../store/viewerStore';
 import { isOpenNow, scheduleToString, parseSchedule } from '../../utils/scheduleUtils';
 
@@ -65,15 +65,40 @@ function FieldIcon({ field, size = 13 }) {
 /* ─── Main ───────────────────────────────────────────────────────────────── */
 export default function HotspotPanel() {
   const { activeHotspot, setActiveHotspot } = useViewerStore();
-  const [imgError, setImgError] = useState(false);
+
+  const [images,    setImages]    = useState([]);
+  const [imgIndex,  setImgIndex]  = useState(0);
+  const [imgError,  setImgError]  = useState(false);
+  const [imgLoaded, setImgLoaded] = useState(false);
+
+  // Cargar imágenes de la API cuando cambia el hotspot activo
+  useEffect(() => {
+    if (!activeHotspot) { setImages([]); setImgIndex(0); return; }
+    setImages([]);
+    setImgIndex(0);
+    setImgError(false);
+    setImgLoaded(false);
+    fetch(`/api/images/hotspot/${activeHotspot.id}`)
+      .then(r => r.ok ? r.json() : [])
+      .then(data => {
+        const sorted = Array.isArray(data)
+          ? [...data].sort((a, b) => a.sort_order - b.sort_order)
+          : [];
+        setImages(sorted);
+      })
+      .catch(() => setImages([]));
+  }, [activeHotspot?.id]);
 
   if (!activeHotspot) return null;
 
-  const hs   = activeHotspot;
-  const meta = TYPE_META[hs.type] || TYPE_META.lab;
-  const imageUrl = hs.image_url || hs.images?.[0]?.url || null;
+  const hs      = activeHotspot;
+  const meta    = TYPE_META[hs.type] || TYPE_META.lab;
+  const current = images[imgIndex] || null;
 
-  const close = () => { setActiveHotspot(null); setImgError(false); };
+  const close = () => { setActiveHotspot(null); setImages([]); setImgIndex(0); };
+
+  const prevImg = () => { setImgError(false); setImgLoaded(false); setImgIndex(i => Math.max(0, i - 1)); };
+  const nextImg = () => { setImgError(false); setImgLoaded(false); setImgIndex(i => Math.min(images.length - 1, i + 1)); };
 
   return (
     <>
@@ -103,20 +128,50 @@ export default function HotspotPanel() {
         }}
       >
 
-        {/* ── Banner / Imagen ─────────────────────────────────────────── */}
-        {imageUrl && !imgError ? (
-          <div style={{ position:'relative', height:200, flexShrink:0, background:'rgba(188,6,19,.06)' }}>
+        {/* ── Banner / Galería ─────────────────────────────────────────── */}
+        {current && !imgError ? (
+          <div style={{ position:'relative', height:200, flexShrink:0, background:'rgba(188,6,19,.06)', overflow:'hidden' }}>
             <img
-              src={imageUrl} alt={hs.name}
-              style={{ width:'100%', height:'100%', objectFit:'cover' }}
+              key={current.url}
+              src={current.url}
+              alt={current.alt_text || hs.name}
+              style={{ width:'100%', height:'100%', objectFit:'cover', opacity: imgLoaded ? 1 : 0, transition:'opacity .25s' }}
+              onLoad={() => setImgLoaded(true)}
               onError={() => setImgError(true)}
             />
-            {/* Gradiente inferior sobre imagen */}
             <div style={{
               position:'absolute', bottom:0, left:0, right:0, height:80,
               background:'linear-gradient(to top, rgba(253,250,249,.9), transparent)',
               pointerEvents:'none',
             }}/>
+            {images.length > 1 && (
+              <>
+                <button onClick={prevImg} disabled={imgIndex === 0} aria-label="Anterior"
+                  style={{ position:'absolute', left:8, top:'50%', transform:'translateY(-50%)',
+                    width:30, height:30, borderRadius:'50%', background:'rgba(253,250,249,.88)',
+                    border:'none', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center',
+                    opacity: imgIndex === 0 ? 0.3 : 1, transition:'opacity .15s', boxShadow:'0 2px 8px rgba(0,0,0,.18)' }}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#BC0613" strokeWidth="2.5" strokeLinecap="round"><path d="M15 18l-6-6 6-6"/></svg>
+                </button>
+                <button onClick={nextImg} disabled={imgIndex === images.length - 1} aria-label="Siguiente"
+                  style={{ position:'absolute', right:8, top:'50%', transform:'translateY(-50%)',
+                    width:30, height:30, borderRadius:'50%', background:'rgba(253,250,249,.88)',
+                    border:'none', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center',
+                    opacity: imgIndex === images.length - 1 ? 0.3 : 1, transition:'opacity .15s', boxShadow:'0 2px 8px rgba(0,0,0,.18)' }}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#BC0613" strokeWidth="2.5" strokeLinecap="round"><path d="M9 18l6-6-6-6"/></svg>
+                </button>
+                <div style={{ position:'absolute', bottom:10, left:0, right:0,
+                  display:'flex', justifyContent:'center', gap:5, pointerEvents:'none' }}>
+                  {images.map((_, i) => (
+                    <span key={i} style={{
+                      width: i === imgIndex ? 16 : 6, height:6, borderRadius:3,
+                      background: i === imgIndex ? '#BC0613' : 'rgba(188,6,19,.3)',
+                      transition:'all .2s',
+                    }}/>
+                  ))}
+                </div>
+              </>
+            )}
           </div>
         ) : (
           <div style={{
