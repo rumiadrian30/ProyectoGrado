@@ -6558,3 +6558,71 @@ tr:hover td  { background: #f8fafc; }
   font-weight: 400;
   line-height: 1.45;
 }
+
+/* ── Modo Interior ──────────────────────────────────────────── */
+
+.bl-interior-box {
+  margin-top: 2px;
+}
+
+.bl-interior-toggle {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 500;
+  color: #374151;
+}
+
+.bl-interior-toggle input {
+  accent-color: #c0120c;
+}
+
+.bl-interior-state {
+  font-size: 10px;
+  font-weight: 600;
+  color: #c0120c;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 999px;
+  padding: 3px 8px;
+  line-height: 1;
+}
+
+.bl-interior-details {
+  margin-top: 10px;
+  border-top: 1px solid #f0f0f0;
+  padding-top: 8px;
+}
+
+.bl-interior-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: #6b7280;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.bl-interior-summary:hover {
+  color: #c0120c;
+}
+
+.bl-interior-summary::after {
+  content: 'Mostrar';
+  font-size: 10px;
+  color: #9ca3af;
+  font-weight: 500;
+}
+
+.bl-interior-details[open] .bl-interior-summary::after {
+  content: 'Ocultar';
+  color: #c0120c;
+}
+
+.bl-interior-content {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-top: 10px;
+  padding-top: 12px;
+  border-top: 1px solid #f0f0f0;
+}

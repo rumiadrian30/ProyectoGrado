@@ -2,7 +2,7 @@
  * HotspotPanel.jsx — Explorador 3D FIE
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useViewerStore } from '../../store/viewerStore';
 import { isOpenNow, scheduleToString, parseSchedule } from '../../utils/scheduleUtils';
 
@@ -24,6 +24,87 @@ const TYPE_LABELS = {
   service:   'Servicio',
   access:    'Acceso',
 };
+
+/* ─── Responsive ─────────────────────────────────────────────────────────── */
+function useIsMobile(breakpoint = 768) {
+  const [isMobile, setIsMobile] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return window.innerWidth < breakpoint;
+  });
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const mq = window.matchMedia(`(max-width: ${breakpoint - 1}px)`);
+    const handler = (e) => setIsMobile(e.matches);
+
+    setIsMobile(mq.matches);
+    mq.addEventListener('change', handler);
+
+    return () => mq.removeEventListener('change', handler);
+  }, [breakpoint]);
+
+  return isMobile;
+}
+
+/* ─── Imágenes ya incluidas en el hotspot ────────────────────────────────── */
+function normalizeHotspotImages(hotspot) {
+  if (!hotspot) return [];
+
+  const rawImages = [];
+
+  if (Array.isArray(hotspot.images)) {
+    rawImages.push(...hotspot.images);
+  }
+
+  if (Array.isArray(hotspot.image_urls)) {
+    rawImages.push(...hotspot.image_urls);
+  }
+
+  [
+    'image_url',
+    'photo_url',
+    'thumbnail_url',
+    'cover_url',
+  ].forEach((field) => {
+    if (hotspot[field]) rawImages.push(hotspot[field]);
+  });
+
+  return rawImages
+    .map((img, index) => {
+      if (typeof img === 'string') {
+        return {
+          id: `${hotspot.id || 'hotspot'}-${index}`,
+          url: img,
+          alt_text: hotspot.name,
+          sort_order: index,
+        };
+      }
+
+      const url =
+        img?.url ||
+        img?.image_url ||
+        img?.photo_url ||
+        img?.thumbnail_url ||
+        img?.file_url ||
+        img?.file_path ||
+        img?.src;
+
+      if (!url) return null;
+
+      return {
+        ...img,
+        id: img.id || `${hotspot.id || 'hotspot'}-${index}`,
+        url,
+        alt_text: img.alt_text || img.alt || hotspot.name,
+        sort_order: Number.isFinite(Number(img.sort_order))
+          ? Number(img.sort_order)
+          : index,
+      };
+    })
+    .filter(Boolean)
+    .sort((a, b) => a.sort_order - b.sort_order);
+}
 
 /* ─── TypeIcon ───────────────────────────────────────────────────────────── */
 function TypeIcon({ type, size = 16, color = 'currentColor' }) {
@@ -65,29 +146,33 @@ function FieldIcon({ field, size = 13 }) {
 /* ─── Main ───────────────────────────────────────────────────────────────── */
 export default function HotspotPanel() {
   const { activeHotspot, setActiveHotspot } = useViewerStore();
+  const isMobile = useIsMobile();
 
   const [images,    setImages]    = useState([]);
   const [imgIndex,  setImgIndex]  = useState(0);
   const [imgError,  setImgError]  = useState(false);
   const [imgLoaded, setImgLoaded] = useState(false);
 
-  // Cargar imágenes de la API cuando cambia el hotspot activo
+  const hotspotImages = useMemo(
+    () => normalizeHotspotImages(activeHotspot),
+    [activeHotspot]
+  );
+
+  // Las imágenes se leen desde el objeto hotspot.
+  // No se consulta /api/images/hotspot/:id para evitar errores 401
+  // en el explorador público.
   useEffect(() => {
-    if (!activeHotspot) { setImages([]); setImgIndex(0); return; }
-    setImages([]);
+    if (!activeHotspot) {
+      setImages([]);
+      setImgIndex(0);
+      return;
+    }
+
+    setImages(hotspotImages);
     setImgIndex(0);
     setImgError(false);
     setImgLoaded(false);
-    fetch(`/api/images/hotspot/${activeHotspot.id}`)
-      .then(r => r.ok ? r.json() : [])
-      .then(data => {
-        const sorted = Array.isArray(data)
-          ? [...data].sort((a, b) => a.sort_order - b.sort_order)
-          : [];
-        setImages(sorted);
-      })
-      .catch(() => setImages([]));
-  }, [activeHotspot?.id]);
+  }, [activeHotspot?.id, hotspotImages]);
 
   if (!activeHotspot) return null;
 
@@ -107,7 +192,13 @@ export default function HotspotPanel() {
       <div
         className="hp-overlay"
         onClick={close}
-        style={{ position:'fixed', inset:0, zIndex:49, background:'rgba(20,1,3,0.45)' }}
+        style={{
+          position:'fixed',
+          inset:0,
+          zIndex:49,
+          background: isMobile ? 'rgba(20,1,3,0.45)' : 'rgba(20,1,3,0.28)',
+          backdropFilter: isMobile ? 'blur(2px)' : 'none',
+        }}
         aria-hidden="true"
       />
 
@@ -117,20 +208,32 @@ export default function HotspotPanel() {
         role="complementary"
         aria-label={`Detalle: ${hs.name}`}
         style={{
-          position:'absolute', top:0, right:0, bottom:0,
-          width:360,
+          position:'fixed',
+          top: isMobile ? 'auto' : 0,
+          right:0,
+          bottom:0,
+          left: isMobile ? 0 : 'auto',
+          width: isMobile ? '100%' : 360,
+          maxWidth: isMobile ? '100%' : 360,
+          maxHeight: isMobile ? '82dvh' : '100%',
           background:'var(--cream, #FDFAF9)',
-          borderLeft:'1px solid rgba(188,6,19,.13)',
+          borderLeft: isMobile ? 'none' : '1px solid rgba(188,6,19,.13)',
+          borderTop: isMobile ? '1px solid rgba(188,6,19,.13)' : 'none',
+          borderTopLeftRadius: isMobile ? 18 : 0,
+          borderTopRightRadius: isMobile ? 18 : 0,
           zIndex:50,
           overflowY:'auto',
-          display:'flex', flexDirection:'column',
-          boxShadow:'-4px 0 32px rgba(188,6,19,.09)',
+          display:'flex',
+          flexDirection:'column',
+          boxShadow: isMobile
+            ? '0 -8px 32px rgba(188,6,19,.16)'
+            : '-4px 0 32px rgba(188,6,19,.09)',
         }}
       >
 
         {/* ── Banner / Galería ─────────────────────────────────────────── */}
         {current && !imgError ? (
-          <div style={{ position:'relative', height:200, flexShrink:0, background:'rgba(188,6,19,.06)', overflow:'hidden' }}>
+          <div style={{ position:'relative', height: isMobile ? 150 : 200, flexShrink:0, background:'rgba(188,6,19,.06)', overflow:'hidden' }}>
             <img
               key={current.url}
               src={current.url}
@@ -175,7 +278,7 @@ export default function HotspotPanel() {
           </div>
         ) : (
           <div style={{
-            height:130, flexShrink:0,
+            height: isMobile ? 108 : 130, flexShrink:0,
             background:'#BC0613',
             display:'flex', alignItems:'center', justifyContent:'center',
             position:'relative', overflow:'hidden',
@@ -208,7 +311,7 @@ export default function HotspotPanel() {
 
         {/* ── Cuerpo ─────────────────────────────────────────────────── */}
         <div style={{
-          padding:'1.25rem 1.25rem .5rem',
+          padding: isMobile ? '1rem 1rem .4rem' : '1.25rem 1.25rem .5rem',
           display:'flex', flexDirection:'column', gap:'.7rem',
           flex:1,
         }}>
@@ -231,7 +334,7 @@ export default function HotspotPanel() {
           {/* Nombre */}
           <h2 style={{
             fontFamily:'var(--font-display)',
-            fontSize:'1.2rem', fontWeight:800,
+            fontSize: isMobile ? '1.05rem' : '1.2rem', fontWeight:800,
             letterSpacing:'-.025em', lineHeight:1.15,
             color:'rgba(40,2,5,.9)', margin:0,
           }}>
@@ -352,7 +455,7 @@ export default function HotspotPanel() {
 
         {/* ── Pie ────────────────────────────────────────────────────── */}
         <div style={{
-          padding:'.85rem 1.25rem 1rem',
+          padding: isMobile ? '.75rem 1rem calc(.9rem + env(safe-area-inset-bottom))' : '.85rem 1.25rem 1rem',
           borderTop:'1px solid rgba(188,6,19,.1)',
           background:'#fff',
           flexShrink:0,

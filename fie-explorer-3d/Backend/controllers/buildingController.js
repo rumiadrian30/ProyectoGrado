@@ -29,7 +29,9 @@ async function getOne(req, res, next) {
 
 // ── POST / ───────────────────────────────────────────────────
 async function create(req, res, next) {
-  const { name, code, description, type, floor_count, offset_x, offset_y, offset_z } = req.body;
+  const { name, code, description, type, floor_count, offset_x, offset_y, offset_z,
+          has_interior, interior_cam_x, interior_cam_y, interior_cam_z,
+          interior_target_x, interior_target_y, interior_target_z, exterior_group_name } = req.body;
 
   if (!name?.trim()) {
     const e = new Error('El campo "name" es obligatorio.'); e.status = 400; return next(e);
@@ -47,9 +49,28 @@ async function create(req, res, next) {
 
   try {
     const { rows } = await pool.query(`
-      INSERT INTO buildings (name, code, description, type, floor_count, offset_x, offset_y, offset_z)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *
-    `, [name.trim(), code.trim().toUpperCase(), description || null, type, floor_count || 1, ox, oy, oz]);
+      INSERT INTO buildings (
+        name, code, description, type, floor_count,
+        offset_x, offset_y, offset_z,
+        has_interior,
+        interior_cam_x, interior_cam_y, interior_cam_z,
+        interior_target_x, interior_target_y, interior_target_z,
+        exterior_group_name
+      )
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
+      RETURNING *
+    `, [
+      name.trim(), code.trim().toUpperCase(), description || null, type, floor_count || 1,
+      ox, oy, oz,
+      has_interior === true || has_interior === 'true' ? true : false,
+      parseFloat(interior_cam_x)    || 0,
+      parseFloat(interior_cam_y)    || 8,
+      parseFloat(interior_cam_z)    || 15,
+      parseFloat(interior_target_x) || 0,
+      parseFloat(interior_target_y) || 2,
+      parseFloat(interior_target_z) || 0,
+      exterior_group_name?.trim()   || 'Exterior',
+    ]);
 
     const b = rows[0];
     await writeAudit({
@@ -71,7 +92,9 @@ async function create(req, res, next) {
 // ── PUT /:id ─────────────────────────────────────────────────
 async function update(req, res, next) {
   const { id } = req.params;
-  const { name, code, description, type, floor_count, is_active, offset_x, offset_y, offset_z } = req.body;
+  const { name, code, description, type, floor_count, is_active, offset_x, offset_y, offset_z,
+          has_interior, interior_cam_x, interior_cam_y, interior_cam_z,
+          interior_target_x, interior_target_y, interior_target_z, exterior_group_name } = req.body;
 
   try {
     const before = await pool.query(`SELECT * FROM buildings WHERE id = $1`, [id]);
@@ -82,15 +105,24 @@ async function update(req, res, next) {
     const sets = []; const values = []; let idx = 1;
     const push = (col, val) => { sets.push(`${col} = $${idx++}`); values.push(val); };
 
-    if (name        !== undefined) push('name',        name?.trim() || old.name);
-    if (code        !== undefined) push('code',        code?.trim().toUpperCase() || old.code);
-    if (description !== undefined) push('description', description);
-    if (type        !== undefined) push('type',        type);
-    if (floor_count !== undefined) push('floor_count', floor_count);
-    if (is_active   !== undefined) push('is_active',   is_active);
-    if (offset_x    !== undefined) push('offset_x', parseFloat(offset_x) || 0);
-    if (offset_y    !== undefined) push('offset_y', parseFloat(offset_y) || 0);
-    if (offset_z    !== undefined) push('offset_z', parseFloat(offset_z) || 0);
+    if (name              !== undefined) push('name',               name?.trim() || old.name);
+    if (code              !== undefined) push('code',               code?.trim().toUpperCase() || old.code);
+    if (description       !== undefined) push('description',        description);
+    if (type              !== undefined) push('type',               type);
+    if (floor_count       !== undefined) push('floor_count',        floor_count);
+    if (is_active         !== undefined) push('is_active',          is_active);
+    if (offset_x          !== undefined) push('offset_x',           parseFloat(offset_x) || 0);
+    if (offset_y          !== undefined) push('offset_y',           parseFloat(offset_y) || 0);
+    if (offset_z          !== undefined) push('offset_z',           parseFloat(offset_z) || 0);
+    // Interior
+    if (has_interior      !== undefined) push('has_interior',       has_interior === true || has_interior === 'true');
+    if (interior_cam_x    !== undefined) push('interior_cam_x',     parseFloat(interior_cam_x)    || 0);
+    if (interior_cam_y    !== undefined) push('interior_cam_y',     parseFloat(interior_cam_y)    || 8);
+    if (interior_cam_z    !== undefined) push('interior_cam_z',     parseFloat(interior_cam_z)    || 15);
+    if (interior_target_x !== undefined) push('interior_target_x',  parseFloat(interior_target_x) || 0);
+    if (interior_target_y !== undefined) push('interior_target_y',  parseFloat(interior_target_y) || 2);
+    if (interior_target_z !== undefined) push('interior_target_z',  parseFloat(interior_target_z) || 0);
+    if (exterior_group_name !== undefined) push('exterior_group_name', exterior_group_name?.trim() || 'Exterior');
 
     sets.push(`updated_at = NOW()`);
     values.push(id);

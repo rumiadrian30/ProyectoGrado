@@ -2,8 +2,9 @@
  * Explorer.jsx — GeoESPOCH 3D
  */
 
-import React, { useEffect, useState, useCallback, useMemo } from 'react';
+import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import * as THREE from 'three';
 import CampusViewer3D from '../components/viewer/CampusViewer3D';
 import HotspotPanel   from '../components/hotspots/HotspotPanel';
 import BuildingSelector from '../components/viewer/BuildingSelector';
@@ -15,6 +16,7 @@ import { isOpenNow }        from '../utils/scheduleUtils';
 
 /* ─── Constantes ─────────────────────────────────────────────────────────── */
 const SIDEBAR_W = 288;
+const INTERIOR_BASE_CAMERA_NAME = 'Cam_Interior_FIE';
 
 /* ─── SVG Icons inline ───────────────────────────────────────────────────── */
 const TYPE_ICONS_SVG = {
@@ -86,6 +88,9 @@ export default function Explorer() {
   const [allExteriorModels, setAllExteriorModels]  = useState([]);
   const [typeFilter,        setTypeFilter]         = useState('all');
   const [openNowOnly,       setOpenNowOnly]        = useState(false);
+  const [interiorMode,      setInteriorMode]       = useState(false);
+  const viewerSceneRef         = useRef(null);
+  const viewerCameraCommandRef = useRef(null); // expuesto por CampusViewer3D
 
   const activeBuildings = useMemo(() => {
     return buildings.filter((b) =>
@@ -215,10 +220,206 @@ export default function Explorer() {
     if (isMobile) setSidebarOpen(false);
   }, [setSelectedBuilding, setActiveHotspot, navigate, isMobile]);
 
+  /** Anima la cámara principal hacia un objeto cámara marcadora del GLB */
+  const flyToMarkerCamera = useCallback((markerCam) => {
+    if (!markerCam) return;
+
+    const worldPos = new THREE.Vector3();
+    const worldQuat = new THREE.Quaternion();
+
+    markerCam.getWorldPosition(worldPos);
+    markerCam.getWorldQuaternion(worldQuat);
+
+    const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(worldQuat);
+    const lookTarget = worldPos.clone().add(forward);
+
+    viewerCameraCommandRef.current?.moveTo?.(
+      worldPos.toArray(),
+      lookTarget.toArray(),
+      worldQuat
+    );
+  }, []);
+
+  /** Regresa a la cámara base del modo interior y cierra el foco de hotspot */
+  const flyToInteriorBaseCamera = useCallback(() => {
+    if (!selectedBuilding) return;
+
+    const markerCam = viewerSceneRef.current?.getObjectByName(
+      INTERIOR_BASE_CAMERA_NAME
+    );
+
+    if (markerCam) {
+      flyToMarkerCamera(markerCam);
+      return;
+    }
+
+    const ox = parseFloat(selectedBuilding.offset_x) || 0;
+    const oz = parseFloat(selectedBuilding.offset_z) || 0;
+
+    const cx = parseFloat(selectedBuilding.interior_cam_x) || 0;
+    const cy = parseFloat(selectedBuilding.interior_cam_y) || 8;
+    const cz = parseFloat(selectedBuilding.interior_cam_z) || 15;
+
+    const tx = parseFloat(selectedBuilding.interior_target_x) || 0;
+    const ty = parseFloat(selectedBuilding.interior_target_y) || 2;
+    const tz = parseFloat(selectedBuilding.interior_target_z) || 0;
+
+    viewerCameraCommandRef.current?.moveTo?.(
+      [ox + cx, cy, oz + cz],
+      [ox + tx, ty, oz + tz]
+    );
+  }, [
+    selectedBuilding,
+    flyToMarkerCamera,
+  ]);
+
   const handleHotspotClick = useCallback((hs) => {
+    const isSameHotspot =
+      activeHotspot?.id &&
+      hs?.id &&
+      String(activeHotspot.id) === String(hs.id);
+
+    if (
+      isSameHotspot &&
+      interiorMode &&
+      selectedBuilding?.has_interior
+    ) {
+      setActiveHotspot(null);
+
+      if (isMobile) {
+        setSidebarOpen(false);
+      }
+
+      flyToInteriorBaseCamera();
+      return;
+    }
+
     setActiveHotspot(hs);
-    if (isMobile) setSidebarOpen(false);
-  }, [setActiveHotspot, isMobile]);
+
+    if (isMobile) {
+      setSidebarOpen(false);
+    }
+
+    if (
+      interiorMode &&
+      selectedBuilding?.has_interior &&
+      viewerSceneRef.current
+    ) {
+      if (hs.camera_reference) {
+        const markerCam = viewerSceneRef.current.getObjectByName(
+          hs.camera_reference
+        );
+
+        if (markerCam) {
+          flyToMarkerCamera(markerCam);
+          return;
+        }
+      }
+
+      const interiorCams = [];
+
+      viewerSceneRef.current.traverse(obj => {
+        if (obj.name?.startsWith('Cam_Interior_')) {
+          interiorCams.push(obj);
+        }
+      });
+
+      if (interiorCams.length > 0) {
+        flyToMarkerCamera(interiorCams[0]);
+      }
+    }
+  }, [
+    activeHotspot,
+    setActiveHotspot,
+    isMobile,
+    interiorMode,
+    selectedBuilding,
+    flyToMarkerCamera,
+    flyToInteriorBaseCamera,
+  ]);
+
+  /**
+   * handleMeshClick — llamado desde CampusViewer3D cuando el usuario hace clic
+   * en una malla del GLB mientras está en modo interior.
+   *
+   * Lógica multinivel:
+   *  - Escenario A (exterior): nunca llega aquí — CampusViewer3D emite onBuildingClick
+   *  - Escenario B (interior): busca el hotspot cuyo `mesh_name` coincide con meshName,
+   *    abre su panel Y anima la cámara a la cámara marcadora Cam_Interior_* más cercana.
+   */
+  /**
+   * handleMeshClick — clic en malla GLB en modo interior.
+   *
+   * Lógica de Mapeo Espacial (Camino A):
+   *  1. Busca el hotspot cuyo mesh_name coincide con la malla clicada.
+   *  2. Si el hotspot tiene camera_reference en BD → flyTo a esa cámara exacta.
+   *  3. Si camera_reference es NULL → busca la cámara Cam_Interior_* más cercana (fallback).
+   *  4. Si no hay cámaras interiores → solo abre el panel sin mover la cámara.
+   */
+  const handleMeshClick = useCallback((meshName) => {
+    if (!meshName || !selectedBuilding) return;
+
+    const hs = hotspots.find(h =>
+      h.mesh_name === meshName ||
+      h.name === meshName ||
+      meshName.toLowerCase().includes(h.name?.toLowerCase())
+    );
+
+    if (!hs) return;
+
+    const isSameHotspot =
+      activeHotspot?.id &&
+      hs?.id &&
+      String(activeHotspot.id) === String(hs.id);
+
+    if (
+      isSameHotspot &&
+      interiorMode &&
+      selectedBuilding?.has_interior
+    ) {
+      setActiveHotspot(null);
+
+      if (isMobile) {
+        setSidebarOpen(false);
+      }
+
+      flyToInteriorBaseCamera();
+      return;
+    }
+
+    setActiveHotspot(hs);
+
+    if (isMobile) {
+      setSidebarOpen(false);
+    }
+
+    if (
+      !interiorMode ||
+      !selectedBuilding.has_interior ||
+      !viewerSceneRef.current
+    ) {
+      return;
+    }
+
+    const targetCamName = hs.camera_reference || null;
+
+    if (!targetCamName) return;
+
+    const markerCam = viewerSceneRef.current.getObjectByName(targetCamName);
+
+    if (markerCam) {
+      flyToMarkerCamera(markerCam);
+    }
+  }, [
+    selectedBuilding,
+    hotspots,
+    activeHotspot,
+    interiorMode,
+    isMobile,
+    setActiveHotspot,
+    flyToMarkerCamera,
+    flyToInteriorBaseCamera,
+  ]);
 
   /* ──────────────────────────────────────────────────────────────────────
      RENDER
@@ -235,6 +436,13 @@ export default function Explorer() {
         buildings={activeBuildings}
         building={selectedBuilding}
         onBuildingClick={handleSelectBuilding}
+        onMeshClick={handleMeshClick}
+        onInteriorModeChange={entering => {
+          setInteriorMode(entering);
+          if (!entering) setActiveHotspot(null);
+        }}
+        onSceneReady={s => { viewerSceneRef.current = s; }}
+        onCameraCommandReady={ref => { viewerCameraCommandRef.current = ref; }}
         isMobile={isMobile}
         sidebarOpen={sidebarOpen}
         onRequestChangeBuilding={() => setShowSelector(true)}

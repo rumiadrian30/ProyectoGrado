@@ -93,6 +93,8 @@ function BuildingModel({
   buildingId,
   isSelected,
   onClick,
+  onMeshClick,
+  interiorMode = false,
 }) {
   const { scene } = useGLTF(url);
 
@@ -135,7 +137,11 @@ function BuildingModel({
       scale={[scaleX, scaleY, scaleZ]}
       onClick={(e) => {
         e.stopPropagation();
-        onClick?.(buildingId);
+        if (interiorMode && onMeshClick && e.object?.name) {
+          onMeshClick(e.object.name);
+        } else {
+          onClick?.(buildingId);
+        }
       }}
       onPointerOver={(e) => {
         e.stopPropagation();
@@ -200,7 +206,7 @@ function BuildingFallback({
    BuildingEntry
 ───────────────────────────────────────────────────────────────────────────── */
 
-function BuildingEntry({ model, building, isSelected, onClick }) {
+function BuildingEntry({ model, building, isSelected, onClick, onMeshClick, interiorMode }) {
   const pos = getModelPosition(model, building);
   const rot = getModelRotation(model);
   const scl = getModelScale(model);
@@ -234,6 +240,8 @@ function BuildingEntry({ model, building, isSelected, onClick }) {
         buildingId={building?.id}
         isSelected={isSelected}
         onClick={onClick}
+        onMeshClick={onMeshClick}
+        interiorMode={interiorMode}
       />
     </Suspense>
   );
@@ -248,17 +256,21 @@ function CameraController({
   allModels,
   orbitRef,
   cameraCommandRef,
+  onCameraCommandReady,
+  interiorMode,
 }) {
   const { camera } = useThree();
 
   const targetRef = useRef(new THREE.Vector3(...CAMERA_INITIAL.target));
   const cameraTargetRef = useRef(new THREE.Vector3(...CAMERA_INITIAL.position));
   const animatingRef = useRef(false);
+  const targetQuatRef = useRef(null); // null = no animar quaternion
   const lastFocusKeyRef = useRef(null);
 
-  const moveTo = useCallback((position, target) => {
+  const moveTo = useCallback((position, target, quaternion = null) => {
     cameraTargetRef.current.set(position[0], position[1], position[2]);
     targetRef.current.set(target[0], target[1], target[2]);
+    targetQuatRef.current = quaternion ? quaternion.clone() : null;
     animatingRef.current = true;
   }, []);
 
@@ -269,9 +281,10 @@ function CameraController({
     if (controls) {
       controls.autoRotate = false;
       controls.autoRotateSpeed = 0;
-      controls.enableDamping = true;
+      controls.enableDamping = !interiorMode;
+      controls.enabled = !interiorMode;
     }
-  }, [orbitRef]);
+  }, [orbitRef, interiorMode]);
 
   const focusBuilding = useCallback((building) => {
     if (!building) {
@@ -291,6 +304,7 @@ function CameraController({
   useEffect(() => {
     cameraCommandRef.current = {
       cancelAnimation,
+      moveTo,
 
       reset() {
         lastFocusKeyRef.current = null;
@@ -392,6 +406,7 @@ function CameraController({
         moveTo(nextPosition.toArray(), controls.target.toArray());
       },
     };
+    onCameraCommandReady?.(cameraCommandRef.current);
   }, [
     camera,
     orbitRef,
@@ -399,7 +414,28 @@ function CameraController({
     moveTo,
     focusBuilding,
     cancelAnimation,
+    interiorMode,
   ]);
+
+  useEffect(() => {
+    const controls = orbitRef.current;
+    if (!controls) return;
+
+    if (interiorMode) {
+      controls.enabled = false;
+      controls.enableDamping = false;
+      controls.autoRotate = false;
+      controls.autoRotateSpeed = 0;
+      return;
+    }
+
+    controls.enabled = true;
+    controls.enableDamping = true;
+    controls.autoRotate = false;
+    controls.autoRotateSpeed = 0;
+    controls.update();
+  }, [interiorMode, orbitRef]);
+
 
   useEffect(() => {
     if (!selectedBuilding) {
@@ -424,17 +460,66 @@ function CameraController({
     const controls = orbitRef.current;
     if (!animatingRef.current || !controls) return;
 
+    const hasQuaternionTarget = !!targetQuatRef.current;
+
+    // En modo interior, OrbitControls no debe tocar la cámara.
+    // Se mantiene deshabilitado durante toda la estancia interior.
+    if (interiorMode) {
+      controls.enabled = false;
+      controls.enableDamping = false;
+      controls.autoRotate = false;
+      controls.autoRotateSpeed = 0;
+    } else {
+      controls.enabled = true;
+    }
+
     camera.position.lerp(cameraTargetRef.current, 0.07);
-    controls.target.lerp(targetRef.current, 0.07);
-    controls.update();
+
+    if (!interiorMode) {
+      controls.target.lerp(targetRef.current, 0.07);
+    }
+
+    if (hasQuaternionTarget) {
+      camera.quaternion.slerp(targetQuatRef.current, 0.07);
+    } else {
+      camera.lookAt(targetRef.current);
+    }
+
+    camera.updateMatrixWorld(true);
+
+    // Solo actualizar OrbitControls cuando no estamos en interior.
+    // En interior, update() puede sobrescribir la rotación exacta de Blender.
+    if (!interiorMode) {
+      controls.update();
+    }
 
     const cameraDone = camera.position.distanceTo(cameraTargetRef.current) < 0.5;
-    const targetDone = controls.target.distanceTo(targetRef.current) < 0.2;
+    const targetDone = interiorMode
+      ? true
+      : controls.target.distanceTo(targetRef.current) < 0.2;
 
     if (cameraDone && targetDone) {
       camera.position.copy(cameraTargetRef.current);
-      controls.target.copy(targetRef.current);
-      controls.update();
+
+      if (hasQuaternionTarget) {
+        camera.quaternion.copy(targetQuatRef.current);
+        targetQuatRef.current = null;
+      } else {
+        camera.lookAt(targetRef.current);
+      }
+
+      camera.updateMatrixWorld(true);
+
+      if (!interiorMode) {
+        controls.target.copy(targetRef.current);
+        controls.enabled = true;
+        controls.enableDamping = true;
+        controls.update();
+      } else {
+        controls.enabled = false;
+        controls.enableDamping = false;
+      }
+
       animatingRef.current = false;
     }
   });
@@ -524,6 +609,152 @@ function LoadingOverlay() {
   );
 }
 
+
+function InteriorMouseNavigation({ active, isMobile = false }) {
+  const { camera, gl } = useThree();
+
+  const draggingRef = useRef(false);
+  const activePointerIdRef = useRef(null);
+  const yawRef = useRef(0);
+  const pitchRef = useRef(0);
+
+  const syncRotationFromCamera = useCallback(() => {
+    const euler = new THREE.Euler().setFromQuaternion(
+      camera.quaternion,
+      'YXZ'
+    );
+
+    yawRef.current = euler.y;
+    pitchRef.current = THREE.MathUtils.clamp(
+      euler.x,
+      -Math.PI / 2 + 0.05,
+      Math.PI / 2 - 0.05
+    );
+  }, [camera]);
+
+  useEffect(() => {
+    if (!active) return;
+
+    syncRotationFromCamera();
+  }, [active, syncRotationFromCamera]);
+
+  useEffect(() => {
+    if (!active) return;
+
+    const canvas = gl.domElement;
+    const previousCursor = canvas.style.cursor;
+    const previousTouchAction = canvas.style.touchAction;
+    const previousUserSelect = canvas.style.userSelect;
+
+    canvas.style.cursor = 'grab';
+    canvas.style.touchAction = 'none';
+    canvas.style.userSelect = 'none';
+
+    const applyRotation = () => {
+      camera.rotation.order = 'YXZ';
+      camera.rotation.set(
+        pitchRef.current,
+        yawRef.current,
+        0
+      );
+      camera.updateMatrixWorld(true);
+    };
+
+    const handlePointerDown = (event) => {
+      if (event.pointerType === 'mouse' && event.button !== 0) return;
+
+      draggingRef.current = true;
+      activePointerIdRef.current = event.pointerId;
+      canvas.style.cursor = 'grabbing';
+      syncRotationFromCamera();
+
+      try {
+        canvas.setPointerCapture(event.pointerId);
+      } catch {
+        // Algunos navegadores móviles pueden no permitir capture aquí.
+      }
+
+      event.preventDefault();
+    };
+
+    const handlePointerMove = (event) => {
+      if (!draggingRef.current) return;
+
+      if (
+        activePointerIdRef.current !== null &&
+        event.pointerId !== activePointerIdRef.current
+      ) {
+        return;
+      }
+
+      const sensitivity = isMobile ? 0.003 : 0.0022;
+
+      yawRef.current -= event.movementX * sensitivity;
+      pitchRef.current -= event.movementY * sensitivity;
+
+      pitchRef.current = THREE.MathUtils.clamp(
+        pitchRef.current,
+        -Math.PI / 2 + 0.05,
+        Math.PI / 2 - 0.05
+      );
+
+      applyRotation();
+      event.preventDefault();
+    };
+
+    const stopDragging = (event) => {
+      if (
+        event?.pointerId &&
+        activePointerIdRef.current !== null &&
+        event.pointerId !== activePointerIdRef.current
+      ) {
+        return;
+      }
+
+      draggingRef.current = false;
+      activePointerIdRef.current = null;
+      canvas.style.cursor = 'grab';
+
+      if (event?.pointerId) {
+        try {
+          canvas.releasePointerCapture(event.pointerId);
+        } catch {
+          // Sin acción.
+        }
+      }
+    };
+
+    canvas.addEventListener('pointerdown', handlePointerDown);
+    canvas.addEventListener('pointermove', handlePointerMove);
+    canvas.addEventListener('pointerup', stopDragging);
+    canvas.addEventListener('pointercancel', stopDragging);
+    canvas.addEventListener('lostpointercapture', stopDragging);
+
+    return () => {
+      draggingRef.current = false;
+      activePointerIdRef.current = null;
+
+      canvas.style.cursor = previousCursor;
+      canvas.style.touchAction = previousTouchAction;
+      canvas.style.userSelect = previousUserSelect;
+
+      canvas.removeEventListener('pointerdown', handlePointerDown);
+      canvas.removeEventListener('pointermove', handlePointerMove);
+      canvas.removeEventListener('pointerup', stopDragging);
+      canvas.removeEventListener('pointercancel', stopDragging);
+      canvas.removeEventListener('lostpointercapture', stopDragging);
+    };
+  }, [
+    active,
+    camera,
+    gl,
+    isMobile,
+    syncRotationFromCamera,
+  ]);
+
+  return null;
+}
+
 function CameraTracker({ orbitRef, onSnapshot }) {
   const { camera } = useThree();
   const lastUpdateRef = useRef(0);
@@ -559,13 +790,22 @@ function Scene({
   buildings,
   selectedBuilding,
   onBuildingClick,
+  onMeshClick,
+  interiorMode,
   orbitRef,
   cameraCommandRef,
   onCameraSnapshot,
   onBoundsWarning,
+  onSceneReady,
+  onCameraCommandReady,
+  isMobile,
 }) {
-  
   const [hoveredPinId, setHoveredPinId] = useState(null);
+  const { scene } = useThree();
+
+  useEffect(() => {
+    onSceneReady?.(scene);
+  }, [scene, onSceneReady]);
 
   return (
     <>
@@ -584,6 +824,7 @@ function Scene({
       <OrbitControls
         ref={orbitRef}
         makeDefault
+        enabled={!interiorMode}
         maxPolarAngle={Math.PI / 2.1}
         minDistance={20}
         maxDistance={700}
@@ -607,6 +848,7 @@ function Scene({
           TWO: THREE.TOUCH.DOLLY_ROTATE,
         }}
         onStart={() => {
+          if (interiorMode) return;
           cameraCommandRef.current?.cancelAnimation?.();
         }}
       />
@@ -616,18 +858,24 @@ function Scene({
         allModels={allModels}
         orbitRef={orbitRef}
         cameraCommandRef={cameraCommandRef}
+        onCameraCommandReady={onCameraCommandReady}
+        interiorMode={interiorMode}
       />
 
-      <KeyboardNavigation3D
-        orbitRef={orbitRef}
-        cameraCommandRef={cameraCommandRef}
-        onBoundsWarning={onBoundsWarning}
-      />
+      {!interiorMode && (
+        <KeyboardNavigation3D
+          orbitRef={orbitRef}
+          cameraCommandRef={cameraCommandRef}
+          onBoundsWarning={onBoundsWarning}
+        />
+      )}
 
       <CameraTracker
         orbitRef={orbitRef}
         onSnapshot={onCameraSnapshot}
       />
+
+      <InteriorMouseNavigation active={interiorMode} isMobile={isMobile} />
 
       <Suspense fallback={<LoadingOverlay />}>
         <CampusBase />
@@ -651,15 +899,19 @@ function Scene({
               building={building}
               isSelected={selectedBuilding?.id === building.id}
               onClick={onBuildingClick}
+              onMeshClick={onMeshClick}
+              interiorMode={interiorMode && selectedBuilding?.id === building.id}
             />
 
-            <MapPin
-              building={building}
-              isSelected={selectedBuilding?.id === building.id}
-              isDimmed={isDimmed}
-              onHoverChange={setHoveredPinId}
-              onClick={onBuildingClick}
-            />
+            {!interiorMode && (
+              <MapPin
+                building={building}
+                isSelected={selectedBuilding?.id === building.id}
+                isDimmed={isDimmed}
+                onHoverChange={setHoveredPinId}
+                onClick={onBuildingClick}
+              />
+            )}
           </React.Fragment>
         );
       })}
@@ -1096,6 +1348,10 @@ export default function CampusViewer3D({
   buildings = [],
   building,
   onBuildingClick,
+  onMeshClick,
+  onInteriorModeChange,
+  onSceneReady,
+  onCameraCommandReady,
   isMobile = false,
   sidebarOpen = true,
   onRequestChangeBuilding,
@@ -1105,8 +1361,10 @@ export default function CampusViewer3D({
   const [showMiniMap, setShowMiniMap] = useState(false);
   const [miniMapExpanded, setMiniMapExpanded] = useState(false);
   const [cameraSnapshot, setCameraSnapshot] = useState(null);
+  const [interiorMode, setInteriorMode] = useState(false);
   const orbitRef = useRef(null);
   const cameraCommandRef = useRef(null);
+  const sceneRef = useRef(null);  // ref para acceder a la escena Three.js
   const [boundsWarning, setBoundsWarning] = useState(false);
   const boundsWarningTimerRef = useRef(null);
 
@@ -1134,6 +1392,68 @@ export default function CampusViewer3D({
 
     return () => window.clearTimeout(timer);
   }, [setModelLoading, setModelProgress]);
+
+  // Reset interior mode when building changes
+  useEffect(() => { setInteriorMode(false); }, [building?.id]);
+
+  const toggleInteriorMode = useCallback(() => {
+    if (!building) return;
+
+    const entering = !interiorMode;
+    setInteriorMode(entering);
+    onInteriorModeChange?.(entering);
+
+    const cmd = cameraCommandRef.current;
+
+    if (entering) {
+      // Buscar cámara marcadora en la escena Three.js (exportada desde Blender)
+      const markerCam = sceneRef.current?.getObjectByName('Cam_Interior_FIE');
+
+      if (markerCam) {
+        const worldPos  = new THREE.Vector3();
+        const worldQuat = new THREE.Quaternion();
+        markerCam.getWorldPosition(worldPos);
+        markerCam.getWorldQuaternion(worldQuat);
+
+        // Target: 1 m delante de la cámara marcadora según su orientación
+        const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(worldQuat);
+        const lookTarget = worldPos.clone().add(forward);
+
+        cmd?.moveTo?.(worldPos.toArray(), lookTarget.toArray(), worldQuat);
+      } else {
+        // Fallback a coordenadas de BD si el GLB no tiene cámara marcadora
+        const ox = parseFloat(building.offset_x)          || 0;
+        const oz = parseFloat(building.offset_z)          || 0;
+        const cx = parseFloat(building.interior_cam_x)    || 0;
+        const cy = parseFloat(building.interior_cam_y)    || 8;
+        const cz = parseFloat(building.interior_cam_z)    || 15;
+        const tx = parseFloat(building.interior_target_x) || 0;
+        const ty = parseFloat(building.interior_target_y) || 2;
+        const tz = parseFloat(building.interior_target_z) || 0;
+        cmd?.moveTo?.([ox + cx, cy, oz + cz], [ox + tx, ty, oz + tz]);
+      }
+
+      // Ocultar grupo exterior cuando la cámara haya llegado (~800 ms)
+      const groupName = building.exterior_group_name || 'Exterior';
+      setTimeout(() => {
+        sceneRef.current?.traverse(obj => {
+          if (obj.name === groupName || obj.parent?.name === groupName) {
+            obj.visible = false;
+          }
+        });
+      }, 800);
+
+    } else {
+      // Salir: mostrar inmediatamente y volver al foco del edificio
+      const groupName = building.exterior_group_name || 'Exterior';
+      sceneRef.current?.traverse(obj => {
+        if (obj.name === groupName || obj.parent?.name === groupName) {
+          obj.visible = true;
+        }
+      });
+      cmd?.focusBuilding?.(building);
+    }
+  }, [interiorMode, building]);
 
   const handleBuildingClick = useCallback((buildingOrId) => {
     if (typeof buildingOrId === 'object' && buildingOrId !== null) {
@@ -1223,10 +1543,18 @@ export default function CampusViewer3D({
           buildings={buildings}
           selectedBuilding={building}
           onBuildingClick={handleBuildingClick}
+          onMeshClick={onMeshClick}
+          interiorMode={interiorMode}
           orbitRef={orbitRef}
           cameraCommandRef={cameraCommandRef}
           onCameraSnapshot={setCameraSnapshot}
           onBoundsWarning={showBoundsWarning}
+          onSceneReady={s => {
+            sceneRef.current = s;
+            onSceneReady?.(s);
+          }}
+          onCameraCommandReady={onCameraCommandReady}
+          isMobile={isMobile}
         />
       </Canvas>
 
@@ -1266,10 +1594,12 @@ export default function CampusViewer3D({
         active={showOverlay}
       />
 
-      <ViewerControls3D
-        isMobile={isMobile}
-        cameraCommandRef={cameraCommandRef}
-      />
+      {!interiorMode && (
+        <ViewerControls3D
+          isMobile={isMobile}
+          cameraCommandRef={cameraCommandRef}
+        />
+      )}
 
       <MiniMap3D
         buildings={buildings}
@@ -1296,6 +1626,76 @@ export default function CampusViewer3D({
           isMobile={isMobile}
           onClick={onRequestChangeBuilding}
         />
+      )}
+
+      {/* ── Botón Modo Interior ─────────────────────────── */}
+      {building?.has_interior && (
+        <button
+          onClick={toggleInteriorMode}
+          title={interiorMode ? 'Ver exterior' : 'Ver interior'}
+          style={{
+            position: 'absolute',
+            top: isMobile ? 14 : 14,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            zIndex: 26,
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 8,
+            padding: '0.52rem 1.1rem',
+            background: interiorMode ? '#BC0613' : 'rgba(255,255,255,0.94)',
+            backdropFilter: 'blur(8px)',
+            border: interiorMode ? '1.5px solid #a50f09' : '1.5px solid rgba(188,6,19,0.28)',
+            borderRadius: 999,
+            boxShadow: '0 2px 12px rgba(0,0,0,0.15)',
+            color: interiorMode ? '#fff' : '#BC0613',
+            fontSize: isMobile ? '0.72rem' : '0.78rem',
+            fontWeight: 700,
+            cursor: 'pointer',
+            fontFamily: 'var(--font-body, system-ui)',
+            transition: 'background 0.25s, color 0.25s, border-color 0.25s',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {interiorMode ? (
+            <>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/>
+              </svg>
+              Ver exterior
+            </>
+          ) : (
+            <>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M8 3H5a2 2 0 0 0-2 2v3M21 8V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3M16 21h3a2 2 0 0 0 2-2v-3"/>
+              </svg>
+              Ver interior
+            </>
+          )}
+        </button>
+      )}
+
+      {interiorMode && (
+        <div style={{
+          position: 'absolute',
+          left: '50%',
+          bottom: isMobile ? 18 : 48,
+          transform: 'translateX(-50%)',
+          zIndex: 25,
+          padding: '0.42rem 0.75rem',
+          background: 'rgba(255,255,255,0.92)',
+          border: '1px solid rgba(0,0,0,0.12)',
+          borderRadius: 999,
+          boxShadow: '0 2px 8px rgba(0,0,0,0.12)',
+          color: '#374151',
+          fontSize: isMobile ? '0.68rem' : '0.72rem',
+          fontWeight: 700,
+          pointerEvents: 'none',
+          backdropFilter: 'blur(8px)',
+          whiteSpace: 'nowrap',
+        }}>
+          {isMobile ? 'Arrastra sobre la pantalla para mirar alrededor' : 'Arrastra con clic izquierdo para mirar alrededor'}
+        </div>
       )}
 
       <StatusPill3D isMobile={isMobile} />

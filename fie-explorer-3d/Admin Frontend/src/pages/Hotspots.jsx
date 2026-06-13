@@ -146,10 +146,18 @@ function HotspotForm({ data, onChange, buildings = [] }) {
         <SchedulePicker value={data.schedule || ''} onChange={v => set('schedule', v)} />
       </div>
 
+      <div className="hs-form-section-label" style={{ marginTop: '20px' }}>Mapeo Espacial 3D</div>
+
       <div className="hs-field">
-        <label className="hs-label">URL de imagen</label>
-        <input className="hs-input" placeholder="https://... o ruta relativa"
-          value={data.image_url || ''} onChange={e => set('image_url', e.target.value)} />
+        <label className="hs-label">Referencia de cámara interior</label>
+        <input className="hs-input"
+          placeholder="Ej: Cam_Interior_FIE_Lab1"
+          value={data.camera_reference || ''}
+          onChange={e => set('camera_reference', e.target.value)} />
+        <span className="hs-field-hint">
+          Nombre exacto del objeto cámara en el GLB. Al hacer clic en este hotspot en modo interior,
+          la cámara vuela hacia esa posición. Dejar vacío para usar el comportamiento por defecto.
+        </span>
       </div>
 
       <div className="hs-field">
@@ -192,7 +200,7 @@ export default function Hotspots() {
     setForm({
       type: 'classroom', floor: 1, pos_x: 0, pos_y: 0, pos_z: 0,
       building_id: buildings.find(b => b.is_active)?.id || '',
-      teacher: '', capacity: null, phone: '', schedule: '', description: '', image_url: '',
+      teacher: '', capacity: null, phone: '', schedule: '', description: '', image_url: '', camera_reference: '',
     })
     setModal({ type: 'new' })
   }
