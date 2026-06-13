@@ -230,6 +230,127 @@ function BuildingForm({ data, onChange, isEdit = false }) {
         Resetear a (0, 0, 0)
       </button>
 
+      {/* ── Modo Interior ─────────────────────────────────── */}
+      <span className="bl-form-section" style={{ marginTop: '16px' }}>Modo Interior</span>
+
+      <div className="bl-transform-box bl-interior-box">
+        <div className="bl-transform-header">
+          <label className="bl-uniform-toggle bl-interior-toggle">
+            <input
+              type="checkbox"
+              checked={!!data.has_interior}
+              onChange={e => set('has_interior', e.target.checked)}
+            />
+            Vista interior activada
+          </label>
+
+          {data.has_interior && (
+            <span className="bl-interior-state">Configurado</span>
+          )}
+        </div>
+
+        <div className="bl-transform-body">
+          <p className="bl-form-hint">
+            Permite ocultar una parte del GLB y mover la cámara hacia una vista interna del edificio.
+          </p>
+
+          {data.has_interior && (
+            <details className="bl-details bl-interior-details">
+              <summary className="bl-details-summary bl-interior-summary">
+                Opciones avanzadas de interior
+              </summary>
+
+              <div className="bl-interior-content">
+                <div className="bl-alert bl-alert--info">
+                  El GLB debe tener un grupo nombrado según el campo Nombre del grupo exterior para que el corte funcione.
+                </div>
+
+                <div className="bl-field">
+                  <label className="bl-label">Nombre del grupo exterior en el GLB</label>
+                  <input
+                    className="bl-input"
+                    placeholder="Exterior"
+                    value={data.exterior_group_name ?? 'Exterior'}
+                    onChange={e => set('exterior_group_name', e.target.value)}
+                  />
+                  <span className="bl-field-hint">
+                    Nombre exacto del grupo Three.js a ocultar al entrar. Es sensible a mayúsculas.
+                  </span>
+                </div>
+
+                <div className="bl-field">
+                  <label className="bl-label">Cámara interior — Posición (X / Y / Z)</label>
+                  <div className="bl-grid-3">
+                    {[
+                      { field: 'interior_cam_x', label: 'X', placeholder: '0'  },
+                      { field: 'interior_cam_y', label: 'Y', placeholder: '8'  },
+                      { field: 'interior_cam_z', label: 'Z', placeholder: '15' },
+                    ].map(({ field, label, placeholder }) => (
+                      <div key={field} className="bl-axis-field">
+                        <span className="bl-axis-label">{label}</span>
+                        <input
+                          className="bl-input bl-input--center"
+                          type="number"
+                          step="0.5"
+                          placeholder={placeholder}
+                          value={data[field] ?? ''}
+                          onChange={e => set(field, parseFloat(e.target.value) || 0)}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                  <span className="bl-field-hint">
+                    Posición inicial de la cámara al entrar al interior.
+                  </span>
+                </div>
+
+                <div className="bl-field">
+                  <label className="bl-label">Cámara interior — Target (X / Y / Z)</label>
+                  <div className="bl-grid-3">
+                    {[
+                      { field: 'interior_target_x', label: 'X', placeholder: '0' },
+                      { field: 'interior_target_y', label: 'Y', placeholder: '2' },
+                      { field: 'interior_target_z', label: 'Z', placeholder: '0' },
+                    ].map(({ field, label, placeholder }) => (
+                      <div key={field} className="bl-axis-field">
+                        <span className="bl-axis-label">{label}</span>
+                        <input
+                          className="bl-input bl-input--center"
+                          type="number"
+                          step="0.5"
+                          placeholder={placeholder}
+                          value={data[field] ?? ''}
+                          onChange={e => set(field, parseFloat(e.target.value) || 0)}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                  <span className="bl-field-hint">
+                    Punto al que mira la cámara al entrar al interior.
+                  </span>
+                </div>
+
+                <button
+                  type="button"
+                  className="bl-btn bl-btn--ghost bl-btn--sm"
+                  onClick={() => {
+                    set('exterior_group_name', 'Exterior')
+                    set('interior_cam_x', 0)
+                    set('interior_cam_y', 8)
+                    set('interior_cam_z', 15)
+                    set('interior_target_x', 0)
+                    set('interior_target_y', 2)
+                    set('interior_target_z', 0)
+                  }}
+                >
+                  Restaurar valores recomendados
+                </button>
+              </div>
+            </details>
+          )}
+        </div>
+      </div>
+
       {isEdit && (
         <div className="bl-field" style={{ marginTop: '16px' }}>
           <label className="bl-label">Estado</label>

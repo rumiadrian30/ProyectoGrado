@@ -114,7 +114,8 @@ const SELECT_FIELDS = `
   b.code                        AS building_code,
   CAST(b.offset_x  AS FLOAT8)  AS building_offset_x,
   CAST(b.offset_y  AS FLOAT8)  AS building_offset_y,
-  CAST(b.offset_z  AS FLOAT8)  AS building_offset_z
+  CAST(b.offset_z  AS FLOAT8)  AS building_offset_z,
+  h.camera_reference
 `;
 
 // ─────────────────────────────────────────────────────────────
@@ -198,6 +199,7 @@ async function create(req, res, next) {
     building_id, name, description, type, floor,
     pos_x, pos_y, pos_z,
     schedule, equipment, teacher, capacity, phone, image_url,
+    camera_reference,
   } = req.body;
 
   if (!name?.trim())
@@ -231,8 +233,8 @@ async function create(req, res, next) {
       `INSERT INTO hotspots
          (building_id, created_by, name, description, type, floor,
           pos_x, pos_y, pos_z, schedule, equipment,
-          teacher, capacity, phone, image_url)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+          teacher, capacity, phone, image_url, camera_reference)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
        RETURNING *`,
       [
         building_id, req.admin.id, name.trim(),
@@ -243,6 +245,7 @@ async function create(req, res, next) {
         schedule     || null, equipment || null,
         teacher      || null, capacity  || null,
         phone        || null, image_url || null,
+        camera_reference?.trim() || null,
       ],
     );
     const h = rows[0];
@@ -269,6 +272,7 @@ async function update(req, res, next) {
     building_id, name, description, type, floor,
     pos_x, pos_y, pos_z, schedule, equipment,
     teacher, capacity, phone, image_url,
+    camera_reference,
   } = req.body;
 
   try {
@@ -303,21 +307,22 @@ async function update(req, res, next) {
     // pos_x/y/z se actualizan como valores locales puros; sin suma de offsets.
     const { rows } = await pool.query(
       `UPDATE hotspots SET
-         building_id = COALESCE($1,  building_id),
-         name        = COALESCE($2,  name),
-         description = COALESCE($3,  description),
-         type        = COALESCE($4,  type),
-         floor       = COALESCE($5,  floor),
-         pos_x       = COALESCE($6,  pos_x),
-         pos_y       = COALESCE($7,  pos_y),
-         pos_z       = COALESCE($8,  pos_z),
-         schedule    = COALESCE($9,  schedule),
-         equipment   = COALESCE($10, equipment),
-         teacher     = COALESCE($11, teacher),
-         capacity    = COALESCE($12, capacity),
-         phone       = COALESCE($13, phone),
-         image_url   = COALESCE($14, image_url),
-         updated_at  = NOW()
+         building_id        = COALESCE($1,  building_id),
+         name               = COALESCE($2,  name),
+         description        = COALESCE($3,  description),
+         type               = COALESCE($4,  type),
+         floor              = COALESCE($5,  floor),
+         pos_x              = COALESCE($6,  pos_x),
+         pos_y              = COALESCE($7,  pos_y),
+         pos_z              = COALESCE($8,  pos_z),
+         schedule           = COALESCE($9,  schedule),
+         equipment          = COALESCE($10, equipment),
+         teacher            = COALESCE($11, teacher),
+         capacity           = COALESCE($12, capacity),
+         phone              = COALESCE($13, phone),
+         image_url          = COALESCE($14, image_url),
+         camera_reference   = $16,
+         updated_at         = NOW()
        WHERE id = $15
        RETURNING *`,
       [
@@ -326,6 +331,7 @@ async function update(req, res, next) {
         pos_y != null ? parseFloat(pos_y) : null,
         pos_z != null ? parseFloat(pos_z) : null,
         schedule, equipment, teacher, capacity, phone, image_url, id,
+        camera_reference !== undefined ? (camera_reference?.trim() || null) : old.camera_reference,
       ],
     );
     const h = rows[0];
