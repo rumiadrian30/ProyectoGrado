@@ -3,7 +3,7 @@ import { api } from '../api'
 
 const GROUP_META = {
   login:         { label: 'Seguridad de acceso',  desc: 'Control de intentos de inicio de sesión y bloqueo de cuentas.' },
-  session:       { label: 'Sesión',               desc: 'Duración y comportamiento de las sesiones de usuario.' },
+  session:       { label: 'Sesión',               desc: 'Duración de las sesiones de usuario.' },
 }
 
 const STRING_OPTIONS = {
@@ -296,10 +296,6 @@ function ConfigRow({ cfg, editing, saving, setEditing, onSave, onReset }) {
           </>
         )}
       </div>
-
-      {cfg.updated_by_name && (
-        <span className="st-config-updated">Modificado por {cfg.updated_by_name}</span>
-      )}
     </div>
   )
 }

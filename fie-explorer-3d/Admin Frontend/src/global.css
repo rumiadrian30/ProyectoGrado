@@ -1321,6 +1321,17 @@ tr:hover td  { background: #f8fafc; }
 }
 .hs-btn--danger:hover { background: #a50f09; }
 
+.hs-btn--sm {
+  height: 28px;
+  padding: 0 10px;
+  font-size: 12px;
+}
+ 
+/* Animación de spinner — reutilizada del selector de cámaras interiores */
+@keyframes glb-spin {
+  to { transform: rotate(360deg); }
+}
+
 /* Tabs */
 .hs-tabs {
   display: flex;
