@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { api, fmt, typeBadgeClass } from '../api'
 import SchedulePicker from '../components/SchedulePicker'
+import { useInteriorCameras } from '../hooks/useInteriorCameras'
 
 const TYPE_LABELS = {
   classroom: 'Aula',
@@ -45,11 +46,19 @@ function Modal({ title, children, onConfirm, confirmLabel = 'Guardar', danger = 
 }
 
 /* ── Form ───────────────────────────────────────────────────── */
-function HotspotForm({ data, onChange, buildings = [] }) {
+function HotspotForm({ data, onChange, buildings = [], models = [] }) {
   const set = (k, v) => onChange({ ...data, [k]: v })
 
   const selectedBuilding = buildings.find(b => String(b.id) === String(data.building_id))
   const maxFloor = selectedBuilding?.floor_count ?? 99
+
+  // Modelo activo (lod_level=0) del edificio seleccionado — fuente de cámaras interiores
+  const activeModel = models.find(m =>
+    String(m.building_id) === String(data.building_id) && m.is_active
+  )
+
+  const { cameras, loading: camerasLoading, error: camerasError, reload: reloadCameras } =
+    useInteriorCameras(activeModel?.file_path)
 
   const handleBuildingChange = (newId) => {
     const building = buildings.find(b => String(b.id) === String(newId))
@@ -150,13 +159,57 @@ function HotspotForm({ data, onChange, buildings = [] }) {
 
       <div className="hs-field">
         <label className="hs-label">Referencia de cámara interior</label>
-        <input className="hs-input"
-          placeholder="Ej: Cam_Interior_FIE_Lab1"
-          value={data.camera_reference || ''}
-          onChange={e => set('camera_reference', e.target.value)} />
+
+        {!data.building_id ? (
+          <span className="hs-field-hint">Selecciona un edificio para ver sus cámaras disponibles.</span>
+        ) : !activeModel ? (
+          <span className="hs-field-hint">Este edificio no tiene un modelo 3D activo.</span>
+        ) : camerasLoading ? (
+          <div className="hs-input" style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#9ca3af' }}>
+            <span style={{ display: 'inline-block', width: 12, height: 12, border: '2px solid #e5e7eb', borderTopColor: '#BC0613', borderRadius: '50%', animation: 'glb-spin 0.8s linear infinite' }} />
+            Cargando cámaras del modelo…
+          </div>
+        ) : (
+          <>
+            <select
+              className="hs-input"
+              value={data.camera_reference || ''}
+              onChange={e => set('camera_reference', e.target.value)}
+            >
+              <option value="">— Sin referencia (vista exterior) —</option>
+              {cameras.map(camName => (
+                <option key={camName} value={camName}>{camName}</option>
+              ))}
+              {data.camera_reference && !cameras.includes(data.camera_reference) && (
+                <option value={data.camera_reference}>
+                  {data.camera_reference} (no encontrada en el modelo actual)
+                </option>
+              )}
+            </select>
+
+            {cameras.length === 0 && !camerasError && (
+              <span className="hs-field-hint">
+                No se encontraron objetos "Cam_Interior_*" en el GLB de este edificio.
+              </span>
+            )}
+            {camerasError && (
+              <span className="hs-field-hint" style={{ color: '#dc2626' }}>{camerasError}</span>
+            )}
+
+            <button
+              type="button"
+              className="hs-btn hs-btn--ghost hs-btn--sm"
+              style={{ marginTop: '6px', alignSelf: 'flex-start' }}
+              onClick={reloadCameras}
+            >
+              Recargar cámaras del modelo
+            </button>
+          </>
+        )}
+
         <span className="hs-field-hint">
-          Nombre exacto del objeto cámara en el GLB. Al hacer clic en este hotspot en modo interior,
-          la cámara vuela hacia esa posición. Dejar vacío para usar el comportamiento por defecto.
+          Al hacer clic en este hotspot en modo interior, la cámara vuela hacia la posición
+          y orientación exactas de la cámara seleccionada en Blender.
         </span>
       </div>
 
@@ -174,6 +227,7 @@ function HotspotForm({ data, onChange, buildings = [] }) {
 export default function Hotspots() {
   const [hotspots,  setHotspots]  = useState([])
   const [buildings, setBuildings] = useState([])
+  const [models,    setModels]    = useState([])
   const [loading,   setLoading]   = useState(true)
   const [error,     setError]     = useState('')
   const [toast,     setToast]     = useState(null)
@@ -185,8 +239,12 @@ export default function Hotspots() {
 
   async function loadAll() {
     try {
-      const [h, b] = await Promise.all([api('GET', '/hotspots'), api('GET', '/buildings')])
-      setHotspots(h); setBuildings(b)
+      const [h, b, m] = await Promise.all([
+        api('GET', '/hotspots'),
+        api('GET', '/buildings'),
+        api('GET', '/models'),
+      ])
+      setHotspots(h); setBuildings(b); setModels(Array.isArray(m) ? m : (m?.data ?? []))
     } catch (e) { setError(e.message) }
     finally { setLoading(false) }
   }
@@ -200,7 +258,7 @@ export default function Hotspots() {
     setForm({
       type: 'classroom', floor: 1, pos_x: 0, pos_y: 0, pos_z: 0,
       building_id: buildings.find(b => b.is_active)?.id || '',
-      teacher: '', capacity: null, phone: '', schedule: '', description: '', image_url: '', camera_reference: '',
+      teacher: '', capacity: null, phone: '', schedule: '', description: '', camera_reference: '',
     })
     setModal({ type: 'new' })
   }
@@ -384,12 +442,12 @@ export default function Hotspots() {
       {/* Modals */}
       {modal?.type === 'new' && (
         <Modal title="Nuevo hotspot" onConfirm={confirmNew} confirmLabel="Crear hotspot" onClose={() => setModal(null)}>
-          <HotspotForm data={form} onChange={setForm} buildings={buildings} />
+          <HotspotForm data={form} onChange={setForm} buildings={buildings} models={models} />
         </Modal>
       )}
       {modal?.type === 'edit' && (
         <Modal title="Editar hotspot" onConfirm={confirmEdit} confirmLabel="Guardar cambios" onClose={() => setModal(null)}>
-          <HotspotForm data={form} onChange={setForm} buildings={buildings} />
+          <HotspotForm data={form} onChange={setForm} buildings={buildings} models={models} />
         </Modal>
       )}
       {modal?.type === 'delete' && (
