@@ -16,7 +16,7 @@ import { isOpenNow }        from '../utils/scheduleUtils';
 
 /* ─── Constantes ─────────────────────────────────────────────────────────── */
 const SIDEBAR_W = 288;
-const INTERIOR_BASE_CAMERA_NAME = 'Cam_Interior_FIE';
+const INTERIOR_BASE_CAMERA_NAME = 'Cam_Interior_FIE_CentroBajo';
 
 /* ─── SVG Icons inline ───────────────────────────────────────────────────── */
 const TYPE_ICONS_SVG = {

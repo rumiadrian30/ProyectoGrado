@@ -1635,7 +1635,7 @@ export default function CampusViewer3D({
           title={interiorMode ? 'Ver exterior' : 'Ver interior'}
           style={{
             position: 'absolute',
-            top: isMobile ? 14 : 14,
+            top: isMobile ? 56 : 14,
             left: '50%',
             transform: 'translateX(-50%)',
             zIndex: 26,
