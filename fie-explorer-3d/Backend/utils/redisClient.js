@@ -11,24 +11,30 @@ function getClient() {
   if (_client) return _client;
 
   const url = process.env.REDIS_URL;
+
   if (!url) {
     console.warn('  \x1b[33m[Redis]\x1b[0m REDIS_URL no definido — caché desactivado.');
     return null;
   }
 
   _client = new Redis(url, {
-    lazyConnect:        true,
-    enableReadyCheck:   false,
+    lazyConnect: true,
+    enableReadyCheck: false,
     maxRetriesPerRequest: 1,
-    connectTimeout:     3000,
+    connectTimeout: 3000,
+    tls: url.startsWith('rediss://') ? {} : undefined,
   });
 
-  _client.on('connect', () =>
-    console.log('  \x1b[36m[Redis]\x1b[0m Conectado →', url.replace(/:\/\/.*@/, '://***@'))
-  );
-  _client.on('error', (err) =>
-    console.warn('  \x1b[33m[Redis]\x1b[0m Error:', err.message)
-  );
+  _client.on('connect', () => {
+    console.log(
+      '  \x1b[36m[Redis]\x1b[0m Conectado →',
+      url.replace(/:\/\/.*@/, '://***@')
+    );
+  });
+
+  _client.on('error', (err) => {
+    console.warn('  \x1b[33m[Redis]\x1b[0m Error:', err.message);
+  });
 
   return _client;
 }
