@@ -146,7 +146,7 @@ function FieldIcon({ field, size = 13 }) {
 /* ─── Main ───────────────────────────────────────────────────────────────── */
 export default function HotspotPanel() {
   const { activeHotspot, setActiveHotspot } = useViewerStore();
-  const isMobile = useIsMobile();
+  const isMobile = useIsMobile(900);
 
   const [images,    setImages]    = useState([]);
   const [imgIndex,  setImgIndex]  = useState(0);
@@ -193,11 +193,12 @@ export default function HotspotPanel() {
         className="hp-overlay"
         onClick={close}
         style={{
-          position:'fixed',
+          position:'absolute',
           inset:0,
           zIndex:49,
-          background: isMobile ? 'rgba(20,1,3,0.45)' : 'rgba(20,1,3,0.28)',
+          background: isMobile ? 'rgba(20,1,3,0.45)' : 'transparent',
           backdropFilter: isMobile ? 'blur(2px)' : 'none',
+          pointerEvents: isMobile ? 'auto' : 'none',
         }}
         aria-hidden="true"
       />
@@ -207,33 +208,58 @@ export default function HotspotPanel() {
         className="hp-panel hp-panel-aside hp-scroll"
         role="complementary"
         aria-label={`Detalle: ${hs.name}`}
+        onClick={(e) => e.stopPropagation()}
         style={{
-          position:'fixed',
+          position:'absolute',
           top: isMobile ? 'auto' : 0,
-          right:0,
-          bottom:0,
-          left: isMobile ? 0 : 'auto',
-          width: isMobile ? '100%' : 360,
-          maxWidth: isMobile ? '100%' : 360,
-          maxHeight: isMobile ? '82dvh' : '100%',
+          right: isMobile ? 10 : 0,
+          bottom: isMobile ? 10 : 0,
+          left: isMobile ? 10 : 'auto',
+          width: isMobile ? 'auto' : 'min(360px, 100%)',
+          maxWidth: isMobile ? 'none' : '360px',
+          height: isMobile ? 'auto' : '100%',
+          maxHeight: isMobile ? 'min(78dvh, calc(100% - 20px))' : '100%',
+          boxSizing:'border-box',
           background:'var(--cream, #FDFAF9)',
-          borderLeft: isMobile ? 'none' : '1px solid rgba(188,6,19,.13)',
+          borderLeft: isMobile ? '1px solid rgba(188,6,19,.13)' : '1px solid rgba(188,6,19,.13)',
+          borderRight: isMobile ? '1px solid rgba(188,6,19,.13)' : 'none',
           borderTop: isMobile ? '1px solid rgba(188,6,19,.13)' : 'none',
+          borderBottom: isMobile ? '1px solid rgba(188,6,19,.10)' : 'none',
           borderTopLeftRadius: isMobile ? 18 : 0,
           borderTopRightRadius: isMobile ? 18 : 0,
+          borderBottomLeftRadius: isMobile ? 18 : 0,
+          borderBottomRightRadius: isMobile ? 18 : 0,
           zIndex:50,
-          overflowY:'auto',
+          overflow:'hidden',
           display:'flex',
           flexDirection:'column',
           boxShadow: isMobile
-            ? '0 -8px 32px rgba(188,6,19,.16)'
+            ? '0 -8px 32px rgba(20,1,3,.24)'
             : '-4px 0 32px rgba(188,6,19,.09)',
         }}
       >
 
+        {isMobile && (
+          <div style={{
+            flex:'0 0 auto',
+            height:18,
+            display:'flex',
+            alignItems:'center',
+            justifyContent:'center',
+            background:'var(--cream, #FDFAF9)',
+          }}>
+            <span style={{
+              width:36,
+              height:4,
+              borderRadius:999,
+              background:'rgba(40,2,5,.18)',
+            }} />
+          </div>
+        )}
+
         {/* ── Banner / Galería ─────────────────────────────────────────── */}
         {current && !imgError ? (
-          <div style={{ position:'relative', height: isMobile ? 150 : 200, flexShrink:0, background:'rgba(188,6,19,.06)', overflow:'hidden' }}>
+          <div style={{ position:'relative', height: isMobile ? 'clamp(88px, 18dvh, 140px)' : 200, flexShrink:0, background:'rgba(188,6,19,.06)', overflow:'hidden' }}>
             <img
               key={current.url}
               src={current.url}
@@ -278,7 +304,7 @@ export default function HotspotPanel() {
           </div>
         ) : (
           <div style={{
-            height: isMobile ? 108 : 130, flexShrink:0,
+            height: isMobile ? 'clamp(78px, 15dvh, 108px)' : 130, flexShrink:0,
             background:'#BC0613',
             display:'flex', alignItems:'center', justifyContent:'center',
             position:'relative', overflow:'hidden',
@@ -311,9 +337,16 @@ export default function HotspotPanel() {
 
         {/* ── Cuerpo ─────────────────────────────────────────────────── */}
         <div style={{
-          padding: isMobile ? '1rem 1rem .4rem' : '1.25rem 1.25rem .5rem',
-          display:'flex', flexDirection:'column', gap:'.7rem',
-          flex:1,
+          padding: isMobile ? '.95rem 1rem .45rem' : '1.25rem 1.25rem .5rem',
+          display:'flex',
+          flexDirection:'column',
+          gap:'.7rem',
+          flex:'1 1 auto',
+          minHeight:0,
+          overflowY:'auto',
+          overflowX:'hidden',
+          WebkitOverflowScrolling:'touch',
+          boxSizing:'border-box',
         }}>
 
           {/* Badge de tipo */}
@@ -336,7 +369,7 @@ export default function HotspotPanel() {
             fontFamily:'var(--font-display)',
             fontSize: isMobile ? '1.05rem' : '1.2rem', fontWeight:800,
             letterSpacing:'-.025em', lineHeight:1.15,
-            color:'rgba(40,2,5,.9)', margin:0,
+            color:'rgba(40,2,5,.9)', margin:0, overflowWrap:'anywhere',
           }}>
             {hs.name}
           </h2>
@@ -360,7 +393,7 @@ export default function HotspotPanel() {
               lineHeight:1.7, margin:0,
               fontFamily:'var(--font-body)',
               paddingBottom:'.25rem',
-              borderBottom:'1px solid rgba(188,6,19,.08)',
+              borderBottom:'1px solid rgba(188,6,19,.08)', overflowWrap:'anywhere',
             }}>
               {hs.description}
             </p>
@@ -458,7 +491,8 @@ export default function HotspotPanel() {
           padding: isMobile ? '.75rem 1rem calc(.9rem + env(safe-area-inset-bottom))' : '.85rem 1.25rem 1rem',
           borderTop:'1px solid rgba(188,6,19,.1)',
           background:'#fff',
-          flexShrink:0,
+          flex:'0 0 auto',
+          boxSizing:'border-box',
         }}>
           <button className="hp-close-btn" onClick={close}>
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none"

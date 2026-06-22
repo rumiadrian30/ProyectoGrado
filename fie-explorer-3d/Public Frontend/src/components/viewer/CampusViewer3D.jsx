@@ -56,6 +56,11 @@ const CAMERA_TOP = {
 
 const MAX_POLAR = Math.PI / 2.1;
 
+// Optimización: carga de modelos por proximidad a la cámara
+const LOAD_RADIUS   = 80;  // metros — distancia a la que el GLB se carga
+const UNLOAD_RADIUS = 110; // metros — distancia a la que se descarga (histéresis)
+const PROXIMITY_CHECK_INTERVAL = 0.4; // segundos entre chequeos
+
 
 /* ─────────────────────────────────────────────────────────────────────────────
    CampusBase
@@ -67,12 +72,46 @@ function CampusBase() {
   useMemo(() => {
     scene.traverse((obj) => {
       if (!obj.isMesh) return;
+      // El terreno/campus base solo recibe sombra del sol; no proyecta sombra propia.
       obj.receiveShadow = true;
       obj.castShadow = false;
     });
   }, [scene]);
 
   return <primitive object={scene} position={[0, 0, 0]} />;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   ProximityGate — monta/desmonta el GLB de un edificio según distancia a cámara
+───────────────────────────────────────────────────────────────────────────── */
+
+function ProximityGate({ position, forceLoad, children, fallback }) {
+  const { camera, invalidate } = useThree();
+  const [inRange, setInRange] = useState(forceLoad);
+  const elapsedRef = useRef(0);
+  const posVec = useRef(new THREE.Vector3(...position));
+
+  useEffect(() => {
+    posVec.current.set(position[0], position[1], position[2]);
+  }, [position]);
+
+  useFrame((_, delta) => {
+    if (forceLoad) {
+      if (!inRange) { setInRange(true); invalidate(); }
+      return;
+    }
+
+    elapsedRef.current += delta;
+    if (elapsedRef.current < PROXIMITY_CHECK_INTERVAL) return;
+    elapsedRef.current = 0;
+
+    const dist = camera.position.distanceTo(posVec.current);
+
+    if (!inRange && dist < LOAD_RADIUS) { setInRange(true); invalidate(); }
+    else if (inRange && dist > UNLOAD_RADIUS) { setInRange(false); invalidate(); }
+  });
+
+  return inRange ? children : fallback;
 }
 
 /* ─────────────────────────────────────────────────────────────────────────────
@@ -98,14 +137,38 @@ function BuildingModel({
 }) {
   const { scene } = useGLTF(url);
 
+  // Liberar memoria al desmontar: dispose de geometrías/texturas/materiales
+  // y limpiar el caché de drei para esta URL.
+  useEffect(() => {
+    return () => {
+      scene.traverse((obj) => {
+        if (!obj.isMesh) return;
+        obj.geometry?.dispose?.();
+        const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
+        mats.forEach((mat) => {
+          if (!mat) return;
+          Object.values(mat).forEach((value) => {
+            if (value?.isTexture) value.dispose();
+          });
+          mat.dispose?.();
+        });
+      });
+      useGLTF.clear(url);
+    };
+  }, [url, scene]);
+
   const clonedScene = useMemo(() => {
     const cloned = scene.clone(true);
 
     cloned.traverse((obj) => {
       if (!obj.isMesh) return;
 
-      obj.castShadow = true;
-      obj.receiveShadow = true;
+      // Optimización: sombras dinámicas solo en modo interior, donde el
+      // usuario está cerca y la diferencia visual se nota. En exterior
+      // se desactivan para reducir el costo cuando hay varios edificios
+      // visibles simultáneamente.
+      obj.castShadow    = interiorMode;
+      obj.receiveShadow = interiorMode;
 
       const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
 
@@ -128,7 +191,7 @@ function BuildingModel({
     });
 
     return cloned;
-  }, [scene, isSelected]);
+  }, [scene, isSelected, interiorMode]);
 
   return (
     <group
@@ -183,7 +246,7 @@ function BuildingFallback({
         document.body.style.cursor = 'default';
       }}
     >
-      <mesh castShadow receiveShadow>
+      <mesh receiveShadow>
         <boxGeometry args={[10, 12, 8]} />
         <meshStandardMaterial
           color={isSelected ? '#BC0613' : '#8B9EB0'}
@@ -206,7 +269,7 @@ function BuildingFallback({
    BuildingEntry
 ───────────────────────────────────────────────────────────────────────────── */
 
-function BuildingEntry({ model, building, isSelected, onClick, onMeshClick, interiorMode }) {
+function BuildingEntry({ model, building, isSelected, onClick, onMeshClick, interiorMode, proximityEnabled = true }) {
   const pos = getModelPosition(model, building);
   const rot = getModelRotation(model);
   const scl = getModelScale(model);
@@ -224,26 +287,44 @@ function BuildingEntry({ model, building, isSelected, onClick, onMeshClick, inte
     );
   }
 
+  // El edificio seleccionado o en modo interior siempre debe estar cargado,
+  // sin importar la distancia de la cámara. Si la optimización por
+  // proximidad está desactivada, todo carga siempre (comportamiento clásico).
+  const forceLoad = !proximityEnabled || isSelected || interiorMode;
+
+  const fallback = (
+    <BuildingFallback
+      offsetX={pos.x}
+      offsetY={pos.y}
+      offsetZ={pos.z}
+      buildingId={building?.id}
+      isSelected={isSelected}
+      onClick={onClick}
+    />
+  );
+
   return (
-    <Suspense fallback={null}>
-      <BuildingModel
-        url={model.file_path}
-        offsetX={pos.x}
-        offsetY={pos.y}
-        offsetZ={pos.z}
-        rotateX={rot.x}
-        rotateY={rot.y}
-        rotateZ={rot.z}
-        scaleX={scl.x}
-        scaleY={scl.y}
-        scaleZ={scl.z}
-        buildingId={building?.id}
-        isSelected={isSelected}
-        onClick={onClick}
-        onMeshClick={onMeshClick}
-        interiorMode={interiorMode}
-      />
-    </Suspense>
+    <ProximityGate position={[pos.x, pos.y, pos.z]} forceLoad={forceLoad} fallback={fallback}>
+      <Suspense fallback={fallback}>
+        <BuildingModel
+          url={model.file_path}
+          offsetX={pos.x}
+          offsetY={pos.y}
+          offsetZ={pos.z}
+          rotateX={rot.x}
+          rotateY={rot.y}
+          rotateZ={rot.z}
+          scaleX={scl.x}
+          scaleY={scl.y}
+          scaleZ={scl.z}
+          buildingId={building?.id}
+          isSelected={isSelected}
+          onClick={onClick}
+          onMeshClick={onMeshClick}
+          interiorMode={interiorMode}
+        />
+      </Suspense>
+    </ProximityGate>
   );
 }
 
@@ -259,7 +340,7 @@ function CameraController({
   onCameraCommandReady,
   interiorMode,
 }) {
-  const { camera } = useThree();
+  const { camera, invalidate } = useThree();
 
   const targetRef = useRef(new THREE.Vector3(...CAMERA_INITIAL.target));
   const cameraTargetRef = useRef(new THREE.Vector3(...CAMERA_INITIAL.position));
@@ -272,7 +353,8 @@ function CameraController({
     targetRef.current.set(target[0], target[1], target[2]);
     targetQuatRef.current = quaternion ? quaternion.clone() : null;
     animatingRef.current = true;
-  }, []);
+    invalidate(); // frameloop="demand": forzar el primer frame de la animación
+  }, [invalidate]);
 
   const cancelAnimation = useCallback(() => {
     animatingRef.current = false;
@@ -328,6 +410,7 @@ function CameraController({
 
           currentControls.autoRotate = true;
           currentControls.autoRotateSpeed = 0.8;
+          invalidate();
         }, 900);
       },
 
@@ -415,6 +498,7 @@ function CameraController({
     focusBuilding,
     cancelAnimation,
     interiorMode,
+    invalidate,
   ]);
 
   useEffect(() => {
@@ -521,6 +605,9 @@ function CameraController({
       }
 
       animatingRef.current = false;
+    } else {
+      // Animación en curso: pedir el siguiente frame bajo frameloop="demand"
+      invalidate();
     }
   });
   return null;
@@ -611,7 +698,7 @@ function LoadingOverlay() {
 
 
 function InteriorMouseNavigation({ active, isMobile = false }) {
-  const { camera, gl } = useThree();
+  const { camera, gl, invalidate } = useThree();
 
   const draggingRef = useRef(false);
   const activePointerIdRef = useRef(null);
@@ -658,6 +745,7 @@ function InteriorMouseNavigation({ active, isMobile = false }) {
         0
       );
       camera.updateMatrixWorld(true);
+      invalidate(); // frameloop="demand": la rotación manual necesita render
     };
 
     const handlePointerDown = (event) => {
@@ -750,6 +838,7 @@ function InteriorMouseNavigation({ active, isMobile = false }) {
     gl,
     isMobile,
     syncRotationFromCamera,
+    invalidate,
   ]);
 
   return null;
@@ -792,6 +881,7 @@ function Scene({
   onBuildingClick,
   onMeshClick,
   interiorMode,
+  proximityEnabled,
   orbitRef,
   cameraCommandRef,
   onCameraSnapshot,
@@ -901,6 +991,7 @@ function Scene({
               onClick={onBuildingClick}
               onMeshClick={onMeshClick}
               interiorMode={interiorMode && selectedBuilding?.id === building.id}
+              proximityEnabled={proximityEnabled}
             />
 
             {!interiorMode && (
@@ -1003,7 +1094,7 @@ function WebGLErrorFallback() {
    ViewerControls3D
 ───────────────────────────────────────────────────────────────────────────── */
 
-function ViewerControls3D({ isMobile, cameraCommandRef }) {
+function ViewerControls3D({ isMobile, cameraCommandRef, proximityEnabled, onToggleProximity }) {
   const baseButton = {
     width: 36,
     height: 36,
@@ -1122,6 +1213,24 @@ function ViewerControls3D({ isMobile, cameraCommandRef }) {
         </svg>
       </button>
 
+      <button
+        title={proximityEnabled ? 'Desactivar carga por proximidad' : 'Activar carga por proximidad'}
+        aria-label="Carga por proximidad"
+        aria-pressed={proximityEnabled}
+        onClick={onToggleProximity}
+        onMouseEnter={hoverIn}
+        onMouseLeave={hoverOut}
+        style={{
+          ...baseButton,
+          color: proximityEnabled ? '#16a34a' : '#9ca3af',
+        }}
+      >
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="12" cy="12" r="3" />
+          <path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83" />
+          {!proximityEnabled && <line x1="3" y1="21" x2="21" y2="3" />}
+        </svg>
+      </button>
 
     </div>
   );
@@ -1362,6 +1471,7 @@ export default function CampusViewer3D({
   const [miniMapExpanded, setMiniMapExpanded] = useState(false);
   const [cameraSnapshot, setCameraSnapshot] = useState(null);
   const [interiorMode, setInteriorMode] = useState(false);
+  const [proximityEnabled, setProximityEnabled] = useState(true); // carga por radio (optimización)
   const orbitRef = useRef(null);
   const cameraCommandRef = useRef(null);
   const sceneRef = useRef(null);  // ref para acceder a la escena Three.js
@@ -1407,7 +1517,7 @@ export default function CampusViewer3D({
 
     if (entering) {
       // Buscar cámara marcadora en la escena Three.js (exportada desde Blender)
-      const markerCam = sceneRef.current?.getObjectByName('Cam_Interior_FIE');
+      const markerCam = sceneRef.current?.getObjectByName('Cam_Interior_FIE_CentroBajo');
 
       if (markerCam) {
         const worldPos  = new THREE.Vector3();
@@ -1521,6 +1631,7 @@ export default function CampusViewer3D({
     }}>
       <Canvas
       shadows
+      frameloop="demand"
       dpr={[1, 1.5]}
       gl={{
         antialias: true,
@@ -1545,6 +1656,7 @@ export default function CampusViewer3D({
           onBuildingClick={handleBuildingClick}
           onMeshClick={onMeshClick}
           interiorMode={interiorMode}
+          proximityEnabled={proximityEnabled}
           orbitRef={orbitRef}
           cameraCommandRef={cameraCommandRef}
           onCameraSnapshot={setCameraSnapshot}
@@ -1598,6 +1710,8 @@ export default function CampusViewer3D({
         <ViewerControls3D
           isMobile={isMobile}
           cameraCommandRef={cameraCommandRef}
+          proximityEnabled={proximityEnabled}
+          onToggleProximity={() => setProximityEnabled(p => !p)}
         />
       )}
 
@@ -1635,7 +1749,7 @@ export default function CampusViewer3D({
           title={interiorMode ? 'Ver exterior' : 'Ver interior'}
           style={{
             position: 'absolute',
-            top: isMobile ? 14 : 14,
+            top: isMobile ? 56 : 14,
             left: '50%',
             transform: 'translateX(-50%)',
             zIndex: 26,
