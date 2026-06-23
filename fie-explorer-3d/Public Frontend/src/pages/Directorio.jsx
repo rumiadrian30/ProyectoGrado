@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../services/api';
 import { isOpenNow, scheduleToString, parseSchedule } from '../utils/scheduleUtils';
-import BuildingAccordion from '../components/ui/BuildingAccordion.jsx';
+import BuildingAccordion from '../components/ui/Buildingaccordion.jsx';
 
 const TYPE_LABEL = {
   classroom: 'Aula',
