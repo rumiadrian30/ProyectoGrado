@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { api, fmt, typeBadgeClass } from '../api'
 import SchedulePicker from '../components/SchedulePicker'
-import { useInteriorCameras } from '../hooks/useInteriorCameras'
+import { useInteriorCameras } from '../hooks/Useinteriorcameras'
 
 const TYPE_LABELS = {
   classroom: 'Aula',
