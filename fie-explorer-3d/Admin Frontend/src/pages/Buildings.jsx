@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { api, fmt } from '../api'
+import { api, fmt, API } from '../api'
 import GlbPreview from '../components/GlbPreview'
 
 const TYPE_LABELS = { main: 'Principal', secondary: 'Secundario', lab: 'Laboratorio' }
@@ -404,7 +404,7 @@ function BuildingModels({ building, onToast, onReloadBuildings }) {
       formData.append('model', file)
       const result = await new Promise((resolve, reject) => {
         const xhr = new XMLHttpRequest()
-        xhr.open('POST', '/api/models/upload')
+        xhr.open('POST', `${API}/models/upload`)
         xhr.withCredentials = true
         xhr.upload.onprogress = ev => { if (ev.lengthComputable) setUploadPct(Math.round(ev.loaded / ev.total * 100)) }
         xhr.onload = () => {
