@@ -2,7 +2,7 @@ services:
   - type: web
     name: explorador-3d-fie-backend
     env: node
-    buildCommand: npm install
+    buildCommand: pnpm install
     startCommand: node server.js
     envVars:
       - key: NODE_ENV
