@@ -1,13 +1,11 @@
 import { encryptedSession } from './utils/encryptedStorage';
 
 // ── URL base ─────────────────────────────────────────────────
-// En producción usa Render. En local usa proxy de Vite con /api.
-const API_ROOT = import.meta.env.VITE_API_URL || '';
+const API_ROOT =
+  import.meta.env.VITE_API_URL || 'http://localhost:3001';
 
-const API = API_ROOT
-  ? `${API_ROOT.replace(/\/$/, '')}/api`
-  : '/api';
-  
+const API = `${API_ROOT.replace(/\/$/, '')}/api`;
+
 // sessionStorage
 let _token = encryptedSession.getItem('admin_token');
 let _onUnauthorized = null;
@@ -36,7 +34,7 @@ export async function api(method, path, body) {
     method,
     headers: {
       'Content-Type': 'application/json',
-      'X-Client-App': 'admin',        
+      'X-Client-App': 'admin',
     },
     credentials: 'include',
   };
@@ -49,10 +47,11 @@ export async function api(method, path, body) {
     opts.body = JSON.stringify(body);
   }
 
-  const res = await fetch(API + path, opts);
+  const url = `${API}${path}`;
+
+  const res = await fetch(url, opts);
   const data = await res.json().catch(() => ({}));
 
-  // ── Sesión expirada ───────────────────────────────────────
   if (res.status === 401) {
     if (!_handlingUnauthorized) {
       _handlingUnauthorized = true;
@@ -62,22 +61,32 @@ export async function api(method, path, body) {
         _handlingUnauthorized = false;
       }, 1000);
     }
+
     throw Object.assign(
       new Error('Sesión expirada. Vuelve a iniciar sesión.'),
       { status: 401 }
     );
   }
 
-  // ── Otros errores ─────────────────────────────────────────
   if (!res.ok) {
+    console.error('[API ERROR]', {
+      baseURL: API,
+      path,
+      fullURL: url,
+      method,
+      status: res.status,
+      data,
+    });
+
     throw Object.assign(
       new Error(data.error || 'Error en la solicitud'),
       {
         status: res.status,
-        data
+        data,
       }
     );
   }
+
   return data;
 }
 
@@ -117,7 +126,7 @@ export function typeBadgeClass(t) {
     lab: 'b-blue',
     office: 'b-teal',
     service: 'b-green',
-    access: 'b-gray'
+    access: 'b-gray',
   };
   return m[t] || 'b-gray';
 }
@@ -126,7 +135,14 @@ export function typeBadgeClass(t) {
 export function isEncrypted(val) {
   return val === '[CIFRADO]' || val === null;
 }
-// ── Señal de actividad para el timer de inactividad ──────────────────────────
-let _onActivity = null
-export function onActivity(cb) { _onActivity = cb }
-export function signalActivity()  { _onActivity?.() }
+
+// ── Señal de actividad para el timer de inactividad ─────────
+let _onActivity = null;
+
+export function onActivity(cb) {
+  _onActivity = cb;
+}
+
+export function signalActivity() {
+  _onActivity?.();
+}
