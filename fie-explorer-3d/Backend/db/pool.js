@@ -9,7 +9,7 @@ const basePoolOptions = {
   max: 10,
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 10000,
-  options: '-c search_path=public',
+  options: '-c search_path=public,extensions',
 };
 
 const poolConfig = process.env.DATABASE_URL

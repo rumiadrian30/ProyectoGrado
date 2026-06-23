@@ -40,10 +40,10 @@ export default defineConfig(({ mode }) => {
           deadCodeInjection: true,
           deadCodeInjectionThreshold: 0.25,
           renameLocals: true,
-          debugProtection: false, 
+          debugProtection: false,
           disableConsoleOutput: true,
           identifierNamesGenerator: 'hexadecimal',
-          seed: 0,                 
+          seed: 0,
         },
       })
     : null
@@ -51,7 +51,7 @@ export default defineConfig(({ mode }) => {
   return {
     plugins: [
       react(),
-      obfuscatorConfig,       
+      obfuscatorConfig,
     ].filter(Boolean),
 
     // ── Configuración del build de producción ───────────────────────────────
@@ -74,7 +74,7 @@ export default defineConfig(({ mode }) => {
           toplevel: true,
           eval: true,
           properties: {
-            regex: /^_[^_]/,        
+            regex: /^_[^_]/,
             reserved: [],
           },
         },
@@ -87,16 +87,16 @@ export default defineConfig(({ mode }) => {
 
       rollupOptions: {
         output: {
-          chunkFileNames:  'assets/[hash].js',
-          entryFileNames:  'assets/[hash].js',
-          assetFileNames:  'assets/[hash][extname]',
+          chunkFileNames: 'assets/[hash].js',
+          entryFileNames: 'assets/[hash].js',
+          assetFileNames: 'assets/[hash][extname]',
         },
       },
       outDir: 'dist',
       emptyOutDir: true,
     },
 
-    //  Servidor de desarrollo
+    // Servidor de desarrollo
     server: {
       port: 5173,
       headers: {
@@ -104,25 +104,25 @@ export default defineConfig(({ mode }) => {
           default-src 'self';
           script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.gstatic.com blob:;
           style-src 'self' 'unsafe-inline';
-          img-src 'self' data: blob: http://localhost:3001;
-          connect-src 'self' http://localhost:3001 https://www.gstatic.com blob:;
+          img-src 'self' data: blob: http://localhost:3001 https://explorador-3d-fie-backend.onrender.com;
+          connect-src 'self' http://localhost:3001 https://explorador-3d-fie-backend.onrender.com https://www.gstatic.com blob:;
           worker-src 'self' blob:;
         `.replace(/\n/g, ' ').trim(),
 
-        'X-Frame-Options':        'SAMEORIGIN',
+        'X-Frame-Options': 'SAMEORIGIN',
         'X-Content-Type-Options': 'nosniff',
       },
       proxy: {
         '/api': {
-          target:       'http://localhost:3001',
+          target: 'http://localhost:3001',
           changeOrigin: true,
         },
         '/hotspot-images': {
-          target:       'http://localhost:3001',
+          target: 'http://localhost:3001',
           changeOrigin: true,
         },
         '/models': {
-          target:       'http://localhost:3001',
+          target: 'http://localhost:3001',
           changeOrigin: true,
         },
       },
