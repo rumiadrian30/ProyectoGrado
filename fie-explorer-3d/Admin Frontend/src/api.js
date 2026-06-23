@@ -1,16 +1,18 @@
 import { encryptedSession } from './utils/encryptedStorage';
 
 // ── URL base ─────────────────────────────────────────────────
+// En producción usa Render. En local puedes cambiarlo con VITE_API_URL.
 const API_ROOT =
-  import.meta.env.VITE_API_URL || 'http://localhost:3001';
+  import.meta.env.VITE_API_URL ||
+  'https://explorador-3d-fie-backend.onrender.com';
 
-const API = `${API_ROOT.replace(/\/$/, '')}/api`;
+export const API = `${API_ROOT.replace(/\/$/, '')}/api`;
 
 // sessionStorage
 let _token = encryptedSession.getItem('admin_token');
 let _onUnauthorized = null;
 
-// Evita multiples logout simultaneos
+// Evita múltiples logout simultáneos
 let _handlingUnauthorized = false;
 
 export function setToken(t) {
@@ -52,11 +54,13 @@ export async function api(method, path, body) {
   const res = await fetch(url, opts);
   const data = await res.json().catch(() => ({}));
 
+  // ── Sesión expirada ───────────────────────────────────────
   if (res.status === 401) {
     if (!_handlingUnauthorized) {
       _handlingUnauthorized = true;
       clearToken();
       _onUnauthorized?.();
+
       setTimeout(() => {
         _handlingUnauthorized = false;
       }, 1000);
@@ -68,6 +72,7 @@ export async function api(method, path, body) {
     );
   }
 
+  // ── Otros errores ─────────────────────────────────────────
   if (!res.ok) {
     console.error('[API ERROR]', {
       baseURL: API,
@@ -107,6 +112,7 @@ export function actionBadgeClass(a) {
     ACTIVATE: 'b-green',
     DEACTIVATE: 'b-amber',
   };
+
   return m[a] || 'b-gray';
 }
 
@@ -118,6 +124,7 @@ export function severityBadgeClass(s) {
     ERROR: 'b-red',
     FATAL: 'b-purple',
   };
+
   return m[s] || 'b-gray';
 }
 
@@ -128,6 +135,7 @@ export function typeBadgeClass(t) {
     service: 'b-green',
     access: 'b-gray',
   };
+
   return m[t] || 'b-gray';
 }
 

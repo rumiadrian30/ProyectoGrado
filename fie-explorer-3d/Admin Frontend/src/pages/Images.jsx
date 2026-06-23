@@ -1,6 +1,6 @@
 // Admin Frontend/src/pages/Images.jsx
 import { useState, useEffect, useRef } from 'react'
-import { api } from '../api'
+import { api, API } from '../api'
 
 const ALLOWED_EXT  = ['.jpg', '.jpeg', '.png', '.webp', '.gif']
 const MAX_SIZE_MB  = 5
@@ -136,7 +136,7 @@ export default function Images() {
       formData.append('image', file)
       const result = await new Promise((resolve, reject) => {
         const xhr = new XMLHttpRequest()
-        xhr.open('POST', '/api/images/upload')
+        xhr.open('POST', `${API}/images/upload`)
         xhr.withCredentials = true
         xhr.setRequestHeader('X-Client-App', 'admin')
         const storedToken = sessionStorage.getItem('admin_token')
