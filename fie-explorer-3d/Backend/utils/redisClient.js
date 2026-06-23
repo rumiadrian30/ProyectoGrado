@@ -17,12 +17,16 @@ function getClient() {
     return null;
   }
 
+  const requiresTls =
+    url.startsWith('rediss://') ||
+    url.includes('upstash.io');
+
   _client = new Redis(url, {
     lazyConnect: true,
     enableReadyCheck: false,
     maxRetriesPerRequest: 1,
     connectTimeout: 3000,
-    tls: url.startsWith('rediss://') ? {} : undefined,
+    tls: requiresTls ? {} : undefined,
   });
 
   _client.on('connect', () => {
@@ -30,6 +34,10 @@ function getClient() {
       '  \x1b[36m[Redis]\x1b[0m Conectado →',
       url.replace(/:\/\/.*@/, '://***@')
     );
+  });
+
+  _client.on('ready', () => {
+    console.log('  \x1b[32m[Redis]\x1b[0m Disponible para caché.');
   });
 
   _client.on('error', (err) => {
