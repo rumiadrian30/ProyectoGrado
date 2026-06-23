@@ -1,8 +1,13 @@
 import { encryptedSession } from './utils/encryptedStorage';
 
 // ── URL base ─────────────────────────────────────────────────
-const API = '/api';
+// En producción usa Render. En local usa proxy de Vite con /api.
+const API_ROOT = import.meta.env.VITE_API_URL || '';
 
+const API = API_ROOT
+  ? `${API_ROOT.replace(/\/$/, '')}/api`
+  : '/api';
+  
 // sessionStorage
 let _token = encryptedSession.getItem('admin_token');
 let _onUnauthorized = null;
