@@ -5,17 +5,22 @@ const { Pool } = require('pg');
 
 const isProduction = process.env.NODE_ENV === 'production';
 
+const basePoolOptions = {
+  max: 10,
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 10000,
+  options: '-c search_path=public',
+};
+
 const poolConfig = process.env.DATABASE_URL
   ? {
-      connectionString: process.env.DATABASE_URL,
+      connectionString: process.env.DATABASE_URL.trim(),
       ssl: isProduction
         ? {
             rejectUnauthorized: false,
           }
         : false,
-      max: 10,
-      idleTimeoutMillis: 30000,
-      connectionTimeoutMillis: 5000,
+      ...basePoolOptions,
     }
   : {
       host: process.env.DB_HOST || 'localhost',
@@ -28,14 +33,28 @@ const poolConfig = process.env.DATABASE_URL
             rejectUnauthorized: false,
           }
         : false,
-      max: 10,
-      idleTimeoutMillis: 30000,
-      connectionTimeoutMillis: 5000,
+      ...basePoolOptions,
     };
+
+if (process.env.DATABASE_URL) {
+  try {
+    const parsed = new URL(process.env.DATABASE_URL.trim());
+
+    console.log('[DB DEBUG]', {
+      username: parsed.username,
+      host: parsed.hostname,
+      port: parsed.port,
+      database: parsed.pathname,
+      search_path: 'public',
+    });
+  } catch (err) {
+    console.error('[DB DEBUG] DATABASE_URL inválida:', err.message);
+  }
+}
 
 const pool = new Pool(poolConfig);
 
-pool.connect((err, client, release) => {
+pool.connect(async (err, client, release) => {
   if (err) {
     console.error('❌  Error conectando a PostgreSQL:', err.message);
 
@@ -48,10 +67,30 @@ pool.connect((err, client, release) => {
     return;
   }
 
-  release();
+  try {
+    const info = await client.query(`
+      SELECT 
+        current_database() AS database,
+        current_schema() AS schema,
+        current_user AS user,
+        current_setting('search_path') AS search_path,
+        to_regclass('public.buildings') AS buildings_table,
+        to_regclass('public.hotspots') AS hotspots_table,
+        to_regclass('public.error_logs') AS error_logs_table
+    `);
+
+    console.log('[DB CHECK]', info.rows[0]);
+  } catch (checkErr) {
+    console.error('⚠  No se pudo verificar tablas PostgreSQL:', checkErr.message);
+  } finally {
+    release();
+  }
 
   if (process.env.DATABASE_URL) {
-    const safeUrl = process.env.DATABASE_URL.replace(/:\/\/.*@/, '://***@');
+    const safeUrl = process.env.DATABASE_URL
+      .trim()
+      .replace(/:\/\/.*@/, '://***@');
+
     console.log(`✅  PostgreSQL conectado → ${safeUrl}`);
   } else {
     console.log(
