@@ -402,16 +402,33 @@ function CameraController({
           controls.enableDamping = true;
         }
 
-        moveTo(CAMERA_TOP.position, CAMERA_TOP.target);
+        // Si hay edificio seleccionado → vista superior sobre ese edificio.
+        // Si no → vista superior general del campus con auto-rotación.
+        if (selectedBuilding) {
+          const model = findBuildingModel(allModels, selectedBuilding);
+          const pos   = getModelPosition(model, selectedBuilding);
 
-        window.setTimeout(() => {
-          const currentControls = orbitRef.current;
-          if (!currentControls) return;
+          // Calcular bounding box del edificio para altura proporcional
+          const targetCenter = new THREE.Vector3(pos.x, pos.y, pos.z);
+          const estimatedSize = 30; // metros, fallback conservador
+          const topHeight = estimatedSize * 1.8;
 
-          currentControls.autoRotate = true;
-          currentControls.autoRotateSpeed = 0.8;
-          invalidate();
-        }, 900);
+          moveTo(
+            [pos.x, pos.y + Math.max(topHeight, 40), pos.z + 0.01],
+            [pos.x, pos.y, pos.z]
+          );
+        } else {
+          moveTo(CAMERA_TOP.position, CAMERA_TOP.target);
+
+          window.setTimeout(() => {
+            const currentControls = orbitRef.current;
+            if (!currentControls) return;
+
+            currentControls.autoRotate = true;
+            currentControls.autoRotateSpeed = 0.8;
+            invalidate();
+          }, 900);
+        }
       },
 
       focusBuilding(building) {
