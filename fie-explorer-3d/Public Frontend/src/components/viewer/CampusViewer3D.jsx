@@ -348,6 +348,12 @@ function CameraController({
   const targetQuatRef = useRef(null); // null = no animar quaternion
   const lastFocusKeyRef = useRef(null);
 
+  // Refs para que top() lea siempre el valor actual sin depender del useEffect
+  const selectedBuildingRef = useRef(selectedBuilding);
+  const allModelsRef = useRef(allModels);
+  useEffect(() => { selectedBuildingRef.current = selectedBuilding; }, [selectedBuilding]);
+  useEffect(() => { allModelsRef.current = allModels; }, [allModels]);
+
   const moveTo = useCallback((position, target, quaternion = null) => {
     cameraTargetRef.current.set(position[0], position[1], position[2]);
     targetRef.current.set(target[0], target[1], target[2]);
@@ -402,16 +408,31 @@ function CameraController({
           controls.enableDamping = true;
         }
 
-        moveTo(CAMERA_TOP.position, CAMERA_TOP.target);
+        // Leer siempre el valor actual via ref (evita closure stale del useEffect)
+        const currentBuilding = selectedBuildingRef.current;
+        const currentModels   = allModelsRef.current;
 
-        window.setTimeout(() => {
-          const currentControls = orbitRef.current;
-          if (!currentControls) return;
+        if (currentBuilding) {
+          const model = findBuildingModel(currentModels, currentBuilding);
+          const pos   = getModelPosition(model, currentBuilding);
 
-          currentControls.autoRotate = true;
-          currentControls.autoRotateSpeed = 0.8;
-          invalidate();
-        }, 900);
+          // Altura proporcional al edificio: 120m da una vista aérea clara
+          moveTo(
+            [pos.x, pos.y + 120, pos.z + 0.01],
+            [pos.x, pos.y, pos.z]
+          );
+        } else {
+          moveTo(CAMERA_TOP.position, CAMERA_TOP.target);
+
+          window.setTimeout(() => {
+            const currentControls = orbitRef.current;
+            if (!currentControls) return;
+
+            currentControls.autoRotate = true;
+            currentControls.autoRotateSpeed = 0.8;
+            invalidate();
+          }, 900);
+        }
       },
 
       focusBuilding(building) {
