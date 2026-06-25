@@ -1111,6 +1111,170 @@ function WebGLErrorFallback() {
   );
 }
 
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   ProximityWarningToast
+───────────────────────────────────────────────────────────────────────────── */
+
+function ProximityConfirmDialog({
+  visible,
+  isMobile,
+  onCancel,
+  onAccept,
+}) {
+  if (!visible) return null;
+
+  return (
+    <>
+      <div
+        onClick={onCancel}
+        style={{
+          position: 'absolute',
+          inset: 0,
+          zIndex: 35,
+          background: 'rgba(20,1,3,0.18)',
+          backdropFilter: 'blur(1.5px)',
+        }}
+        aria-hidden="true"
+      />
+
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="proximity-confirm-title"
+        aria-describedby="proximity-confirm-description"
+        style={{
+          position: 'absolute',
+          right: isMobile ? 12 : 58,
+          top: isMobile ? 210 : 210,
+          zIndex: 36,
+          width: isMobile ? 'calc(100% - 24px)' : 340,
+          maxWidth: isMobile ? 'calc(100% - 24px)' : 340,
+          padding: '0.85rem',
+          background: 'rgba(255,255,255,0.97)',
+          border: '1px solid rgba(188,6,19,0.16)',
+          borderLeft: '3px solid #BC0613',
+          borderRadius: 14,
+          boxShadow: '0 10px 30px rgba(20,1,3,0.18)',
+          backdropFilter: 'blur(10px)',
+          color: '#374151',
+          fontFamily: 'var(--font-body, system-ui)',
+          animation: 'proximityDialogIn .22s ease',
+        }}
+      >
+        <div style={{
+          display: 'flex',
+          alignItems: 'flex-start',
+          gap: 10,
+        }}>
+          <span style={{
+            width: 30,
+            height: 30,
+            borderRadius: '50%',
+            background: 'rgba(188,6,19,0.08)',
+            color: '#BC0613',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            flexShrink: 0,
+            marginTop: 1,
+          }}>
+            <svg
+              width="15"
+              height="15"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M12 9v4" />
+              <path d="M12 17h.01" />
+              <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+            </svg>
+          </span>
+
+          <div style={{ minWidth: 0, flex: 1 }}>
+            <p
+              id="proximity-confirm-title"
+              style={{
+                margin: 0,
+                fontSize: isMobile ? '0.78rem' : '0.8rem',
+                fontWeight: 800,
+                color: 'rgba(40,2,5,0.88)',
+                letterSpacing: '-0.01em',
+              }}
+            >
+              Desactivar carga por proximidad
+            </p>
+
+            <p
+              id="proximity-confirm-description"
+              style={{
+                margin: '4px 0 0',
+                fontSize: isMobile ? '0.7rem' : '0.72rem',
+                lineHeight: 1.48,
+                fontWeight: 500,
+                color: 'rgba(40,2,5,0.6)',
+              }}
+            >
+              Se cargarán más modelos 3D al mismo tiempo. Esto puede consumir más memoria y bajar el rendimiento del visor.
+            </p>
+
+            <div style={{
+              display: 'flex',
+              justifyContent: 'flex-end',
+              gap: 8,
+              marginTop: '0.8rem',
+            }}>
+              <button
+                type="button"
+                onClick={onCancel}
+                style={{
+                  height: 34,
+                  padding: '0 0.8rem',
+                  borderRadius: 8,
+                  border: '1px solid rgba(0,0,0,0.12)',
+                  background: 'rgba(255,255,255,0.92)',
+                  color: '#6b7280',
+                  fontSize: '0.72rem',
+                  fontWeight: 800,
+                  cursor: 'pointer',
+                  fontFamily: 'var(--font-body, system-ui)',
+                }}
+              >
+                Cancelar
+              </button>
+
+              <button
+                type="button"
+                onClick={onAccept}
+                style={{
+                  height: 34,
+                  padding: '0 0.85rem',
+                  borderRadius: 8,
+                  border: '1px solid #a50f09',
+                  background: '#BC0613',
+                  color: '#fff',
+                  fontSize: '0.72rem',
+                  fontWeight: 800,
+                  cursor: 'pointer',
+                  boxShadow: '0 2px 8px rgba(188,6,19,0.18)',
+                  fontFamily: 'var(--font-body, system-ui)',
+                }}
+              >
+                Aceptar
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
+
+
 /* ─────────────────────────────────────────────────────────────────────────────
    ViewerControls3D
 ───────────────────────────────────────────────────────────────────────────── */
@@ -1493,6 +1657,7 @@ export default function CampusViewer3D({
   const [cameraSnapshot, setCameraSnapshot] = useState(null);
   const [interiorMode, setInteriorMode] = useState(false);
   const [proximityEnabled, setProximityEnabled] = useState(true); // carga por radio (optimización)
+  const [showProximityConfirm, setShowProximityConfirm] = useState(false);
   const orbitRef = useRef(null);
   const cameraCommandRef = useRef(null);
   const sceneRef = useRef(null);  // ref para acceder a la escena Three.js
@@ -1616,6 +1781,25 @@ export default function CampusViewer3D({
     };
   }, []);
 
+  const handleToggleProximity = useCallback(() => {
+    if (proximityEnabled) {
+      setShowProximityConfirm(true);
+      return;
+    }
+
+    setProximityEnabled(true);
+    setShowProximityConfirm(false);
+  }, [proximityEnabled]);
+
+  const cancelDisableProximity = useCallback(() => {
+    setShowProximityConfirm(false);
+  }, []);
+
+  const acceptDisableProximity = useCallback(() => {
+    setProximityEnabled(false);
+    setShowProximityConfirm(false);
+  }, []);
+
   const selectedHasModel = useMemo(() => {
     return allModels.some(
       (m) => String(m.building_id) === String(building?.id) && m.is_active
@@ -1732,9 +1916,16 @@ export default function CampusViewer3D({
           isMobile={isMobile}
           cameraCommandRef={cameraCommandRef}
           proximityEnabled={proximityEnabled}
-          onToggleProximity={() => setProximityEnabled(p => !p)}
+          onToggleProximity={handleToggleProximity}
         />
       )}
+
+      <ProximityConfirmDialog
+        visible={showProximityConfirm && !interiorMode}
+        isMobile={isMobile}
+        onCancel={cancelDisableProximity}
+        onAccept={acceptDisableProximity}
+      />
 
       <MiniMap3D
         buildings={buildings}
@@ -1770,7 +1961,7 @@ export default function CampusViewer3D({
           title={interiorMode ? 'Ver exterior' : 'Ver interior'}
           style={{
             position: 'absolute',
-            top: isMobile ? 56 : 14,
+            top: isMobile ? 14 : 14,
             left: '50%',
             transform: 'translateX(-50%)',
             zIndex: 26,
@@ -1844,6 +2035,17 @@ export default function CampusViewer3D({
           to {
             opacity: 1;
             transform: translateX(-50%) translateY(0);
+          }
+        }
+
+        @keyframes proximityDialogIn {
+          from {
+            opacity: 0;
+            transform: translateY(-6px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
           }
         }
       `}</style>
