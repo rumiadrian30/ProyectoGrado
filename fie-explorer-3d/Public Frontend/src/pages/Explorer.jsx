@@ -1,5 +1,5 @@
 /**
- * Explorer.jsx — GeoESPOCH 3D
+ * Explorer.jsx — Explorador 3D FIE
  */
 
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
@@ -87,10 +87,11 @@ export default function Explorer() {
   const [sidebarOpen,       setSidebarOpen]        = useState(true);
   const [allExteriorModels, setAllExteriorModels]  = useState([]);
   const [typeFilter,        setTypeFilter]         = useState('all');
+  const [floorFilter,       setFloorFilter]        = useState('all'); // ← NUEVO
   const [openNowOnly,       setOpenNowOnly]        = useState(false);
   const [interiorMode,      setInteriorMode]       = useState(false);
   const viewerSceneRef         = useRef(null);
-  const viewerCameraCommandRef = useRef(null); // expuesto por CampusViewer3D
+  const viewerCameraCommandRef = useRef(null);
 
   const activeBuildings = useMemo(() => {
     return buildings.filter((b) =>
@@ -108,7 +109,6 @@ export default function Explorer() {
       m.is_active === '1'
     );
   }, [allExteriorModels]);
-
 
   useEffect(() => { if (isMobile) setSidebarOpen(false); }, [isMobile]);
 
@@ -174,9 +174,7 @@ export default function Explorer() {
       })
       .catch(console.error);
 
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, []);
 
   // ── Info del modelo del edificio seleccionado ───────────────────────────
@@ -188,6 +186,7 @@ export default function Explorer() {
   useEffect(() => {
     if (!selectedBuilding) return;
     setTypeFilter('all');
+    setFloorFilter('all'); // ← NUEVO
     setOpenNowOnly(false);
     setSearchQuery('');
     const params = { building_id: selectedBuilding.id };
@@ -196,9 +195,16 @@ export default function Explorer() {
       .catch(() => setHotspots([]));
   }, [selectedBuilding, currentFloor, setHotspots]);
 
+  // ── Pisos presentes (derivado) ──────────────────────────────────────────
+  const presentFloors = useMemo(
+    () => [...new Set(hotspots.map(h => h.floor).filter(Boolean))].sort((a, b) => a - b),
+    [hotspots]
+  );
+
   // ── Filtrado de hotspots ────────────────────────────────────────────────
   const filteredHotspots = hotspots
     .filter(h => typeFilter === 'all' || h.type === typeFilter)
+    .filter(h => floorFilter === 'all' || String(h.floor) === String(floorFilter)) // ← NUEVO
     .filter(h => !openNowOnly || isOpenNow(h.schedule) === true)
     .filter(h => {
       if (!searchQuery.trim()) return true;
@@ -209,7 +215,7 @@ export default function Explorer() {
     });
 
   const presentTypes = [...new Set(hotspots.map(h => h.type))];
-  const hasActiveFilters = typeFilter !== 'all' || openNowOnly || !!searchQuery;
+  const hasActiveFilters = typeFilter !== 'all' || floorFilter !== 'all' || openNowOnly || !!searchQuery; // ← NUEVO
 
   // ── Handlers ────────────────────────────────────────────────────────────
   const handleSelectBuilding = useCallback((b) => {
@@ -220,17 +226,16 @@ export default function Explorer() {
     if (isMobile) setSidebarOpen(false);
   }, [setSelectedBuilding, setActiveHotspot, navigate, isMobile]);
 
-  /** Anima la cámara principal hacia un objeto cámara marcadora del GLB */
   const flyToMarkerCamera = useCallback((markerCam) => {
     if (!markerCam) return;
 
-    const worldPos = new THREE.Vector3();
+    const worldPos  = new THREE.Vector3();
     const worldQuat = new THREE.Quaternion();
 
     markerCam.getWorldPosition(worldPos);
     markerCam.getWorldQuaternion(worldQuat);
 
-    const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(worldQuat);
+    const forward    = new THREE.Vector3(0, 0, -1).applyQuaternion(worldQuat);
     const lookTarget = worldPos.clone().add(forward);
 
     viewerCameraCommandRef.current?.moveTo?.(
@@ -240,13 +245,10 @@ export default function Explorer() {
     );
   }, []);
 
-  /** Regresa a la cámara base del modo interior y cierra el foco de hotspot */
   const flyToInteriorBaseCamera = useCallback(() => {
     if (!selectedBuilding) return;
 
-    const markerCam = viewerSceneRef.current?.getObjectByName(
-      INTERIOR_BASE_CAMERA_NAME
-    );
+    const markerCam = viewerSceneRef.current?.getObjectByName(INTERIOR_BASE_CAMERA_NAME);
 
     if (markerCam) {
       flyToMarkerCamera(markerCam);
@@ -255,11 +257,9 @@ export default function Explorer() {
 
     const ox = parseFloat(selectedBuilding.offset_x) || 0;
     const oz = parseFloat(selectedBuilding.offset_z) || 0;
-
     const cx = parseFloat(selectedBuilding.interior_cam_x) || 0;
     const cy = parseFloat(selectedBuilding.interior_cam_y) || 8;
     const cz = parseFloat(selectedBuilding.interior_cam_z) || 15;
-
     const tx = parseFloat(selectedBuilding.interior_target_x) || 0;
     const ty = parseFloat(selectedBuilding.interior_target_y) || 2;
     const tz = parseFloat(selectedBuilding.interior_target_z) || 0;
@@ -268,10 +268,7 @@ export default function Explorer() {
       [ox + cx, cy, oz + cz],
       [ox + tx, ty, oz + tz]
     );
-  }, [
-    selectedBuilding,
-    flyToMarkerCamera,
-  ]);
+  }, [selectedBuilding, flyToMarkerCamera]);
 
   const handleHotspotClick = useCallback((hs) => {
     const isSameHotspot =
@@ -279,83 +276,34 @@ export default function Explorer() {
       hs?.id &&
       String(activeHotspot.id) === String(hs.id);
 
-    if (
-      isSameHotspot &&
-      interiorMode &&
-      selectedBuilding?.has_interior
-    ) {
+    if (isSameHotspot && interiorMode && selectedBuilding?.has_interior) {
       setActiveHotspot(null);
-
-      if (isMobile) {
-        setSidebarOpen(false);
-      }
-
+      if (isMobile) setSidebarOpen(false);
       flyToInteriorBaseCamera();
       return;
     }
 
     setActiveHotspot(hs);
+    if (isMobile) setSidebarOpen(false);
 
-    if (isMobile) {
-      setSidebarOpen(false);
-    }
-
-    if (
-      interiorMode &&
-      selectedBuilding?.has_interior &&
-      viewerSceneRef.current
-    ) {
+    if (interiorMode && selectedBuilding?.has_interior && viewerSceneRef.current) {
       if (hs.camera_reference) {
-        const markerCam = viewerSceneRef.current.getObjectByName(
-          hs.camera_reference
-        );
-
-        if (markerCam) {
-          flyToMarkerCamera(markerCam);
-          return;
-        }
+        const markerCam = viewerSceneRef.current.getObjectByName(hs.camera_reference);
+        if (markerCam) { flyToMarkerCamera(markerCam); return; }
       }
 
       const interiorCams = [];
-
       viewerSceneRef.current.traverse(obj => {
-        if (obj.name?.startsWith('Cam_Interior_')) {
-          interiorCams.push(obj);
-        }
+        if (obj.name?.startsWith('Cam_Interior_')) interiorCams.push(obj);
       });
-
-      if (interiorCams.length > 0) {
-        flyToMarkerCamera(interiorCams[0]);
-      }
+      if (interiorCams.length > 0) flyToMarkerCamera(interiorCams[0]);
     }
   }, [
-    activeHotspot,
-    setActiveHotspot,
-    isMobile,
-    interiorMode,
-    selectedBuilding,
-    flyToMarkerCamera,
-    flyToInteriorBaseCamera,
+    activeHotspot, setActiveHotspot, isMobile,
+    interiorMode, selectedBuilding,
+    flyToMarkerCamera, flyToInteriorBaseCamera,
   ]);
 
-  /**
-   * handleMeshClick — llamado desde CampusViewer3D cuando el usuario hace clic
-   * en una malla del GLB mientras está en modo interior.
-   *
-   * Lógica multinivel:
-   *  - Escenario A (exterior): nunca llega aquí — CampusViewer3D emite onBuildingClick
-   *  - Escenario B (interior): busca el hotspot cuyo `mesh_name` coincide con meshName,
-   *    abre su panel Y anima la cámara a la cámara marcadora Cam_Interior_* más cercana.
-   */
-  /**
-   * handleMeshClick — clic en malla GLB en modo interior.
-   *
-   * Lógica de Mapeo Espacial (Camino A):
-   *  1. Busca el hotspot cuyo mesh_name coincide con la malla clicada.
-   *  2. Si el hotspot tiene camera_reference en BD → flyTo a esa cámara exacta.
-   *  3. Si camera_reference es NULL → busca la cámara Cam_Interior_* más cercana (fallback).
-   *  4. Si no hay cámaras interiores → solo abre el panel sin mover la cámara.
-   */
   const handleMeshClick = useCallback((meshName) => {
     if (!meshName || !selectedBuilding) return;
 
@@ -372,53 +320,26 @@ export default function Explorer() {
       hs?.id &&
       String(activeHotspot.id) === String(hs.id);
 
-    if (
-      isSameHotspot &&
-      interiorMode &&
-      selectedBuilding?.has_interior
-    ) {
+    if (isSameHotspot && interiorMode && selectedBuilding?.has_interior) {
       setActiveHotspot(null);
-
-      if (isMobile) {
-        setSidebarOpen(false);
-      }
-
+      if (isMobile) setSidebarOpen(false);
       flyToInteriorBaseCamera();
       return;
     }
 
     setActiveHotspot(hs);
+    if (isMobile) setSidebarOpen(false);
 
-    if (isMobile) {
-      setSidebarOpen(false);
-    }
-
-    if (
-      !interiorMode ||
-      !selectedBuilding.has_interior ||
-      !viewerSceneRef.current
-    ) {
-      return;
-    }
+    if (!interiorMode || !selectedBuilding.has_interior || !viewerSceneRef.current) return;
 
     const targetCamName = hs.camera_reference || null;
-
     if (!targetCamName) return;
 
     const markerCam = viewerSceneRef.current.getObjectByName(targetCamName);
-
-    if (markerCam) {
-      flyToMarkerCamera(markerCam);
-    }
+    if (markerCam) flyToMarkerCamera(markerCam);
   }, [
-    selectedBuilding,
-    hotspots,
-    activeHotspot,
-    interiorMode,
-    isMobile,
-    setActiveHotspot,
-    flyToMarkerCamera,
-    flyToInteriorBaseCamera,
+    selectedBuilding, hotspots, activeHotspot, interiorMode, isMobile,
+    setActiveHotspot, flyToMarkerCamera, flyToInteriorBaseCamera,
   ]);
 
   /* ──────────────────────────────────────────────────────────────────────
@@ -430,7 +351,7 @@ export default function Explorer() {
       overflow: 'hidden',
     }}>
 
-      {/* ── VISOR 3D (reemplaza MapboxViewer) ─────────────────────── */}
+      {/* ── VISOR 3D ─────────────────────────────────────────────────── */}
       <CampusViewer3D
         allModels={activeExteriorModels}
         buildings={activeBuildings}
@@ -489,7 +410,7 @@ export default function Explorer() {
             }}>
               <span style={{ width: 5, height: 5, borderRadius: '50%', background: 'rgba(255,255,255,.7)', display: 'block' }} />
               <span style={{ fontSize: '.6rem', fontWeight: 700, letterSpacing: '.14em', textTransform: 'uppercase', color: 'rgba(255,255,255,.65)' }}>
-                GeoESPOCH 3D
+                Explorador 3D FIE
               </span>
             </div>
             <h2 style={{
@@ -616,7 +537,7 @@ export default function Explorer() {
               </div>
 
               {/* Filtros */}
-              {(presentTypes.length > 1 || hotspots.some(h => h.schedule)) && (
+              {(presentTypes.length > 1 || presentFloors.length > 1 || hotspots.some(h => h.schedule)) && (
                 <div style={{
                   padding: '.35rem .75rem .6rem',
                   borderBottom: '1px solid var(--rule)',
@@ -632,7 +553,12 @@ export default function Explorer() {
                     }}>Filtros</span>
                     {hasActiveFilters && (
                       <button
-                        onClick={() => { setTypeFilter('all'); setOpenNowOnly(false); setSearchQuery(''); }}
+                        onClick={() => {
+                          setTypeFilter('all');
+                          setFloorFilter('all'); // ← NUEVO
+                          setOpenNowOnly(false);
+                          setSearchQuery('');
+                        }}
                         style={{
                           fontSize: '.62rem', fontWeight: 700,
                           color: 'var(--red)', background: 'none',
@@ -645,8 +571,12 @@ export default function Explorer() {
                     )}
                   </div>
 
+                  {/* Chips por tipo */}
                   {presentTypes.length > 1 && (
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: hotspots.some(h => h.schedule) ? '.4rem' : 0 }}>
+                    <div style={{
+                      display: 'flex', flexWrap: 'wrap', gap: 4,
+                      marginBottom: (presentFloors.length > 1 || hotspots.some(h => h.schedule)) ? '.4rem' : 0,
+                    }}>
                       <FilterChip active={typeFilter === 'all'} onClick={() => setTypeFilter('all')} label="Todos" />
                       {presentTypes.map(t => (
                         <FilterChip
@@ -660,6 +590,65 @@ export default function Explorer() {
                     </div>
                   )}
 
+                  {/* ── Selector de piso — segmented control ── */}
+                  {presentFloors.length > 1 && (
+                    <div style={{
+                      display: 'flex', alignItems: 'center', gap: 6,
+                      marginBottom: hotspots.some(h => h.schedule) ? '.4rem' : 0,
+                    }}>
+                      <span style={{
+                        fontSize: '.6rem', fontWeight: 600, color: 'var(--ink)',
+                        letterSpacing: '.06em', flexShrink: 0,
+                      }}>Piso</span>
+                      <div style={{
+                        display: 'inline-flex',
+                        background: 'var(--red-06)',
+                        border: '1px solid var(--red-10)',
+                        borderRadius: 6,
+                        padding: 2,
+                        gap: 1,
+                      }}>
+                        {/* Opción "Todos" */}
+                        <button
+                          onClick={() => setFloorFilter('all')}
+                          style={{
+                            fontSize: '.62rem', fontWeight: 700,
+                            padding: '2px 7px', borderRadius: 4,
+                            border: 'none', cursor: 'pointer',
+                            background: floorFilter === 'all' ? 'var(--red)' : 'transparent',
+                            color: floorFilter === 'all' ? '#fff' : 'var(--ink)',
+                            transition: 'background .12s, color .12s',
+                            lineHeight: 1.6,
+                            fontFamily: 'var(--font-body)',
+                          }}
+                        >
+                          Todos
+                        </button>
+                        {/* Un botón por piso */}
+                        {presentFloors.map(f => (
+                          <button
+                            key={f}
+                            onClick={() => setFloorFilter(String(f))}
+                            style={{
+                              fontSize: '.62rem', fontWeight: 700,
+                              padding: '2px 8px', borderRadius: 4,
+                              border: 'none', cursor: 'pointer',
+                              background: floorFilter === String(f) ? 'var(--red)' : 'transparent',
+                              color: floorFilter === String(f) ? '#fff' : 'var(--ink)',
+                              transition: 'background .12s, color .12s',
+                              lineHeight: 1.6,
+                              fontFamily: 'var(--font-body)',
+                              minWidth: 24,
+                            }}
+                          >
+                            {f}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Chip abierto ahora */}
                   {hotspots.some(h => h.schedule) && (
                     <FilterChip
                       active={openNowOnly}
@@ -698,7 +687,10 @@ export default function Explorer() {
             {filteredHotspots.length === 0 && hotspots.length > 0 && (
               <div style={{ textAlign: 'center', padding: '1.5rem 1rem' }}>
                 <p style={{ fontSize: '.78rem', fontWeight: 400, color: 'var(--ink)', margin: 0 }}>
-                  Sin {TYPE_LABELS[typeFilter]?.toLowerCase() || 'resultados'} en este edificio.
+                  {floorFilter !== 'all'
+                    ? `Sin resultados en piso ${floorFilter}.`
+                    : `Sin ${TYPE_LABELS[typeFilter]?.toLowerCase() || 'resultados'} en este edificio.`
+                  }
                 </p>
               </div>
             )}
