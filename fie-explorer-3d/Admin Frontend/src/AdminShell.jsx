@@ -11,6 +11,7 @@ import AuditLogs  from './pages/AuditLogs'
 import ErrorLogs  from './pages/ErrorLogs'
 import Settings   from './pages/Settings'
 import { prefetchAll } from './cache/prefetch' 
+import { invalidateAll } from './cache/queryCache'
 
 const PAGES = {
   dashboard: Dashboard, hotspots: Hotspots, buildings: Buildings,
@@ -68,11 +69,12 @@ export default function AdminShell({ user, onLogout, inactivityMs }) {
   const [page,       setPage]       = useState('dashboard')
   const [errBadge,   setErrBadge]   = useState(0)
   const [dbOk,       setDbOk]       = useState(true)
-  const [remaining,  setRemaining]  = useState(inactivityMs)
+  const [remaining,  setRemaining]  = useState(null) 
   const [collapsed,  setCollapsed]  = useState(false)
 
-  const remainingRef = useRef(inactivityMs)
+  const remainingRef = useRef(0)
   const tickRef      = useRef(null)
+  const keepaliveRef = useRef(null) 
 
   const initials = (user.full_name || 'A')
     .split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()
@@ -113,18 +115,35 @@ export default function AdminShell({ user, onLogout, inactivityMs }) {
     fetch('/api/health').then(() => setDbOk(true)).catch(() => setDbOk(false))
   }, [])
 
+  // Avisa al backend que el usuario sigue activo (debounce 2s para no spamear)
+  const pingBackend = useCallback(() => {
+    clearTimeout(keepaliveRef.current)
+    keepaliveRef.current = setTimeout(() => {
+      api('POST', '/auth/keepalive').catch(() => {})
+    }, 2000)
+  }, [])
+
+  // Resetea el visual Y el backend al mismo tiempo
   const resetTimer = useCallback(() => {
+    if (!inactivityMs) return
     remainingRef.current = inactivityMs
     setRemaining(inactivityMs)
-  }, [inactivityMs])
+    pingBackend()
+  }, [inactivityMs, pingBackend])
 
+  // Arranca el intervalo SOLO cuando llega el valor real de la BD
+  // Si inactivityMs cambia (ej: admin lo edita en Settings), reinicia limpio
   useEffect(() => {
+    if (!inactivityMs) return
+    remainingRef.current = inactivityMs
+    setRemaining(inactivityMs)
+    clearInterval(tickRef.current)
     tickRef.current = setInterval(() => {
       remainingRef.current = Math.max(0, remainingRef.current - 1000)
       setRemaining(remainingRef.current)
     }, 1000)
     return () => clearInterval(tickRef.current)
-  }, [])
+  }, [inactivityMs])
 
   useEffect(() => {
     ACTIVITY_EVENTS.forEach(evt =>
@@ -137,24 +156,19 @@ export default function AdminShell({ user, onLogout, inactivityMs }) {
     }
   }, [resetTimer])
 
-  useEffect(() => {
-    remainingRef.current = inactivityMs
-    setRemaining(inactivityMs)
-  }, [inactivityMs])
-
   async function doLogout() {
     try { await api('POST', '/auth/logout') } catch {}
+    invalidateAll()
     onLogout()
   }
 
   const PageComponent = PAGES[page] || Dashboard
 
-  const totalSec = Math.ceil(remaining / 1000)
-  const mm = String(Math.floor(totalSec / 60)).padStart(2, '0')
-  const ss = String(totalSec % 60).padStart(2, '0')
-  const timerStr = `${mm}:${ss}`
-
-  const pct = remaining / inactivityMs
+  const totalSec    = remaining !== null ? Math.ceil(remaining / 1000) : null
+  const mm          = totalSec !== null ? String(Math.floor(totalSec / 60)).padStart(2, '0') : '--'
+  const ss          = totalSec !== null ? String(totalSec % 60).padStart(2, '0')             : '--'
+  const timerStr    = `${mm}:${ss}`
+  const pct         = (remaining !== null && inactivityMs) ? remaining / inactivityMs : 1
   const timerUrgent = pct <= 0.10
   const timerWarn   = pct <= 0.25 && pct > 0.10
 
