@@ -1,6 +1,8 @@
 // Admin Frontend/src/pages/Images.jsx
 import { useState, useEffect, useRef } from 'react'
 import { api, API } from '../api'
+import { useCachedQuery } from '../cache/useCachedQuery'
+import { invalidate }     from '../cache/queryCache'
 
 const ALLOWED_EXT  = ['.jpg', '.jpeg', '.png', '.webp', '.gif']
 const MAX_SIZE_MB  = 5
@@ -27,12 +29,9 @@ function Modal({ title, children, onConfirm, confirmLabel = 'Guardar', danger = 
 }
 
 export default function Images() {
-  const [hotspots,       setHotspots]       = useState([])
-  const [buildings,      setBuildings]      = useState([])
   const [images,         setImages]         = useState([])
   const [selected,       setSelected]       = useState(null)
   const [buildingFilter, setBuildingFilter] = useState('all')
-  const [loading,        setLoading]        = useState(true)
   const [loadingImg,     setLoadingImg]     = useState(false)
   const [toast,          setToast]          = useState(null)
   const [modal,          setModal]          = useState(null)
@@ -67,15 +66,9 @@ export default function Images() {
     setLightbox({ url: img.url, alt: img.alt_text || '', index })
   }
 
-  useEffect(() => { loadAll() }, [])
-
-  async function loadAll() {
-    try {
-      const [h, b] = await Promise.all([api('GET', '/hotspots'), api('GET', '/buildings')])
-      setHotspots(h); setBuildings(b)
-    } catch (e) { console.error(e) }
-    finally { setLoading(false) }
-  }
+  const { data: hotspots  = [], loading: lh } = useCachedQuery('hotspots',  () => api('GET', '/hotspots'))
+  const { data: buildings = [], loading: lb } = useCachedQuery('buildings', () => api('GET', '/buildings'))
+  const loading = lh || lb
 
   async function loadImages(hotspot) {
     setSelected(hotspot); setLoadingImg(true)

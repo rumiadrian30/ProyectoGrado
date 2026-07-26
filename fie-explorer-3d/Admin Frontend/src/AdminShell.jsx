@@ -10,6 +10,7 @@ import AdminUsers from './pages/AdminUsers'
 import AuditLogs  from './pages/AuditLogs'
 import ErrorLogs  from './pages/ErrorLogs'
 import Settings   from './pages/Settings'
+import { prefetchAll } from './cache/prefetch' 
 
 const PAGES = {
   dashboard: Dashboard, hotspots: Hotspots, buildings: Buildings,
@@ -96,6 +97,11 @@ export default function AdminShell({ user, onLogout, inactivityMs }) {
       return next
     })
   }
+
+  useEffect(() => {
+    prefetchAll(isSuperAdmin)
+  }, [isSuperAdmin])
+
 
   function goTo(pageId) {
     setPage(pageId)

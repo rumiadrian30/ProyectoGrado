@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from 'react'
 import { api, fmt, API } from '../api'
 import GlbPreview from '../components/GlbPreview'
+import { useCachedQuery } from '../cache/useCachedQuery'
+import { invalidate }     from '../cache/queryCache'
 
 const LOD_LABELS = { 0: 'Alta (LOD 0)', 1: 'Media (LOD 1)', 2: 'Baja (LOD 2)' }
 const TRANSFORM_DEFAULTS = { scale_x: 1, scale_y: 1, scale_z: 1, rotate_x: 0, rotate_y: 0, rotate_z: 0 }
@@ -227,9 +229,6 @@ function DeleteModelDialog({ modal, onConfirm, onClose, checking, deleting }) {
 
 /* ── Página principal ───────────────────────────────────────── */
 export default function Models() {
-  const [models,    setModels]    = useState([])
-  const [buildings, setBuildings] = useState([])
-  const [loading,   setLoading]   = useState(true)
   const [toast,     setToast]     = useState(null)
   const [modal,     setModal]     = useState(null)
   const [form,      setForm]      = useState({})
@@ -244,15 +243,11 @@ export default function Models() {
   const [deleting,       setDeleting]       = useState(false)
   const fileInputRef = useRef(null)
 
-  useEffect(() => { loadAll() }, [])
+  const { data: models    = [], loading: lm, refresh: rm } = useCachedQuery('models',    () => api('GET', '/models'))
+  const { data: buildings = [], loading: lb              } = useCachedQuery('buildings', () => api('GET', '/buildings'))
+  const loading = lm || lb
 
-  async function loadAll() {
-    try {
-      const [m, b] = await Promise.all([api('GET', '/models'), api('GET', '/buildings')])
-      setModels(m); setBuildings(b)
-    } catch (e) { console.error(e) }
-    finally { setLoading(false) }
-  }
+  function loadAll() { invalidate('models'); rm() }
 
   function showToast(msg, type = 'success') {
     setToast({ msg, type }); setTimeout(() => setToast(null), 3500)

@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react'
 import { api, fmt, typeBadgeClass } from '../api'
 import SchedulePicker from '../components/SchedulePicker'
 import { useInteriorCameras } from '../hooks/Useinteriorcameras'
+import { useCachedQuery } from '../cache/useCachedQuery'
+import { invalidate }     from '../cache/queryCache'
 
 const TYPE_LABELS = {
   classroom: 'Aula',
@@ -225,29 +227,17 @@ function HotspotForm({ data, onChange, buildings = [], models = [] }) {
 
 /* ── Page ───────────────────────────────────────────────────── */
 export default function Hotspots() {
-  const [hotspots,  setHotspots]  = useState([])
-  const [buildings, setBuildings] = useState([])
-  const [models,    setModels]    = useState([])
-  const [loading,   setLoading]   = useState(true)
-  const [error,     setError]     = useState('')
   const [toast,     setToast]     = useState(null)
   const [modal,     setModal]     = useState(null)
   const [form,      setForm]      = useState({})
   const [filter,    setFilter]    = useState('all')
 
-  useEffect(() => { loadAll() }, [])
+  const { data: hotspots  = [], loading, error, refresh: rh } = useCachedQuery('hotspots',  () => api('GET', '/hotspots'))
+  const { data: buildings = [],                 refresh: rb } = useCachedQuery('buildings', () => api('GET', '/buildings'))
+  const { data: modelsRaw = [],                 refresh: rm } = useCachedQuery('models',    () => api('GET', '/models'))
+  const models = Array.isArray(modelsRaw) ? modelsRaw : (modelsRaw?.data ?? [])
 
-  async function loadAll() {
-    try {
-      const [h, b, m] = await Promise.all([
-        api('GET', '/hotspots'),
-        api('GET', '/buildings'),
-        api('GET', '/models'),
-      ])
-      setHotspots(h); setBuildings(b); setModels(Array.isArray(m) ? m : (m?.data ?? []))
-    } catch (e) { setError(e.message) }
-    finally { setLoading(false) }
-  }
+  function loadAll() { invalidate('hotspots'); rh() }
 
   function showToast(msg, type = 'success') {
     setToast({ msg, type })
@@ -268,7 +258,7 @@ export default function Hotspots() {
     if (!form.building_id)  return showToast('Selecciona un edificio.', 'error')
     try {
       await api('POST', '/hotspots', form)
-      setModal(null); showToast('Hotspot creado y registrado en audit_logs.'); loadAll()
+      setModal(null); showToast('Hotspot creado y registrado en audit_logs.'); invalidate('hotspots'); rh()
     } catch (e) { showToast(e.message, 'error') }
   }
 
@@ -283,21 +273,21 @@ export default function Hotspots() {
     if (!form.name?.trim()) return showToast('El nombre es obligatorio.', 'error')
     try {
       await api('PUT', '/hotspots/' + modal.id, form)
-      setModal(null); showToast('Hotspot actualizado y guardado en audit_logs.'); loadAll()
+      setModal(null); showToast('Hotspot actualizado y guardado en audit_logs.'); invalidate('hotspots'); rh()
     } catch (e) { showToast(e.message, 'error') }
   }
 
   async function toggle(id) {
     try {
       const res = await api('PATCH', '/hotspots/' + id + '/toggle')
-      showToast(`Hotspot ${res.is_active ? 'activado' : 'desactivado'}. Registrado en audit_logs.`); loadAll()
+      showToast(`Hotspot ${res.is_active ? 'activado' : 'desactivado'}. Registrado en audit_logs.`); invalidate('hotspots'); rh()
     } catch (e) { showToast(e.message, 'error') }
   }
 
   async function confirmDelete() {
     try {
       await api('DELETE', '/hotspots/' + modal.id)
-      setModal(null); showToast('Hotspot eliminado. Registrado en audit_logs.'); loadAll()
+      setModal(null); showToast('Hotspot eliminado. Registrado en audit_logs.'); invalidate('hotspots'); rh()
     } catch (e) { showToast(e.message, 'error') }
   }
 

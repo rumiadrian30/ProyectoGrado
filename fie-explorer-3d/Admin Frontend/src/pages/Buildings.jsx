@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from 'react'
 import { api, fmt, API } from '../api'
 import GlbPreview from '../components/GlbPreview'
+import { useCachedQuery } from '../cache/useCachedQuery'
+import { invalidate }     from '../cache/queryCache'
 
 const TYPE_LABELS = { main: 'Principal', secondary: 'Secundario', lab: 'Laboratorio' }
 const LOD_LABELS  = { 0: 'LOD 0 — Alta', 1: 'LOD 1 — Media', 2: 'LOD 2 — Baja' }
@@ -660,21 +662,15 @@ function BuildingModels({ building, onToast, onReloadBuildings }) {
 
 /* ── Página principal ───────────────────────────────────────── */
 export default function Buildings() {
-  const [buildings, setBuildings] = useState([])
-  const [loading,   setLoading]   = useState(true)
-  const [error,     setError]     = useState('')
   const [toast,     setToast]     = useState(null)
   const [modal,     setModal]     = useState(null)
   const [form,      setForm]      = useState(EMPTY_FORM)
   const [saving,    setSaving]    = useState(false)
 
-  useEffect(() => { load() }, [])
-
-  async function load() {
-    try { setBuildings(await api('GET', '/buildings')) }
-    catch (e) { setError(e.message) }
-    finally { setLoading(false) }
-  }
+  const { data: buildings = [], loading, error, refresh: load } = useCachedQuery(
+    'buildings',
+    () => api('GET', '/buildings')
+  )
 
   function showToast(msg, type = 'success') {
     setToast({ msg, type }); setTimeout(() => setToast(null), 3500)
@@ -695,7 +691,9 @@ export default function Buildings() {
     setSaving(true)
     try {
       await api('POST', '/buildings', buildPayload(form))
-      setModal(null); showToast(`Edificio "${form.name}" creado correctamente.`); load()
+      setModal(null); showToast(`Edificio "${form.name}" creado correctamente.`); 
+      invalidate('buildings')
+      load()
     } catch (e) { showToast(e.message, 'error') }
     finally { setSaving(false) }
   }
@@ -705,7 +703,9 @@ export default function Buildings() {
     setSaving(true)
     try {
       await api('PUT', `/buildings/${modal.id}`, buildPayload(form))
-      setModal(null); showToast('Edificio actualizado correctamente.'); load()
+      setModal(null); showToast('Edificio actualizado correctamente.'); 
+      invalidate('buildings')
+      load()
     } catch (e) { showToast(e.message, 'error') }
     finally { setSaving(false) }
   }
@@ -714,7 +714,9 @@ export default function Buildings() {
     setSaving(true)
     try {
       await api('DELETE', `/buildings/${modal.id}`)
-      setModal(null); showToast(`Edificio "${modal.name}" eliminado.`); load()
+      setModal(null); showToast(`Edificio "${modal.name}" eliminado.`); 
+      invalidate('buildings')
+      load()
     } catch (e) { showToast(e.message, 'error') }
     finally { setSaving(false) }
   }
@@ -731,6 +733,7 @@ export default function Buildings() {
     try {
       await api('PATCH', `/buildings/${b.id}/toggle`)
       showToast(`Edificio "${b.name}" ${b.is_active ? 'desactivado' : 'activado'}.`)
+      invalidate('buildings')
       load()
     } catch (e) { showToast(e.message, 'error') }
   }

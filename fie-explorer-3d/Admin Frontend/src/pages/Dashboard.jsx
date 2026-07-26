@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { api, fmt, actionBadgeClass, severityBadgeClass } from '../api'
+import { getCached, setCached } from '../cache/queryCache'
 
 export default function Dashboard({ onErrCount }) {
   const [data,    setData]    = useState(null)
@@ -10,12 +11,18 @@ export default function Dashboard({ onErrCount }) {
 
   async function load() {
     try {
+      const fc = (key, fn) => {
+        const c = getCached(key)
+        if (c) return Promise.resolve(c)
+        return fn().then(d => { setCached(key, d); return d })
+      }
+      
       const [hotspots, buildingsList, models, audit, errors] = await Promise.all([
-        api('GET', '/hotspots'),
-        api('GET', '/buildings'),
-        api('GET', '/models'),
-        api('GET', '/audit-logs?limit=6'),
-        api('GET', '/error-logs?limit=6'),
+        fc('hotspots',  () => api('GET', '/hotspots')),
+        fc('buildings', () => api('GET', '/buildings')),
+        fc('models',    () => api('GET', '/models')),
+        api('GET', '/audit-logs?limit=6'),   // siempre fresco
+        api('GET', '/error-logs?limit=6'),   // siempre fresco
       ])
 
       const imageRequests = hotspots

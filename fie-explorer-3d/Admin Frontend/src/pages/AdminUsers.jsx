@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react'
 import { api, fmt } from '../api'
 import PasswordInput, { isPasswordValid } from '../components/PasswordInput'
+import { useCachedQuery } from '../cache/useCachedQuery'
+import { invalidate }     from '../cache/queryCache'
 
 function Modal({ title, children, onConfirm, confirmLabel = 'Guardar', danger = false, onClose, disabled = false }) {
   return (
@@ -31,9 +33,6 @@ function Avatar({ name }) {
 }
 
 export default function AdminUsers({ currentUser }) {
-  const [users,   setUsers]   = useState([])
-  const [loading, setLoading] = useState(true)
-  const [error,   setError]   = useState('')
   const [toast,   setToast]   = useState(null)
   const [modal,   setModal]   = useState(null)
   const [form,    setForm]    = useState({})
@@ -43,13 +42,10 @@ export default function AdminUsers({ currentUser }) {
   const [deleteConfirmText, setDeleteConfirmText] = useState('')
   const [notifyUser, setNotifyUser] = useState(true)
 
-  useEffect(() => { load() }, [])
-
-  async function load() {
-    try { setUsers(await api('GET', '/admin-users')) }
-    catch (e) { setError(e.message) }
-    finally { setLoading(false) }
-  }
+  const { data: users = [], loading, error, refresh: load } = useCachedQuery(
+    'users',
+    () => api('GET', '/admin-users')
+  )
 
   function showToast(msg, type = 'success') {
     setToast({ msg, type }); setTimeout(() => setToast(null), 4000)
@@ -64,7 +60,9 @@ export default function AdminUsers({ currentUser }) {
     try {
       await api('POST', '/admin-users', { ...form, password: pwd })
       setModal(null); setPwd('')
-      showToast('Usuario creado correctamente.'); load()
+      showToast('Usuario creado correctamente.'); 
+      invalidate('users')
+      load()
     } catch (e) {
       if (e.data?.passwordErrors) setPwdErrors(e.data.passwordErrors)
       showToast(e.message, 'error')
@@ -79,7 +77,7 @@ export default function AdminUsers({ currentUser }) {
         { notify: notifyUser }
       )
       setModal(null)
-      showToast(`Usuario ${modal.isActive ? 'desactivado' : 'activado'}.`); load()
+      showToast(`Usuario ${modal.isActive ? 'desactivado' : 'activado'}.`); invalidate('users'); load()
     } catch (e) { showToast(e.message, 'error') }
   }
 
@@ -96,10 +94,8 @@ export default function AdminUsers({ currentUser }) {
           notify: notifyUser,
         }
       )
-
       setModal(null)
       setNewPwd('')
-
       showToast(
         result.notificationRequested
           ? 'Contraseña actualizada y notificación solicitada.'
@@ -119,7 +115,9 @@ export default function AdminUsers({ currentUser }) {
       )
 
       setModal(null)
-      showToast(`Usuario "${modal.name}" eliminado permanentemente.`); load()
+      showToast(`Usuario "${modal.name}" eliminado permanentemente.`); 
+      invalidate('users')
+      load()
     } catch (e) { showToast(e.message, 'error') }
   }
 
