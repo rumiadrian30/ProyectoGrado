@@ -30,13 +30,13 @@ const NAV_GROUPS = [
   {
     id: 'general',
     label: 'General',
-    icon: IconFolder,
+    icon: IconFolderHome,
     items: [{ id: 'dashboard', label: 'Dashboard', icon: IconDashboard }],
   },
   {
     id: 'contenidos',
     label: 'Contenidos',
-    icon: IconFolder,
+    icon: IconFolderLayers,
     items: [
       { id: 'hotspots',  label: 'Hotspots',    icon: IconHotspot  },
       { id: 'buildings', label: 'Edificios',    icon: IconBuilding },
@@ -47,7 +47,7 @@ const NAV_GROUPS = [
   {
     id: 'trazabilidad',
     label: 'Trazabilidad',
-    icon: IconFolder,
+    icon: IconFolderCheck,
     items: [
       { id: 'audit',  label: 'Audit Logs', icon: IconAudit },
       { id: 'errors', label: 'Error Logs', icon: IconError },
@@ -58,7 +58,7 @@ const NAV_GROUPS = [
 const ADMIN_GROUP = {
   id: 'administracion',
   label: 'Administración',
-  icon: IconFolder,
+  icon: IconFolderKey,
   items: [
     { id: 'users',    label: 'Usuarios',       icon: IconUsers    },
     { id: 'settings', label: 'Configuración',  icon: IconSettings },
@@ -404,6 +404,40 @@ function IconCrumbSep() {
   return (
     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="crumb-sep">
       <polyline points="9 6 15 12 9 18"/>
+    </svg>
+  )
+}
+function IconFolderHome() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M3 7a2 2 0 0 1 2-2h4l2 2.5h8A2 2 0 0 1 21 9.5V17a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"/>
+      <path d="M9.5 18v-3.5l2.5-2 2.5 2V18"/>
+      <path d="M8.5 13.5l3.5-2.8 3.5 2.8"/>
+    </svg>
+  )
+}
+function IconFolderLayers() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M3 7a2 2 0 0 1 2-2h4l2 2.5h8A2 2 0 0 1 21 9.5V17a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"/>
+      <path d="M7 13h10M7 16h7"/>
+    </svg>
+  )
+}
+function IconFolderCheck() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M3 7a2 2 0 0 1 2-2h4l2 2.5h8A2 2 0 0 1 21 9.5V17a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"/>
+      <polyline points="8.5 13.5 10.5 15.5 15.5 11"/>
+    </svg>
+  )
+}
+function IconFolderKey() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M3 7a2 2 0 0 1 2-2h4l2 2.5h8A2 2 0 0 1 21 9.5V17a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"/>
+      <circle cx="10" cy="13.5" r="1.8"/>
+      <path d="M11.8 13.5h3.2v1.5h-1.2v1.5h-1.2v-1.5H12"/>
     </svg>
   )
 }
