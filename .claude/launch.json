@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "public",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["-C", "fie-explorer-3d/Public Frontend", "dev"],
+      "port": 5174
+    }
+  ]
+}
