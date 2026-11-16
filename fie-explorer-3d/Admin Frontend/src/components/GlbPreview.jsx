@@ -6,6 +6,7 @@ import * as THREE                       from 'three'
 import { GLTFLoader }   from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { DRACOLoader }  from 'three/examples/jsm/loaders/DRACOLoader.js'
+import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js'
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001'
 
@@ -69,6 +70,7 @@ export default function GlbPreview({ filePath, height = 220 }) {
     dracoLoader.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.6/')
     const loader = new GLTFLoader()
     loader.setDRACOLoader(dracoLoader)
+    loader.setMeshoptDecoder(MeshoptDecoder) // modelos optimizados (EXT_meshopt_compression)
 
     loader.load(
       url,

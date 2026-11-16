@@ -53,7 +53,7 @@ function Row({ icon, label, sub }) {
   );
 }
 
-export default function ControlsOverlay({ isMobile = false, onDismiss }) {
+export default function ControlsOverlay({ isMobile = false, interiorMode = false, onDismiss }) {
   const [visible, setVisible] = useState(true);
   const [progress, setProgress] = useState(0);
   const [leaving, setLeaving] = useState(false);
@@ -184,20 +184,39 @@ export default function ControlsOverlay({ isMobile = false, onDismiss }) {
           display: 'flex',
           flexDirection: 'column',
         }}>
-          {isMobile ? (
+          {interiorMode ? (
+            isMobile ? (
+              <>
+                <Row icon="Arrastrar" label="Mirar alrededor" />
+                <Row icon="Tap" label="Ir a un punto de interés" sub="marcadores" />
+                <Row icon="Botón" label="Ver exterior" sub="arriba" />
+              </>
+            ) : (
+              <>
+                <Row icon="Arrastrar" label="Mirar alrededor" />
+                <Row icon="W A S D" label="Caminar" sub="Shift corre" />
+                <Row icon="Q / E" label="Girar la vista" />
+                <Row icon="Rueda" label="Avanzar o retroceder" />
+                <Row icon="Clic" label="Punto de interés" sub="marcador o espacio" />
+                <Row icon="Esc" label="Salir al exterior" />
+              </>
+            )
+          ) : isMobile ? (
             <>
-              <Row icon="1 dedo" label="Girar cámara" />
-              <Row icon="2 dedos" label="Acercar o alejar" sub="pellizcar" />
+              <Row icon="1 dedo" label="Desplazar la vista" />
+              <Row icon="2 dedos" label="Acercar, alejar y rotar" />
               <Row icon="Tap" label="Seleccionar edificio" />
-              <Row icon="Botones" label="Cambiar vista técnica" />
+              <Row icon="Doble tap" label="Encuadrar edificio" />
             </>
           ) : (
             <>
-              <Row icon="Clic" label="Rotar cámara" sub="arrastrar" />
+              <Row icon="Clic izq." label="Desplazar la vista" sub="arrastrar" />
+              <Row icon="Clic der." label="Rotar cámara" sub="arrastrar" />
               <Row icon="Rueda" label="Acercar o alejar" />
-              <Row icon="Clic der." label="Desplazar vista" />
-              <Row icon="Clic" label="Seleccionar edificio" />
-              <Row icon="Botones" label="Zoom, rotación y vista superior" />
+              <Row icon="Doble clic" label="Centrar vista en ese punto" />
+              <Row icon="W A S D" label="Mover cámara" sub="Shift rápido" />
+              <Row icon="Q / E" label="Girar alrededor" />
+              <Row icon="Clic" label="Seleccionar edificio" sub="doble clic encuadra" />
             </>
           )}
         </div>
@@ -216,29 +235,6 @@ export default function ControlsOverlay({ isMobile = false, onDismiss }) {
         }} />
       </div>
 
-      <style>{`
-        @keyframes controlsPopoverIn {
-          from {
-            opacity: 0;
-            transform: translateX(8px) scale(.97);
-          }
-          to {
-            opacity: 1;
-            transform: translateX(0) scale(1);
-          }
-        }
-
-        @keyframes controlsPopoverOut {
-          from {
-            opacity: 1;
-            transform: translateX(0) scale(1);
-          }
-          to {
-            opacity: 0;
-            transform: translateX(8px) scale(.97);
-          }
-        }
-      `}</style>
     </>
   );
 }

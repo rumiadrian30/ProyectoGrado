@@ -566,7 +566,7 @@ export default function Models() {
 
               {uploading && (
                 <div className="md-upload-progress">
-                  <span className="md-upload-label">Subiendo… {uploadPct}%</span>
+                  <span className="md-upload-label">{uploadPct >= 100 ? "Optimizando modelo para web…" : `Subiendo… ${uploadPct}%`}</span>
                   <div className="md-progress-track">
                     <div className="md-progress-bar" style={{ width: `${uploadPct}%` }} />
                   </div>

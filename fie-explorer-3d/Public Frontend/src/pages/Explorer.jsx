@@ -6,6 +6,7 @@ import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom';
 import * as THREE from 'three';
 import CampusViewer3D from '../components/viewer/CampusViewer3D';
+import { findMarkerObject } from '../components/viewer/scene/InteriorHotspotMarkers';
 import HotspotPanel   from '../components/hotspots/HotspotPanel';
 import BuildingSelector from '../components/viewer/BuildingSelector';
 import { useViewerStore } from '../store/viewerStore';
@@ -248,7 +249,7 @@ export default function Explorer() {
   const flyToInteriorBaseCamera = useCallback(() => {
     if (!selectedBuilding) return;
 
-    const markerCam = viewerSceneRef.current?.getObjectByName(INTERIOR_BASE_CAMERA_NAME);
+    const markerCam = findMarkerObject(viewerSceneRef.current, INTERIOR_BASE_CAMERA_NAME);
 
     if (markerCam) {
       flyToMarkerCamera(markerCam);
@@ -288,7 +289,7 @@ export default function Explorer() {
 
     if (interiorMode && selectedBuilding?.has_interior && viewerSceneRef.current) {
       if (hs.camera_reference) {
-        const markerCam = viewerSceneRef.current.getObjectByName(hs.camera_reference);
+        const markerCam = findMarkerObject(viewerSceneRef.current, hs.camera_reference);
         if (markerCam) { flyToMarkerCamera(markerCam); return; }
       }
 
@@ -303,6 +304,28 @@ export default function Explorer() {
     interiorMode, selectedBuilding,
     flyToMarkerCamera, flyToInteriorBaseCamera,
   ]);
+
+  // "Ver en 3D" desde el detalle: entra al interior y vuela a la cámara del hotspot
+  const handleGoToHotspot = useCallback((hs) => {
+    const cmd = viewerCameraCommandRef.current;
+    if (!hs || !selectedBuilding?.has_interior || !cmd) return;
+
+    setActiveHotspot(hs);
+    if (isMobile) setSidebarOpen(false);
+
+    const markerCam = hs.camera_reference
+      ? findMarkerObject(viewerSceneRef.current, hs.camera_reference)
+      : null;
+
+    if (!interiorMode) {
+      cmd.enterInterior?.();
+      // El vuelo al marcador reemplaza al vuelo de entrada
+      if (markerCam) window.setTimeout(() => flyToMarkerCamera(markerCam), 120);
+      return;
+    }
+
+    if (markerCam) flyToMarkerCamera(markerCam);
+  }, [selectedBuilding, interiorMode, isMobile, setActiveHotspot, flyToMarkerCamera]);
 
   const handleMeshClick = useCallback((meshName) => {
     if (!meshName || !selectedBuilding) return;
@@ -335,7 +358,7 @@ export default function Explorer() {
     const targetCamName = hs.camera_reference || null;
     if (!targetCamName) return;
 
-    const markerCam = viewerSceneRef.current.getObjectByName(targetCamName);
+    const markerCam = findMarkerObject(viewerSceneRef.current, targetCamName);
     if (markerCam) flyToMarkerCamera(markerCam);
   }, [
     selectedBuilding, hotspots, activeHotspot, interiorMode, isMobile,
@@ -356,6 +379,9 @@ export default function Explorer() {
         allModels={activeExteriorModels}
         buildings={activeBuildings}
         building={selectedBuilding}
+        hotspots={hotspots}
+        activeHotspot={activeHotspot}
+        onHotspotSelect={handleHotspotClick}
         onBuildingClick={handleSelectBuilding}
         onMeshClick={handleMeshClick}
         onInteriorModeChange={entering => {
@@ -447,29 +473,23 @@ export default function Explorer() {
                 : ''}
             </p>
 
-            {/* Estado modelo */}
-            <div style={{
-              marginTop: '.55rem', fontSize: '.68rem', fontWeight: 500,
-              display: 'flex', alignItems: 'center', gap: 5,
-            }}>
+            {/* Resumen del edificio */}
+            <div style={{ marginTop: '.6rem', display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+              <span className="ex-meta-chip">
+                {hotspots.length} {hotspots.length === 1 ? 'espacio' : 'espacios'}
+              </span>
+              {selectedBuilding.has_interior && (
+                <span className="ex-meta-chip is-accent">
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d="M8 3H5a2 2 0 0 0-2 2v3M21 8V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3M16 21h3a2 2 0 0 0 2-2v-3" />
+                  </svg>
+                  Interior 3D
+                </span>
+              )}
               {modelLoading ? (
-                <>
-                  <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#d97706', display: 'block', flexShrink: 0 }} />
-                  <span style={{ color: 'var(--ink)' }}>Cargando… {modelProgress}%</span>
-                </>
-              ) : modelInfo ? (
-                <>
-                  <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#16a34a', display: 'block', flexShrink: 0 }} />
-                  <span style={{ color: 'var(--ink)' }}>
-                    LOD {modelInfo.lod_level}
-                    {modelInfo.file_size_mb ? ` · ${modelInfo.file_size_mb} MB` : ''}
-                  </span>
-                </>
-              ) : (
-                <>
-                  <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#d97706', display: 'block', flexShrink: 0 }} />
-                  <span style={{ color: 'var(--ink)' }}>Sin modelo — placeholder 3D</span>
-                </>
+                <span className="ex-meta-chip is-loading">Cargando modelo… {modelProgress}%</span>
+              ) : !modelInfo && (
+                <span className="ex-meta-chip is-warn">Sin modelo 3D</span>
               )}
             </div>
           </div>
@@ -686,12 +706,27 @@ export default function Explorer() {
           <div style={{ padding: '0 .6rem .75rem', flex: 1 }}>
             {filteredHotspots.length === 0 && hotspots.length > 0 && (
               <div style={{ textAlign: 'center', padding: '1.5rem 1rem' }}>
-                <p style={{ fontSize: '.78rem', fontWeight: 400, color: 'var(--ink)', margin: 0 }}>
-                  {floorFilter !== 'all'
-                    ? `Sin resultados en piso ${floorFilter}.`
-                    : `Sin ${TYPE_LABELS[typeFilter]?.toLowerCase() || 'resultados'} en este edificio.`
+                <p style={{ fontSize: '.78rem', fontWeight: 400, color: 'var(--ink)', margin: '0 0 .6rem' }}>
+                  {searchQuery.trim()
+                    ? `Nada coincide con “${searchQuery.trim()}”.`
+                    : floorFilter !== 'all'
+                      ? `Sin resultados en piso ${floorFilter}.`
+                      : openNowOnly
+                        ? 'Ningún espacio está abierto ahora mismo.'
+                        : `Sin ${TYPE_LABELS[typeFilter]?.toLowerCase() || 'resultados'} en este edificio.`
                   }
                 </p>
+                <button
+                  className="ex-chip"
+                  onClick={() => {
+                    setTypeFilter('all');
+                    setFloorFilter('all');
+                    setOpenNowOnly(false);
+                    setSearchQuery('');
+                  }}
+                >
+                  Limpiar filtros
+                </button>
               </div>
             )}
 
@@ -722,9 +757,25 @@ export default function Explorer() {
                   <p style={{
                     fontSize: '.67rem', fontWeight: 400,
                     color: 'var(--ink)', margin: 0, lineHeight: 1.4,
+                    display: 'flex', alignItems: 'center', gap: 4,
                   }}>
-                    Piso {h.floor}
-                    {h.teacher ? ` · ${h.teacher.split(' ').slice(-1)[0]}` : ''}
+                    {(() => {
+                      const open = isOpenNow(h.schedule);
+                      if (open === null) return null;
+                      return (
+                        <span
+                          title={open ? 'Abierto ahora' : 'Cerrado'}
+                          style={{
+                            width: 6, height: 6, borderRadius: '50%', flexShrink: 0,
+                            background: open ? '#16a34a' : 'rgba(188,6,19,.55)',
+                          }}
+                        />
+                      );
+                    })()}
+                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      Piso {h.floor}
+                      {h.teacher ? ` · ${h.teacher.split(' ').slice(-1)[0]}` : ''}
+                    </span>
                   </p>
                 </div>
                 <svg width="10" height="10" viewBox="0 0 24 24" fill="none"
@@ -779,10 +830,14 @@ export default function Explorer() {
         </svg>
       </button>
 
-      <HotspotPanel />
+      <HotspotPanel
+        canGoTo={!interiorMode && !!selectedBuilding?.has_interior && !!activeHotspot?.camera_reference}
+        onGoTo={handleGoToHotspot}
+      />
       {showSelector && (
         <BuildingSelector
           buildings={activeBuildings}
+          selectedId={selectedBuilding?.id ?? null}
           onSelect={handleSelectBuilding}
           onClose={selectedBuilding ? () => setShowSelector(false) : null}
         />

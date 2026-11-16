@@ -144,9 +144,17 @@ function FieldIcon({ field, size = 13 }) {
 }
 
 /* ─── Main ───────────────────────────────────────────────────────────────── */
-export default function HotspotPanel() {
+export default function HotspotPanel({ canGoTo = false, onGoTo }) {
   const { activeHotspot, setActiveHotspot } = useViewerStore();
   const isMobile = useIsMobile(900);
+
+  // Escape cierra el panel
+  useEffect(() => {
+    if (!activeHotspot) return undefined;
+    const onKey = (e) => { if (e.key === 'Escape') setActiveHotspot(null); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [activeHotspot, setActiveHotspot]);
 
   const [images,    setImages]    = useState([]);
   const [imgIndex,  setImgIndex]  = useState(0);
@@ -494,13 +502,24 @@ export default function HotspotPanel() {
           flex:'0 0 auto',
           boxSizing:'border-box',
         }}>
-          <button className="hp-close-btn" onClick={close}>
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
-              stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-              <path d="M18 6 6 18M6 6l12 12"/>
-            </svg>
-            Cerrar
-          </button>
+          <div style={{ display:'flex', gap:'.5rem' }}>
+            {canGoTo && (
+              <button className="hp-goto-btn" onClick={() => onGoTo?.(hs)} title="Entrar al interior y ver este espacio">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
+                  stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M8 3H5a2 2 0 0 0-2 2v3M21 8V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3M16 21h3a2 2 0 0 0 2-2v-3"/>
+                </svg>
+                Ver en 3D
+              </button>
+            )}
+            <button className="hp-close-btn" onClick={close}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
+                stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                <path d="M18 6 6 18M6 6l12 12"/>
+              </svg>
+              Cerrar
+            </button>
+          </div>
         </div>
       </aside>
     </>

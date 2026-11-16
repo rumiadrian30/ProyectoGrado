@@ -220,13 +220,23 @@ app.use('/hotspot-images', express.static(IMAGES_DIR, {
 }));
 
 // ── Ruta estática genérica para modelos ─────────────────────────────────────
+// Los archivos subidos llevan timestamp en el nombre (nombre_1781601054889.glb),
+// por lo que cada versión tiene una URL única y se cachea un año como inmutable.
+// mapa-espoch.glb no lleva timestamp y mantiene 1 h.
+const IMMUTABLE_MODEL_RE = /_\d{10,}\.(glb|gltf)$/i;
+
 app.use('/models', express.static(MODELS_DIR, {
   setHeaders: (res, filePath) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
     res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
-    res.setHeader('Cache-Control', 'public, max-age=3600');
+    res.setHeader(
+      'Cache-Control',
+      IMMUTABLE_MODEL_RE.test(filePath)
+        ? 'public, max-age=31536000, immutable'
+        : 'public, max-age=3600'
+    );
 
     if (filePath.endsWith('.glb')) {
       res.setHeader('Content-Type', 'model/gltf-binary');
