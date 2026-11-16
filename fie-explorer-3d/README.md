@@ -34,13 +34,13 @@ Iniciar cada servicio en terminales separadas:
 
 ```bash
 # Backend
-cd Backend && npm install && npm run dev
+cd Backend && pnpm install && pnpm dev
 
 # Admin Frontend
-cd "Admin Frontend" && npm install && npm run dev
+cd "Admin Frontend" && pnpm install && pnpm dev
 
 # Public Frontend
-cd "Public Frontend" && npm install && npm run dev
+cd "Public Frontend" && pnpm install && pnpm dev
 ```
 
 ## Docker
@@ -68,9 +68,9 @@ Para optimizar los archivos ya existentes en el servidor:
 
 ```bash
 cd Backend
-npm run optimize:models            # uploads/models (o MODELS_DIR)
-npm run optimize:models -- --force # re-optimizar aunque ya tengan marcador
-npm run optimize:models -- --no-db # no actualizar file_size_mb en la BD
+pnpm run optimize:models            # uploads/models (o MODELS_DIR)
+pnpm run optimize:models -- --force # re-optimizar aunque ya tengan marcador
+pnpm run optimize:models -- --no-db # no actualizar file_size_mb en la BD
 ```
 
 Los originales quedan en `Backend/uploads/models-original/` (ignorado por git).
